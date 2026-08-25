@@ -1,5 +1,6 @@
 import { createContext, useContext, useState } from 'react'
 import { commitPendingSystemSettings } from '../lib/systemSettings'
+import { loadRegisteredCompanies } from '../lib/companies'
 
 const AuthContext = createContext(null)
 
@@ -10,6 +11,7 @@ const ADMIN_CREDENTIALS = {
 
 const CEO_EMAIL = 'ceo@unifiedworkforce.com'
 const CEO_DEFAULT_PASSWORD = 'P@ssw0rd2026!'
+const COMPANY_DEFAULT_PASSWORD = 'P@ssw0rd2026!'
 
 export function getCeoEmail() {
   return CEO_EMAIL
@@ -17,6 +19,23 @@ export function getCeoEmail() {
 
 function getCeoPassword() {
   return localStorage.getItem('uw_ceo_password') || CEO_DEFAULT_PASSWORD
+}
+
+function getRoleLabel(role) {
+  return { administrator: 'Administrator', ceo: 'CEO', employee: 'Employee' }[role] || role
+}
+
+// Resolve an email against registered companies (owner or any listed employee).
+function findCompanyAccount(email) {
+  const normalized = email.trim().toLowerCase()
+  for (const company of loadRegisteredCompanies()) {
+    for (const emp of company.employees) {
+      if ((emp.email || '').trim().toLowerCase() === normalized) {
+        return { company, emp }
+      }
+    }
+  }
+  return null
 }
 
 export function changeCeoPassword(newPassword) {
@@ -32,7 +51,7 @@ export function AuthProvider({ children }) {
     }
   })
 
-  const login = (email) => {
+  const login = (email, password) => {
     const identifier = email.trim().toLowerCase()
     if (identifier === ADMIN_CREDENTIALS.username) {
       throw new Error('ADMIN_PASSWORD_REQUIRED')
@@ -40,11 +59,26 @@ export function AuthProvider({ children }) {
     if (identifier === CEO_EMAIL) {
       throw new Error('CEO_PASSWORD_REQUIRED')
     }
+
+    const account = findCompanyAccount(identifier)
+    if (!account) {
+      throw new Error('ACCOUNT_NOT_FOUND')
+    }
+    if (password !== COMPANY_DEFAULT_PASSWORD && password !== getCeoPassword()) {
+      return null
+    }
+
+    const { company, emp } = account
+    const isOwner = (company.owner?.email || '').trim().toLowerCase() === identifier
+    const role = isOwner ? 'ceo' : 'employee'
+    const name = emp.name || company.owner?.name || 'Company User'
     const u = {
-      email,
-      name: 'Alex Morgan',
-      role: 'employee',
-      initials: 'AM',
+      email: identifier,
+      name,
+      role,
+      roleLabel: isOwner ? 'CEO' : emp.role || 'Employee',
+      companyName: company.name,
+      initials: name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(),
     }
     setUser(u)
     localStorage.setItem('uw_user', JSON.stringify(u))
@@ -62,6 +96,7 @@ export function AuthProvider({ children }) {
       email: ADMIN_CREDENTIALS.username,
       name: 'Aizl Jo Bornillo',
       role: 'administrator',
+      roleLabel: 'Administrator',
       initials: 'AJ',
     }
     setUser(u)
@@ -77,6 +112,7 @@ export function AuthProvider({ children }) {
       email: CEO_EMAIL,
       name: 'Celestine Espenilla',
       role: 'ceo',
+      roleLabel: 'CEO',
       initials: 'CE',
     }
     setUser(u)

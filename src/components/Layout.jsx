@@ -2,7 +2,6 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getActiveSettings } from '../lib/systemSettings'
-
 const nav = [
   { to: '/', label: 'Dashboard', icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
   { to: '/timekeeping', label: 'Time Keeping', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
@@ -11,11 +10,12 @@ const nav = [
 ]
 
 function Logo({ light = false }) {
+  const settings = getActiveSettings()
   return (
     <div className="flex items-center gap-2.5">
       <div className={`flex h-8 w-8 items-center justify-center rounded-lg font-bold text-sm ${light ? 'bg-white/15 text-white ring-1 ring-white/25' : 'bg-brand-600 text-white'}`}>U</div>
       <div className="leading-tight">
-        <p className={`text-sm font-semibold ${light ? 'text-white' : 'text-gray-900'}`}>Unified Workforce</p>
+        <p className={`text-sm font-semibold ${light ? 'text-white' : 'text-gray-900'}`}>{settings.name}</p>
         <p className={`text-[11px] ${light ? 'text-brand-200' : 'text-gray-400'}`}>Workforce Management Suite</p>
       </div>
     </div>
@@ -27,7 +27,7 @@ export { Logo }
 export default function Layout() {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
-  const { logout } = useAuth()
+  const { user, logout } = useAuth()
   const settings = getActiveSettings()
 
   const links = (
@@ -78,10 +78,10 @@ export default function Layout() {
   const userBlock = (
     <div className="mt-auto border-t border-gray-200 p-4">
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-white">AJ</div>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-white">{user?.initials || 'U'}</div>
         <div className="min-w-0 flex-1 leading-tight">
-          <p className="truncate text-sm font-medium text-gray-900">Aizl Jo Bornillo</p>
-          <p className="truncate text-xs text-gray-400">Administrator</p>
+          <p className="truncate text-sm font-medium text-gray-900">{user?.name}</p>
+          <p className="truncate text-xs text-gray-400">{user?.companyName ? `${user.roleLabel} · ${user.companyName}` : user?.roleLabel}</p>
         </div>
         <button onClick={() => { logout(); navigate('/login') }} title="Sign out" className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600">
           <svg className="h-4.5 w-4.5" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
@@ -123,10 +123,10 @@ export default function Layout() {
           <div className="mx-1 hidden h-8 w-px bg-gray-200 sm:block" />
           <div className="flex items-center gap-2.5">
             <div className="hidden text-right leading-tight sm:block">
-              <p className="text-xs font-semibold text-gray-800">Aizl Jo Bornillo</p>
-              <p className="text-[11px] text-gray-400">Administrator</p>
+              <p className="text-xs font-semibold text-gray-800">{user?.name}</p>
+              <p className="text-[11px] text-gray-400">{user?.roleLabel}</p>
             </div>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-white">AJ</div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-white">{user?.initials || 'U'}</div>
           </div>
         </div>
       </header>

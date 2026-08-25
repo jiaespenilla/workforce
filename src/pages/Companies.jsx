@@ -1,70 +1,5 @@
 import { useState } from 'react'
-
-const SAMPLE_COMPANIES = [
-  {
-    id: 'acme',
-    name: 'Acme Corporation',
-    industry: 'Technology',
-    address: '123 Ayala Ave, Suite 100',
-    city: 'Makati',
-    country: 'Philippines',
-    contactPhone: '+63 917 000 1234',
-    contactEmail: 'info@acme.com',
-    registered: '2026-01-12',
-    owner: { name: 'Robert Chen', title: 'CEO', email: 'robert@acme.com' },
-    active: true,
-    employees: [
-      { name: 'Alex Morgan', email: 'alex@acme.com', role: 'Employee', active: true },
-      { name: 'Maria Santos', email: 'maria@acme.com', role: 'HR Manager', active: true },
-      { name: 'John Cruz', email: 'john@acme.com', role: 'Team Lead', active: false },
-      { name: 'Grace Lim', email: 'grace@acme.com', role: 'Employee', active: true },
-    ],
-  },
-  {
-    id: 'northwind',
-    name: 'Northwind Trading',
-    industry: 'Retail',
-    address: '45 Colon Street',
-    city: 'Cebu City',
-    country: 'Philippines',
-    contactPhone: '+63 917 555 8899',
-    contactEmail: 'contact@northwind.com',
-    registered: '2026-03-04',
-    owner: { name: 'Susan Tan', title: 'Owner', email: 'susan@northwind.com' },
-    active: true,
-    employees: [
-      { name: 'Peter Reyes', email: 'peter@northwind.com', role: 'HR Manager', active: true },
-      { name: 'Ana Dizon', email: 'ana@northwind.com', role: 'Employee', active: false },
-      { name: 'Carlo Mendoza', email: 'carlo@northwind.com', role: 'Employee', active: true },
-    ],
-  },
-  {
-    id: 'bluepeak',
-    name: 'Bluepeak Construction',
-    industry: 'Construction',
-    address: '12 Commonwealth Ave',
-    city: 'Quezon City',
-    country: 'Philippines',
-    contactPhone: '+63 918 222 3344',
-    contactEmail: 'admin@bluepeak.com',
-    registered: '2026-06-21',
-    owner: { name: 'Miguel Ramos', title: 'Managing Director', email: 'miguel@bluepeak.com' },
-    active: false,
-    employees: [
-      { name: 'Ramon Villanueva', email: 'ramon@bluepeak.com', role: 'Team Lead', active: false },
-      { name: 'Ella Torres', email: 'ella@bluepeak.com', role: 'Employee', active: true },
-    ],
-  },
-]
-
-function loadRegisteredCompanies() {
-  try {
-    const stored = JSON.parse(localStorage.getItem('uw_companies'))
-    return Array.isArray(stored) ? stored : []
-  } catch {
-    return []
-  }
-}
+import { loadRegisteredCompanies } from '../lib/companies'
 
 const STATUS_STYLES = {
   pending: 'bg-amber-50 text-amber-700 ring-amber-200',
@@ -100,9 +35,26 @@ function DetailRow({ label, value }) {
   )
 }
 
-function CompanyDetailsModal({ company, isNew, onClose, onToggleActive, onToggleEmployee }) {
+const EDIT_FIELDS = [
+  ['name', 'Company name'],
+  ['industry', 'Industry'],
+  ['address', 'Address'],
+  ['city', 'City'],
+  ['country', 'Country'],
+  ['contactPhone', 'Contact phone'],
+  ['contactEmail', 'Contact email', 'email'],
+]
+
+function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmployee, onEditCompany }) {
   const [tab, setTab] = useState('details')
-  const status = company.status || (isNew ? 'pending' : 'approved')
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState(() => ({
+    ...Object.fromEntries(EDIT_FIELDS.map(([key]) => [key, company[key] || ''])),
+    ownerName: company.owner?.name || '',
+    ownerTitle: company.owner?.title || '',
+    ownerEmail: company.owner?.email || '',
+  }))
+  const status = company.status || 'pending'
   const initials = company.name
     .split(' ')
     .map((w) => w[0])
@@ -110,6 +62,17 @@ function CompanyDetailsModal({ company, isNew, onClose, onToggleActive, onToggle
     .join('')
     .toUpperCase()
   const activeCount = company.employees.filter((e) => e.active !== false).length
+
+  const inputCls = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200'
+
+  const saveEdit = () => {
+    const { ownerName, ownerTitle, ownerEmail, ...companyFields } = form
+    onEditCompany(company.id, {
+      ...companyFields,
+      owner: { name: ownerName, title: ownerTitle, email: ownerEmail },
+    })
+    setEditing(false)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -134,6 +97,18 @@ function CompanyDetailsModal({ company, isNew, onClose, onToggleActive, onToggle
               </span>
             </div>
           </div>
+          {!editing && tab === 'details' && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-brand-400 hover:text-brand-700"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Edit
+            </button>
+          )}
           <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -148,8 +123,13 @@ function CompanyDetailsModal({ company, isNew, onClose, onToggleActive, onToggle
           ].map(([id, label]) => (
             <button
               key={id}
-              onClick={() => setTab(id)}
+              onClick={() => {
+                if (editing) return
+                setTab(id)
+              }}
+              disabled={editing}
               className={`rounded-t-lg px-4 py-2 text-sm font-medium transition ${
+                editing ? 'cursor-not-allowed text-gray-300' :
                 tab === id ? 'border-b-2 border-brand-600 text-brand-700' : 'text-gray-500 hover:text-gray-800'
               }`}
             >
@@ -158,7 +138,7 @@ function CompanyDetailsModal({ company, isNew, onClose, onToggleActive, onToggle
           ))}
         </div>
 
-        {tab === 'details' && (
+        {tab === 'details' && !editing && (
           <div className="space-y-6 p-6">
             <section>
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Company Information</h3>
@@ -192,6 +172,70 @@ function CompanyDetailsModal({ company, isNew, onClose, onToggleActive, onToggle
                 aria-pressed={company.active !== false}
               >
                 <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${company.active !== false ? 'left-[22px]' : 'left-0.5'}`} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {tab === 'details' && editing && (
+          <div className="space-y-5 p-6">
+            <section>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Company Information</h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {EDIT_FIELDS.map(([key, label, type]) => (
+                  <label key={key} className={`block text-sm ${key === 'address' ? 'sm:col-span-2' : ''}`}>
+                    <span className="font-medium text-gray-700">{label}</span>
+                    <input
+                      type={type || 'text'}
+                      value={form[key]}
+                      onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                      className={`mt-1 ${inputCls}`}
+                    />
+                  </label>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Owner / Administrator</h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="font-medium text-gray-700">Owner name</span>
+                  <input value={form.ownerName} onChange={(e) => setForm({ ...form, ownerName: e.target.value })} className={`mt-1 ${inputCls}`} />
+                </label>
+                <label className="block text-sm">
+                  <span className="font-medium text-gray-700">Job title</span>
+                  <input value={form.ownerTitle} onChange={(e) => setForm({ ...form, ownerTitle: e.target.value })} className={`mt-1 ${inputCls}`} />
+                </label>
+                <label className="block text-sm sm:col-span-2">
+                  <span className="font-medium text-gray-700">Owner email</span>
+                  <input type="email" value={form.ownerEmail} onChange={(e) => setForm({ ...form, ownerEmail: e.target.value })} className={`mt-1 ${inputCls}`} />
+                </label>
+              </div>
+            </section>
+
+            <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setForm({
+                    ...Object.fromEntries(EDIT_FIELDS.map(([key]) => [key, company[key] || ''])),
+                    ownerName: company.owner?.name || '',
+                    ownerTitle: company.owner?.title || '',
+                    ownerEmail: company.owner?.email || '',
+                  })
+                  setEditing(false)
+                }}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveEdit}
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
+              >
+                Save changes
               </button>
             </div>
           </div>
@@ -241,9 +285,9 @@ function CompanyDetailsModal({ company, isNew, onClose, onToggleActive, onToggle
   )
 }
 
-function CompanyCard({ company, isNew, onView, onApproveReject }) {
+function CompanyCard({ company, onView, onApproveReject }) {
   const [open, setOpen] = useState(false)
-  const status = company.status || (isNew ? 'pending' : 'approved')
+  const status = company.status || 'pending'
   const initials = company.name
     .split(' ')
     .map((w) => w[0])
@@ -330,11 +374,11 @@ function CompanyCard({ company, isNew, onView, onApproveReject }) {
 
 export default function Companies() {
   const [query, setQuery] = useState('')
-  const [registered, setRegistered] = useState(loadRegisteredCompanies)
+  const [companies, setCompanies] = useState(loadRegisteredCompanies)
   const [viewingId, setViewingId] = useState(null)
 
-  const mutateRegistered = (updater) => {
-    setRegistered((prev) => {
+  const mutateCompanies = (updater) => {
+    setCompanies((prev) => {
       const next = updater(prev)
       localStorage.setItem('uw_companies', JSON.stringify(next))
       return next
@@ -342,13 +386,13 @@ export default function Companies() {
   }
 
   const handleStatusChange = (id, status) =>
-    mutateRegistered((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)))
+    mutateCompanies((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)))
 
   const handleToggleActive = (id) =>
-    mutateRegistered((prev) => prev.map((c) => (c.id === id ? { ...c, active: c.active === false } : c)))
+    mutateCompanies((prev) => prev.map((c) => (c.id === id ? { ...c, active: c.active === false } : c)))
 
   const handleToggleEmployee = (id, empEmail) =>
-    mutateRegistered((prev) =>
+    mutateCompanies((prev) =>
       prev.map((c) =>
         c.id === id
           ? { ...c, employees: c.employees.map((e) => (e.email === empEmail ? { ...e, active: e.active === false } : e)) }
@@ -356,17 +400,18 @@ export default function Companies() {
       )
     )
 
-  // Registered companies are editable; sample companies are read-only demo data
-  const all = [...registered, ...SAMPLE_COMPANIES]
-  const filtered = all.filter(
+  const handleEditCompany = (id, updates) =>
+    mutateCompanies((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)))
+
+  const filtered = companies.filter(
     (c) =>
       c.name.toLowerCase().includes(query.toLowerCase()) ||
       (c.industry || '').toLowerCase().includes(query.toLowerCase())
   )
-  const totalEmployees = all.reduce((sum, c) => sum + c.employees.length, 0)
-  const activeEmployees = all.reduce((sum, c) => sum + c.employees.filter((e) => e.active !== false).length, 0)
-  const pendingCount = registered.filter((c) => (c.status || 'pending') === 'pending').length
-  const viewing = all.find((c) => c.id === viewingId)
+  const totalEmployees = companies.reduce((sum, c) => sum + c.employees.length, 0)
+  const activeEmployees = companies.reduce((sum, c) => sum + c.employees.filter((e) => e.active !== false).length, 0)
+  const pendingCount = companies.filter((c) => (c.status || 'pending') === 'pending').length
+  const viewing = companies.find((c) => c.id === viewingId)
 
   return (
     <div className="space-y-6">
@@ -375,7 +420,7 @@ export default function Companies() {
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Administration</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900">Companies</h1>
           <p className="mt-1 text-sm text-gray-500">
-            {all.length} compan{all.length !== 1 ? 'ies' : 'y'} · {activeEmployees}/{totalEmployees} employees active.
+            {companies.length} compan{companies.length !== 1 ? 'ies' : 'y'} · {activeEmployees}/{totalEmployees} employees active.
             {pendingCount > 0 && (
               <span className="ml-2 font-medium text-amber-600">{pendingCount} pending approval.</span>
             )}
@@ -394,25 +439,24 @@ export default function Companies() {
           <CompanyCard
             key={c.id}
             company={c}
-            isNew={registered.some((r) => r.id === c.id)}
             onView={setViewingId}
             onApproveReject={handleStatusChange}
           />
         ))}
         {filtered.length === 0 && (
           <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center">
-            <p className="text-sm text-gray-500">No companies match your search.</p>
+            <p className="text-sm text-gray-500">No companies yet. New registrations will appear here.</p>
           </div>
         )}
       </div>
 
-      {viewing && viewingId.startsWith('reg-') && (
+      {viewing && (
         <CompanyDetailsModal
           company={viewing}
-          isNew
           onClose={() => setViewingId(null)}
           onToggleActive={handleToggleActive}
           onToggleEmployee={handleToggleEmployee}
+          onEditCompany={handleEditCompany}
         />
       )}
     </div>

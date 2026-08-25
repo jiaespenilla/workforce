@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Logo } from '../components/Layout'
 import { useAuth, getCeoEmail } from '../context/AuthContext'
+import { getActiveSettings } from '../lib/systemSettings'
 
 export default function Login() {
   const navigate = useNavigate()
   const { login, loginAdmin, loginCeo } = useAuth()
   const [error, setError] = useState(null)
+  const settings = getActiveSettings()
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -30,9 +32,16 @@ export default function Login() {
       return
     }
 
-    if (password.length < 4) return setError('Invalid credentials. Please try again.')
-    const user = login(identifier)
-    navigate(user.role === 'administrator' ? '/settings' : '/', { replace: true })
+    try {
+      const user = login(identifier, password)
+      navigate(user.role === 'ceo' ? '/companies' : '/', { replace: true })
+    } catch (err) {
+      if (err.message === 'ACCOUNT_NOT_FOUND') {
+        setError('No account found for this email. Register your company first.')
+      } else {
+        setError('Invalid credentials. Please try again.')
+      }
+    }
   }
 
   const inputCls =
@@ -68,7 +77,7 @@ export default function Login() {
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
             <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 font-bold text-white">U</div>
-            <h1 className="text-xl font-bold text-gray-900">Unified Workforce</h1>
+            <h1 className="text-xl font-bold text-gray-900">{settings.name}</h1>
             <p className="mt-1 text-sm text-gray-500">Sign in to your workspace</p>
           </div>
 
@@ -127,13 +136,13 @@ export default function Login() {
             <p className="text-xs font-semibold text-gray-600">Demo accounts</p>
             <p className="mt-1.5 text-xs leading-relaxed text-gray-500">
               Administrator: <span className="font-medium text-gray-700">admin_celestine</span> — system configuration only<br />
-              CEO: <span className="font-medium text-gray-700">{getCeoEmail()}</span> — company oversight<br />
-              Employee: <span className="font-medium text-gray-700">alex@company.com</span> — full workforce suite &amp; kiosk
+              Platform CEO: <span className="font-medium text-gray-700">{getCeoEmail()}</span><br />
+              Company owners &amp; employees: sign in with your registered email — default password <span className="font-medium text-gray-700">P@ssw0rd2026!</span>
             </p>
           </div>
 
           <p className="mt-8 text-center text-xs text-gray-400">
-            Protected by enterprise-grade security. By signing in you agree to our Terms of Service.
+            {settings.name} · {settings.version} · {settings.timezone}
           </p>
         </div>
       </div>

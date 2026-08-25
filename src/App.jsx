@@ -6,6 +6,7 @@ import AdminLayout from './components/AdminLayout'
 import Login from './pages/Login'
 import SystemConfig from './pages/SystemConfig'
 import Companies from './pages/Companies'
+import TaskMonitoring from './pages/TaskMonitoring'
 import CompanyRegistration from './pages/CompanyRegistration'
 import Kiosk from './pages/Kiosk'
 import KioskSetup from './pages/KioskSetup'
@@ -23,6 +24,7 @@ export default function App() {
 
         <Route element={<RequireRole roles={['administrator', 'ceo']}><AdminLayout /></RequireRole>}>
           <Route path="/companies" element={<Companies />} />
+          <Route path="/task-monitoring" element={<TaskMonitoring />} />
           <Route path="/settings" element={<SystemConfig />} />
           <Route path="/kiosk-setup" element={<KioskSetup />} />
         </Route>

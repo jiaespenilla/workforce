@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { getActiveSettings, getPendingSettings, queueSystemSettings } from '../lib/systemSettings'
 
 const DEFAULT_ROLES = [
-  { name: 'Administrator', users: 2, access: 'System configuration only', perms: { mainMenu: false, kiosk: false, settings: true } },
+  { name: 'Administrator', users: 1, access: 'System configuration only — sole account: admin_celestine', perms: { mainMenu: false, kiosk: false, settings: true } },
   { name: 'HR Manager', users: 3, access: 'Full workforce suite', perms: { mainMenu: true, kiosk: true, settings: false } },
   { name: 'Team Lead', users: 6, access: 'Dashboard, timekeeping & tasks', perms: { mainMenu: true, kiosk: true, settings: false } },
   { name: 'Employee', users: 42, access: 'Own records & kiosk punch', perms: { mainMenu: true, kiosk: true, settings: false } },
