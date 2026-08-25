@@ -4,7 +4,15 @@ export function loadRegisteredCompanies() {
     if (!Array.isArray(stored)) return []
     return stored
       .filter((c) => c && typeof c === 'object' && c.id && c.name)
-      .map((c) => ({ ...c, employees: Array.isArray(c.employees) ? c.employees : [] }))
+      .map((c) => {
+        const employees = Array.isArray(c.employees) ? c.employees : []
+        // Migrate older registrations that have no owner record —
+        // fall back to the first listed employee.
+        const owner = c.owner || (employees[0]
+          ? { name: employees[0].name, title: employees[0].role, email: employees[0].email }
+          : undefined)
+        return { ...c, employees, owner }
+      })
   } catch {
     return []
   }
