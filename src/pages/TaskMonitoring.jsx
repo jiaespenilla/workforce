@@ -7,17 +7,12 @@ const columns = [
   { id: 'completed', label: 'Completed' },
 ]
 
-const DEFAULT_TASKS = [
-  { id: 1, title: 'Prepare monthly attendance summary', assignee: 'Maria Santos (Acme Corporation)', priority: 'Medium', due: '', status: 'pending' },
-  { id: 2, title: 'Review vendor contract renewal', assignee: 'Peter Reyes (Northwind Trading)', priority: 'High', due: '', status: 'inprogress' },
-]
-
 function loadTasks() {
   try {
     const stored = JSON.parse(localStorage.getItem('uw_ceo_tasks'))
-    return Array.isArray(stored) ? stored : DEFAULT_TASKS
+    return Array.isArray(stored) ? stored : []
   } catch {
-    return DEFAULT_TASKS
+    return []
   }
 }
 

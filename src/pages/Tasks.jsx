@@ -1,18 +1,11 @@
 import { useState } from 'react'
+import { useAuth } from '../context/AuthContext'
+import TaskMonitoring from './TaskMonitoring'
 
 const columns = [
   { id: 'pending', label: 'Pending' },
   { id: 'inprogress', label: 'In Progress' },
   { id: 'completed', label: 'Completed' },
-]
-
-const initialTasks = [
-  { id: 1, title: 'Draft Q3 financial report', assignee: 'Sarah Chen', priority: 'High', due: 'Aug 28', status: 'pending' },
-  { id: 2, title: 'Update onboarding checklist', assignee: 'Ana Reyes', priority: 'Medium', due: 'Sep 02', status: 'pending' },
-  { id: 3, title: 'Fix payroll tax calculation bug', assignee: 'Miguel Torres', priority: 'Urgent', due: 'Aug 26', status: 'inprogress' },
-  { id: 4, title: 'Interview candidates — Support role', assignee: 'Sarah Chen', priority: 'Medium', due: 'Sep 05', status: 'inprogress' },
-  { id: 5, title: 'Deploy attendance kiosk v2', assignee: 'Dev Team', priority: 'High', due: 'Aug 22', status: 'completed' },
-  { id: 6, title: 'Quarterly performance reviews', assignee: 'HR Manager', priority: 'Low', due: 'Sep 15', status: 'completed' },
 ]
 
 const priorityStyles = {
@@ -22,24 +15,42 @@ const priorityStyles = {
   Low: 'bg-gray-100 text-gray-600',
 }
 
+function loadMyTasks(name) {
+  try {
+    const stored = JSON.parse(localStorage.getItem('uw_ceo_tasks'))
+    return Array.isArray(stored)
+      ? stored.filter((t) => t.assignee && t.assignee.startsWith(`${name} (`))
+      : []
+  } catch {
+    return []
+  }
+}
+
 export default function Tasks() {
-  const [tasks, setTasks] = useState(initialTasks)
+  const { user } = useAuth()
+  return user?.role === 'ceo' ? <TaskMonitoring /> : <EmployeeTasks name={user?.name || ''} />
+}
+
+function EmployeeTasks({ name }) {
+  const [tasks, setTasks] = useState(() => loadMyTasks(name))
   const [dragId, setDragId] = useState(null)
   const [overCol, setOverCol] = useState(null)
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ title: '', assignee: '', priority: 'Medium', due: '' })
-
-  const addTask = (e) => {
-    e.preventDefault()
-    if (!form.title.trim()) return
-    setTasks((t) => [...t, { ...form, id: Date.now(), status: 'pending' }])
-    setForm({ title: '', assignee: '', priority: 'Medium', due: '' })
-    setShowForm(false)
-  }
 
   const drop = (status) => {
     if (dragId == null) return
-    setTasks((t) => t.map((task) => (task.id === dragId ? { ...task, status } : task)))
+    setTasks((t) => {
+      const next = t.map((task) => (task.id === dragId ? { ...task, status } : task))
+      try {
+        const all = JSON.parse(localStorage.getItem('uw_ceo_tasks')) || []
+        localStorage.setItem(
+          'uw_ceo_tasks',
+          JSON.stringify(all.map((task) => (task.id === dragId ? { ...task, status } : task)))
+        )
+      } catch {
+        // ignore storage errors
+      }
+      return next
+    })
     setDragId(null)
     setOverCol(null)
   }
@@ -52,53 +63,10 @@ export default function Tasks() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Task Management</h1>
-          <p className="mt-1 text-sm text-gray-500">Create, assign and organize team tasks. Drag cards between columns.</p>
-        </div>
-        <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700">
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          New Task
-        </button>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">My Tasks</h1>
+        <p className="mt-1 text-sm text-gray-500">Tasks assigned to you. Drag cards between columns to update progress.</p>
       </div>
-
-      {showForm && (
-        <form onSubmit={addTask} className="grid gap-3 rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-5">
-          <input
-            autoFocus
-            placeholder="Task title"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 lg:col-span-2"
-            required
-          />
-          <input
-            placeholder="Assignee"
-            value={form.assignee}
-            onChange={(e) => setForm({ ...form, assignee: e.target.value })}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-          />
-          <select
-            value={form.priority}
-            onChange={(e) => setForm({ ...form, priority: e.target.value })}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-          >
-            {Object.keys(priorityStyles).map((p) => <option key={p}>{p}</option>)}
-          </select>
-          <div className="flex gap-2">
-            <input
-              type="date"
-              value={form.due}
-              onChange={(e) => setForm({ ...form, due: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            />
-            <button type="submit" className="shrink-0 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700">Add</button>
-          </div>
-        </form>
-      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         {columns.map((col) => (

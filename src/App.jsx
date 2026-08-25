@@ -22,7 +22,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<CompanyRegistration />} />
 
-        <Route element={<RequireRole roles={['administrator', 'ceo']}><AdminLayout /></RequireRole>}>
+        <Route element={<RequireRole role="administrator"><AdminLayout /></RequireRole>}>
           <Route path="/companies" element={<Companies />} />
           <Route path="/task-monitoring" element={<TaskMonitoring />} />
           <Route path="/settings" element={<SystemConfig />} />
@@ -31,7 +31,7 @@ export default function App() {
 
         <Route path="/kiosk" element={<RequireRole role="employee"><Kiosk /></RequireRole>} />
 
-        <Route element={<RequireRole role="employee"><Layout /></RequireRole>}>
+        <Route element={<RequireRole roles={['employee', 'ceo']}><Layout /></RequireRole>}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/timekeeping" element={<TimeKeeping />} />
           <Route path="/tasks" element={<Tasks />} />

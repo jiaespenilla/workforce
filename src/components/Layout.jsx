@@ -60,18 +60,22 @@ export default function Layout() {
         ))}
       </nav>
 
-      <p className="px-3 pb-2 pt-6 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Workforce</p>
-      <nav className="space-y-1">
-        <button
-          onClick={() => navigate('/kiosk')}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
-        >
-          <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-          </svg>
-          Kiosk Mode
-        </button>
-      </nav>
+      {user?.role !== 'ceo' && (
+        <>
+          <p className="px-3 pb-2 pt-6 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Workforce</p>
+          <nav className="space-y-1">
+            <button
+              onClick={() => navigate('/kiosk')}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
+            >
+              <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              Kiosk Mode
+            </button>
+          </nav>
+        </>
+      )}
     </>
   )
 
@@ -101,16 +105,9 @@ export default function Layout() {
               <path strokeLinecap="round" strokeLinejoin="round" d={open ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'} />
             </svg>
           </button>
-          <div className="hidden sm:block">
-            <div className="relative">
-              <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-              </svg>
-              <input
-                placeholder="Search employees, tasks, payslips..."
-                className="w-64 rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm text-gray-700 placeholder-gray-400 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 xl:w-80"
-              />
-            </div>
+          <div className="leading-tight">
+            <p className="text-sm font-semibold text-gray-900">{settings.name}</p>
+            <p className="text-[11px] text-gray-400">{user?.companyName || 'Workforce Management Suite'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">

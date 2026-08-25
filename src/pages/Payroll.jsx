@@ -1,11 +1,6 @@
 import { useMemo, useState } from 'react'
 
-const employees = [
-  { id: 1, name: 'Sarah Chen', role: 'HR Manager', type: 'Monthly', rate: 65000, hours: 168, otHours: 6 },
-  { id: 2, name: 'Miguel Torres', role: 'Developer', type: 'Monthly', rate: 58000, hours: 168, otHours: 12 },
-  { id: 3, name: 'Ana Reyes', role: 'Support Lead', type: 'Hourly', rate: 320, hours: 160, otHours: 4 },
-  { id: 4, name: 'James Park', role: 'Designer', type: 'Monthly', rate: 52000, hours: 152, otHours: 0 },
-]
+const employees = []
 
 const deductions = [
   { label: 'Income tax withholding', pct: 15 },
@@ -83,6 +78,11 @@ export default function Payroll() {
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+            {rows.length === 0 ? (
+              <div className="p-10 text-center text-sm text-gray-400">
+                No employee payroll records yet. Employee salary details will appear here once configured.
+              </div>
+            ) : (
             <table className="w-full min-w-[860px] text-left text-sm">
               <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
@@ -118,6 +118,7 @@ export default function Payroll() {
                 ))}
               </tbody>
             </table>
+            )}
           </div>
         </>
       )}
@@ -141,32 +142,18 @@ export default function Payroll() {
         <div className="max-w-2xl space-y-4">
           <div className="rounded-xl border border-brand-200 bg-gradient-to-br from-brand-50 to-emerald-50 p-6 shadow-sm">
             <h2 className="text-base font-semibold text-gray-900">Schedule next run</h2>
-            <p className="mt-1 text-sm text-gray-500">Next scheduled: September 15, 2026 (semi-monthly cycle)</p>
+            <p className="mt-1 text-sm text-gray-500">No payroll runs scheduled yet.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <select className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200">
                 <option>Semi-monthly</option><option>Monthly</option><option>Weekly</option><option>Bi-weekly</option>
               </select>
-              <input type="date" defaultValue="2026-09-15" className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200" />
+              <input type="date" className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200" />
               <button className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Schedule &amp; Run</button>
             </div>
           </div>
-          {[
-            ['#2026-08-B', 'Aug 15, 2026', 'Completed', peso(totals.net)],
-            ['#2026-08-A', 'Jul 31, 2026', 'Completed', '₱198,420'],
-            ['#2026-07-B', 'Jul 15, 2026', 'Completed', '₱196,880'],
-            ['#2026-07-A', 'Jun 30, 2026', 'Completed', '₱201,150'],
-          ].map(([id, date, status, amount]) => (
-            <div key={id} className="flex items-center justify-between rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Payroll run {id}</p>
-                <p className="text-xs text-gray-400">Processed {date}</p>
-              </div>
-              <div className="text-right">
-                <span className="inline-flex rounded-full bg-brand-100 px-2.5 py-1 text-xs font-medium text-brand-700">{status}</span>
-                <p className="mt-1 text-sm font-bold tabular-nums text-gray-900">{amount}</p>
-              </div>
-            </div>
-          ))}
+          <div className="rounded-xl border-2 border-dashed border-gray-200 bg-white p-10 text-center text-sm text-gray-400">
+            No payroll runs yet. Your run history will appear here.
+          </div>
         </div>
       )}
 

@@ -28,13 +28,13 @@ export default function Login() {
     if (identifier === getCeoEmail()) {
       const user = loginCeo(identifier, password)
       if (!user) return setError('Invalid credentials. Please try again.')
-      navigate('/companies', { replace: true })
+      navigate('/', { replace: true })
       return
     }
 
     try {
       const user = login(identifier, password)
-      navigate(user.role === 'ceo' ? '/companies' : '/', { replace: true })
+      navigate('/', { replace: true })
     } catch (err) {
       if (err.message === 'ACCOUNT_NOT_FOUND') {
         setError('No account found for this email. Register your company first.')

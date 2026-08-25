@@ -31,3 +31,9 @@ export function commitPendingSystemSettings() {
   localStorage.setItem('uw_system_settings', JSON.stringify(pending))
   localStorage.removeItem('uw_pending_system_settings')
 }
+
+// IANA time zone derived from the system settings (e.g. "(GMT+08:00) Asia/Manila" -> "Asia/Manila").
+export function getSystemTimeZone() {
+  const tz = getActiveSettings().timezone || ''
+  return tz.split(') ')[1] || 'Asia/Manila'
+}

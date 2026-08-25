@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 
 const HOME_BY_ROLE = {
   administrator: '/settings',
-  ceo: '/companies',
+  ceo: '/',
   employee: '/',
 }
 

@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-
-const employees = [
-  { id: 1, name: 'Sarah Chen' },
-  { id: 2, name: 'Miguel Torres' },
-  { id: 3, name: 'Ana Reyes' },
-]
+import { getAllEmployees } from '../lib/companies'
 
 export default function Kiosk() {
   const [now, setNow] = useState(new Date())
-  const [employee, setEmployee] = useState(employees[0])
+  const employees = getAllEmployees().filter((e) => e.active !== false)
+  const [employeeId, setEmployeeId] = useState(null)
+  const employee = employees.find((e) => String(e.email) === String(employeeId)) || employees[0]
   const [message, setMessage] = useState(null)
 
   useEffect(() => {
@@ -18,11 +15,21 @@ export default function Kiosk() {
   }, [])
 
   const punch = (type) => {
+    if (!employee) return
     setMessage({
       type,
       text: `${type === 'in' ? 'Checked in' : 'Checked out'} at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Have a great ${type === 'in' ? 'shift' : 'day'}, ${employee.name.split(' ')[0]}!`,
     })
     setTimeout(() => setMessage(null), 5000)
+  }
+
+  if (employees.length === 0) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gradient-to-b from-brand-600 to-emerald-500 p-6 text-white">
+        <p className="text-lg font-semibold">No active employees found.</p>
+        <Link to="/" className="rounded-full bg-white/15 px-4 py-2 text-sm font-medium hover:bg-white/25">Exit kiosk</Link>
+      </div>
+    )
   }
 
   return (
@@ -47,11 +54,11 @@ export default function Kiosk() {
           <label htmlFor="kiosk-employee" className="mb-1 block text-center text-sm font-medium text-brand-100">Select your name</label>
           <select
             id="kiosk-employee"
-            value={employee.id}
-            onChange={(e) => setEmployee(employees.find((x) => x.id === Number(e.target.value)))}
+            value={employee?.email || ''}
+            onChange={(e) => setEmployeeId(e.target.value)}
             className="w-full rounded-xl border-0 bg-white px-4 py-4 text-base font-medium text-gray-900 focus:outline-none focus:ring-4 focus:ring-white/40"
           >
-            {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+            {employees.map((e) => <option key={e.email} value={e.email}>{e.name} — {e.companyName}</option>)}
           </select>
         </div>
 
