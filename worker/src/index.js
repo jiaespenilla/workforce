@@ -203,18 +203,18 @@ async function apiRoutes(path, method, request, env, url, claims) {
 
   /* bootstrap — everything the app needs in one call */
   if (path === '/api/bootstrap' && method === 'GET') {
-    const settingsRows = await env.DB.prepare('SELECT key, value FROM settings').all()
-    const roleRows = await env.DB.prepare('SELECT * FROM roles ORDER BY id').all()
-    const companyRows = await env.DB.prepare('SELECT * FROM companies ORDER BY created_at DESC').all()
-    const employeeRows = await env.DB.prepare('SELECT * FROM employees').all()
-    const taskRows = await env.DB.prepare('SELECT * FROM tasks ORDER BY id DESC').all()
+    const settingsRows = await env.DB.prepare('SELECT key, value FROM settings').all().then((r) => r.results)
+    const roleRows = await env.DB.prepare('SELECT * FROM roles ORDER BY id').all().then((r) => r.results)
+    const companyRows = await env.DB.prepare('SELECT * FROM companies ORDER BY created_at DESC').all().then((r) => r.results)
+    const employeeRows = await env.DB.prepare('SELECT * FROM employees').all().then((r) => r.results)
+    const taskRows = await env.DB.prepare('SELECT * FROM tasks ORDER BY id DESC').all().then((r) => r.results)
     let notifications = []
     if (isAdmin) {
-      notifications = (await env.DB.prepare('SELECT * FROM notifications ORDER BY id DESC').all())
+      notifications = (await env.DB.prepare('SELECT * FROM notifications ORDER BY id DESC').all().then((r) => r.results))
         .filter((n) => n.to_email === NOTIFICATION_RECIPIENT.toLowerCase() || n.to_email === claims.sub)
         .map(mapNotification)
     } else {
-      notifications = (await env.DB.prepare('SELECT * FROM notifications WHERE to_email = ? ORDER BY id DESC').bind(claims.sub).all()).map(mapNotification)
+      notifications = (await env.DB.prepare('SELECT * FROM notifications WHERE to_email = ? ORDER BY id DESC').bind(claims.sub).all().then((r) => r.results)).map(mapNotification)
     }
     const settings = Object.fromEntries(settingsRows.map((r) => [r.key, r.value]))
     return json({
@@ -228,7 +228,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
 
   /* settings */
   if (path === '/api/settings' && method === 'GET') {
-    const rows = await env.DB.prepare('SELECT key, value FROM settings').all()
+    const rows = await env.DB.prepare('SELECT key, value FROM settings').all().then((r) => r.results)
     return json(Object.fromEntries(rows.map((r) => [r.key, r.value])))
   }
   if (path === '/api/settings' && method === 'PUT') {
@@ -241,7 +241,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
 
   /* roles */
   if (path === '/api/roles' && method === 'GET') {
-    const rows = await env.DB.prepare('SELECT * FROM roles ORDER BY id').all()
+    const rows = await env.DB.prepare('SELECT * FROM roles ORDER BY id').all().then((r) => r.results)
     return json(rows.map((r) => ({ id: r.id, name: r.name, perms: safeParse(r.perms_json) })))
   }
   if (path === '/api/roles' && method === 'POST') {
@@ -265,8 +265,8 @@ async function apiRoutes(path, method, request, env, url, claims) {
 
   /* companies */
   if (path === '/api/companies' && method === 'GET') {
-    const companyRows = await env.DB.prepare('SELECT * FROM companies ORDER BY created_at DESC').all()
-    const employeeRows = await env.DB.prepare('SELECT * FROM employees').all()
+    const companyRows = await env.DB.prepare('SELECT * FROM companies ORDER BY created_at DESC').all().then((r) => r.results)
+    const employeeRows = await env.DB.prepare('SELECT * FROM employees').all().then((r) => r.results)
     return json(companyRows.map((row) => mapCompany(row, employeeRows)))
   }
   if (path === '/api/companies' && method === 'POST') {
@@ -293,7 +293,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
       subject: `New company registration: ${body.name || 'Unnamed Company'}`,
       body: `Company: ${body.name}\nIndustry: ${body.industry}\nRegistered: ${body.registered}\nTeam size: ${(body.employees || []).length}`,
     })
-    const employeeRows = await env.DB.prepare('SELECT * FROM employees WHERE company_id = ?').bind(id).all()
+    const employeeRows = await env.DB.prepare('SELECT * FROM employees WHERE company_id = ?').bind(id).all().then((r) => r.results)
     const row = await env.DB.prepare('SELECT * FROM companies WHERE id = ?').bind(id).first()
     return json(mapCompany(row, employeeRows), 201)
   }
@@ -343,7 +343,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
   }
 
   /* tasks */
-  if (path === '/api/tasks' && method === 'GET') return json((await env.DB.prepare('SELECT * FROM tasks ORDER BY id DESC').all()).map(mapTask))
+  if (path === '/api/tasks' && method === 'GET') return json((await env.DB.prepare('SELECT * FROM tasks ORDER BY id DESC').all().then((r) => r.results)).map(mapTask))
   if (path === '/api/tasks' && method === 'POST') {
     const t = await readJson(request)
     const result = await env.DB.prepare('INSERT INTO tasks (title, assignee, priority, due, status) VALUES (?, ?, ?, ?, ?)')
@@ -372,7 +372,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
     const rows = await env.DB.prepare(
       `SELECT ec.*, e.name AS emp_name, e.company_id
        FROM employee_credentials ec JOIN employees e ON e.email = ec.email`
-    ).all()
+    ).all().then((r) => r.results)
     let match = null
     for (const row of rows) {
       if (credMethod === 'fingerprint' && row.fp_token && row.fp_token === v) match = row
@@ -396,7 +396,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
   if (path === '/api/kiosk/directory' && method === 'GET') {
     const rows = await env.DB.prepare(
       `SELECT e.id, e.name, e.email, c.name AS company FROM employees e JOIN companies c ON c.id = e.company_id WHERE e.active = 1`
-    ).all()
+    ).all().then((r) => r.results)
     return json(rows)
   }
 
@@ -456,8 +456,8 @@ async function apiRoutes(path, method, request, env, url, claims) {
   /* organization reference lists (departments, positions, etc.) */  if (path === '/api/org-units' && method === 'GET') {
     const kind = url.searchParams.get('kind')
     const rows = kind
-      ? await env.DB.prepare('SELECT * FROM org_units WHERE kind = ? ORDER BY name').bind(kind).all()
-      : await env.DB.prepare('SELECT * FROM org_units ORDER BY kind, name').all()
+      ? await env.DB.prepare('SELECT * FROM org_units WHERE kind = ? ORDER BY name').bind(kind).all().then((r) => r.results)
+      : await env.DB.prepare('SELECT * FROM org_units ORDER BY kind, name').all().then((r) => r.results)
     return json(rows)
   }
   if (path === '/api/org-units' && method === 'POST') {
@@ -484,8 +484,8 @@ async function apiRoutes(path, method, request, env, url, claims) {
   /* notifications */
   if (path === '/api/notifications' && method === 'GET') {
     const rows = isAdmin
-      ? await env.DB.prepare('SELECT * FROM notifications ORDER BY id DESC').all()
-      : await env.DB.prepare('SELECT * FROM notifications WHERE to_email = ? ORDER BY id DESC').bind(claims.sub).all()
+      ? await env.DB.prepare('SELECT * FROM notifications ORDER BY id DESC').all().then((r) => r.results)
+      : await env.DB.prepare('SELECT * FROM notifications WHERE to_email = ? ORDER BY id DESC').bind(claims.sub).all().then((r) => r.results)
     return json(rows.map(mapNotification))
   }
   if (path === '/api/notifications' && method === 'POST') {
