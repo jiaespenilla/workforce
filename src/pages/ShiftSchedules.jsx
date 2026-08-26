@@ -13,6 +13,7 @@ export default function ShiftSchedules() {
   const [companyId, setCompanyId] = useState(companies[0]?.id || '')
   const [data, setData] = useState({ shifts: [], assignments: {} })
   const [loading, setLoading] = useState(true)
+  const [saved, setSaved] = useState(false)
   const [newShift, setNewShift] = useState({ name: '', start: '08:00', end: '17:00' })
 
   useEffect(() => {
@@ -48,7 +49,8 @@ export default function ShiftSchedules() {
 
   const save = async () => {
     await saveCompanyShiftData(companyId, () => data)
-    alert('Shift schedules saved.')
+    setSaved(true)
+    setTimeout(() => setSaved(false), 3000)
   }
 
   const inputCls = 'mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10'
@@ -129,7 +131,34 @@ export default function ShiftSchedules() {
         </ul>
       </section>
 
-      <div className="flex justify-end">
+      {/* Overtime grace */}
+      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 className="text-base font-bold text-gray-900">Overtime</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          A clock-out is flagged as <span className="font-semibold">Overtime</span> when it happens this many
+          minutes after the assigned shift's end time. Applies to all employees of the selected company.
+        </p>
+        <label className="mt-3 block w-48 text-sm">
+          <span className="font-medium text-gray-700">OT after shift end (minutes):</span>
+          <input
+            type="number"
+            min="0"
+            value={Number.isFinite(data.otGraceMinutes) ? data.otGraceMinutes : 15}
+            onChange={(e) => setData((d) => ({ ...d, otGraceMinutes: Number(e.target.value) }))}
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm tabular-nums focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
+          />
+        </label>
+      </section>
+
+      <div className="sticky bottom-4 flex items-center justify-between rounded-xl border border-gray-200 bg-white/95 p-4 shadow-lg backdrop-blur">
+        {saved ? (
+          <span className="inline-flex items-center gap-2 rounded-full bg-brand-50 px-4 py-2 text-xs font-medium text-brand-700 ring-1 ring-brand-200">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+            Shift schedules saved successfully
+          </span>
+        ) : (
+          <span className="text-xs text-gray-400">Changes apply to kiosk punches immediately.</span>
+        )}
         <button type="button" onClick={save} className="rounded-xl bg-brand-600 px-8 py-3 text-sm font-semibold text-white shadow-md hover:bg-brand-700">
           Save schedules
         </button>

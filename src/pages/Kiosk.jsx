@@ -369,6 +369,11 @@ export default function Kiosk() {
           <p className="text-center text-4xl font-black tracking-wide">
             CLOCKED {result.action === 'in' ? 'IN' : 'OUT'}
           </p>
+          {result.action === 'out' && result.overtime && (
+            <span className="rounded-full bg-amber-400 px-4 py-1 text-sm font-extrabold uppercase tracking-widest text-gray-900">
+              Overtime
+            </span>
+          )}
           <p className="text-lg font-semibold text-emerald-50">{result.name}</p>
           <p className="text-sm tabular-nums text-emerald-100">at {result.time}{result.shiftName ? ` · ${result.shiftName} shift` : ''}</p>
         </div>

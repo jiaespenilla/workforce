@@ -59,13 +59,12 @@ export async function saveCompanyShiftData(companyId, updater) {
 }
 
 /**
- * Decide the punch action for an identified employee.
+ * Decide the punch action for an identified employee, plus overtime detection.
  * - With a shift: first scan of the day is CLOCK-IN; once clocked in, the next
- *   scan is CLOCK-OUT. Outside the shift window (with no open clock-in) it
- *   falls back to simple alternation so nobody is locked out.
+ *   scan is CLOCK-OUT. Clocking out beyond shift-end + OT grace marks OVERTIME.
  * - Without a shift: simple alternation based on their last punch.
  */
-export function decideAction(punches, shift, now = new Date()) {
+export function decideAction(punches, shift, now = new Date(), otGraceMinutes = 15) {
   const todayStr = now.toDateString()
   const todays = punches
     .filter((p) => new Date(p.time).toDateString() === todayStr)
@@ -73,31 +72,29 @@ export function decideAction(punches, shift, now = new Date()) {
 
   const lastToday = todays[todays.length - 1]
 
-  if (!shift) {
-    // No shift assigned — alternate in/out per scan of the day.
-    if (lastToday && lastToday.type === 'in') return { action: 'out' }
-    if (lastToday && lastToday.type === 'out' && todays.length % 2 === 0) return { action: 'in' }
-    if (todays.length === 0) return { action: 'in' }
-    return { action: lastToday.type === 'in' ? 'out' : 'in' }
-  }
-
-  const minutesNow = now.getHours() * 60 + now.getMinutes()
   const toMinutes = (t) => {
     const [h, m] = (t || '00:00').split(':').map(Number)
     return h * 60 + m
   }
-  const startM = toMinutes(shift.start)
-  const endM = toMinutes(shift.end)
+
+  if (!shift) {
+    // No shift assigned — alternate in/out per scan of the day.
+    if (!lastToday) return { action: 'in' }
+    return { action: lastToday.type === 'in' ? 'out' : 'in', overtime: false }
+  }
 
   const hasOpenClockIn = lastToday && lastToday.type === 'in'
 
-  // Already clocked in this shift → this scan ends it.
-  if (hasOpenClockIn) return { action: 'out' }
+  // Already clocked in this shift → this scan ends it. Detect overtime when
+  // the clock-out happens past shift end + grace period.
+  if (hasOpenClockIn) {
+    const endM = toMinutes(shift.end)
+    const graceM = Number.isFinite(otGraceMinutes) ? Number(otGraceMinutes) : 15
+    const nowM = now.getHours() * 60 + now.getMinutes()
+    const overtime = nowM >= endM + graceM
+    return { action: 'out', overtime }
+  }
 
-  // Not yet clocked in: allow early arrival up to 2h before shift start,
-  // otherwise treat as clock-in anyway (grace for late employees).
-  void minutesNow
-  void startM
-  void endM
-  return { action: 'in' }
+  // Not yet clocked in today → this scan starts the shift.
+  return { action: 'in', overtime: false }
 }
