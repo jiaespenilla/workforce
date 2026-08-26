@@ -353,6 +353,35 @@ async function apiRoutes(path, method, request, env, url, claims) {
     }
   }
 
+  /* organization reference lists (departments, positions, etc.) */
+  if (path === '/api/org-units' && method === 'GET') {
+    const kind = url.searchParams.get('kind')
+    const rows = kind
+      ? await env.DB.prepare('SELECT * FROM org_units WHERE kind = ? ORDER BY name').bind(kind).all()
+      : await env.DB.prepare('SELECT * FROM org_units ORDER BY kind, name').all()
+    return json(rows)
+  }
+  if (path === '/api/org-units' && method === 'POST') {
+    const { kind, name, code, parent_id } = await readJson(request)
+    if (!kind || !name?.trim()) return json({ error: 'kind and name are required.' }, 400)
+    const result = await env.DB.prepare('INSERT INTO org_units (kind, name, code, parent_id) VALUES (?, ?, ?, ?)')
+      .bind(kind, name.trim(), code || null, parent_id ?? null).run()
+    return json({ id: result.meta.last_row_id, kind, name: name.trim(), code: code || null }, 201)
+  }
+  {
+    const m = path.match(/^\/api\/org-units\/(\d+)$/)
+    if (m && method === 'PUT') {
+      const { name, code } = await readJson(request)
+      await env.DB.prepare('UPDATE org_units SET name = COALESCE(?, name), code = COALESCE(?, code) WHERE id = ?')
+        .bind(name ?? null, code ?? null, Number(m[1])).run()
+      return json({ ok: true })
+    }
+    if (m && method === 'DELETE') {
+      await env.DB.prepare('DELETE FROM org_units WHERE id = ?').run(Number(m[1]))
+      return json({ ok: true })
+    }
+  }
+
   /* notifications */
   if (path === '/api/notifications' && method === 'GET') {
     const rows = isAdmin
