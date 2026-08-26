@@ -154,8 +154,117 @@ function TaskExportToolbar({ tasks }) {
 
 /* ---------- CEO dashboard ---------- */
 
+const STATUS_ORDER = ['pending', 'inprogress', 'completed']
+
+// Full task progress modal — monitoring view with a status stepper. The CEO
+// cannot start a task (that's the employee's move), but can revert or complete.
+function TaskProgressModal({ task, onClose, onStatusChange }) {
+  const currentIndex = STATUS_ORDER.indexOf(task.status)
+  const prevLabel = { inprogress: 'Back to pending', completed: 'Reopen task' }[task.status]
+  // From "In Progress" the CEO may mark completion; never auto-starts a pending task.
+  const nextLabel = task.status === 'inprogress' ? 'Mark as completed' : null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-gray-900/50" />
+      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="h-1.5 w-full bg-gradient-to-r from-brand-600 to-emerald-400" />
+
+        <div className="flex items-start justify-between gap-3 px-6 pt-5">
+          <div>
+            <h3 className="text-lg font-bold leading-snug text-gray-900">{task.title}</h3>
+            <p className="mt-1 text-xs text-gray-500">Assigned to: <span className="font-medium text-gray-700">{task.assignee}</span></p>
+          </div>
+          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Progress stepper */}
+        <div className="px-6 pt-6">
+          <p className="mb-3 text-[11px] font-bold uppercase tracking-wider text-gray-400">Progress</p>
+          <ol className="flex items-start">
+            {STATUS_ORDER.map((status, i) => {
+              const done = i <= currentIndex
+              const isCurrent = i === currentIndex
+              return (
+                <li key={status} className={`flex items-start ${i < STATUS_ORDER.length - 1 ? 'flex-1' : ''}`}>
+                  <div className="flex flex-col items-center gap-1.5">
+                    <span
+                      className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold transition ${
+                        done ? 'border-brand-600 bg-brand-600 text-white' : 'border-gray-300 bg-white text-gray-400'
+                      }`}
+                    >
+                      {done && !isCurrent ? (
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : i + 1}
+                    </span>
+                    <span className={`whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide ${done ? 'text-brand-700' : 'text-gray-400'}`}>
+                      {STATUS_LABELS[status]}
+                    </span>
+                  </div>
+                  {i < STATUS_ORDER.length - 1 && (
+                    <span className={`mx-1 mt-4 h-0.5 flex-1 rounded ${i < currentIndex ? 'bg-brand-600' : 'bg-gray-200'}`} />
+                  )}
+                </li>
+              )
+            })}
+          </ol>
+        </div>
+
+        {/* Details */}
+        <dl className="mx-6 mt-5 grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl bg-gray-50 p-4 text-xs">
+          <div>
+            <dt className="font-semibold uppercase tracking-wide text-gray-400">Priority</dt>
+            <dd className="mt-0.5 font-medium text-gray-900">{task.priority}</dd>
+          </div>
+          <div>
+            <dt className="font-semibold uppercase tracking-wide text-gray-400">Due date</dt>
+            <dd className="mt-0.5 font-medium tabular-nums text-gray-900">{task.due || '—'}</dd>
+          </div>
+          <div>
+            <dt className="font-semibold uppercase tracking-wide text-gray-400">Current status</dt>
+            <dd className="mt-0.5">
+              <span className={`rounded-full px-2 py-0.5 font-semibold ${STATUS_STYLES[task.status]}`}>{STATUS_LABELS[task.status]}</span>
+            </dd>
+          </div>
+        </dl>
+
+        {/* Monitoring actions — no "Start task"; that belongs to the assigned employee */}
+        {(prevLabel || nextLabel) && (
+          <div className="flex flex-wrap justify-end gap-2 border-t border-gray-100 px-6 py-4">
+            {prevLabel && (
+              <button
+                type="button"
+                onClick={() => onStatusChange(task.id, STATUS_ORDER[currentIndex - 1])}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50"
+              >
+                {prevLabel}
+              </button>
+            )}
+            {nextLabel && (
+              <button
+                type="button"
+                onClick={() => onStatusChange(task.id, STATUS_ORDER[currentIndex + 1])}
+                className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-brand-700"
+              >
+                {nextLabel}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function CeoDashboard({ user }) {
   const [selectedEmail, setSelectedEmail] = useState(null)
+  const [viewingTask, setViewingTask] = useState(null)
   const employees = getAllEmployees().filter((e) => e.active !== false && e.email !== user.email)
   const clockState = getClockInState()
   const allTasks = loadAllTasks()
@@ -166,6 +275,17 @@ function CeoDashboard({ user }) {
   const selectedTasks = selected
     ? allTasks.filter((t) => t.assignee === `${selected.name} (${selected.companyName})`)
     : []
+
+  const changeTaskStatus = (taskId, status) => {
+    try {
+      const all = JSON.parse(localStorage.getItem('uw_ceo_tasks')) || []
+      localStorage.setItem('uw_ceo_tasks', JSON.stringify(all.map((t) => (t.id === taskId ? { ...t, status } : t))))
+    } catch {
+      // storage unavailable
+    }
+    setViewingTask((prev) => (prev && prev.id === taskId ? { ...prev, status } : prev))
+  }
+
 
   return (
     <div className="space-y-6">
@@ -211,7 +331,7 @@ function CeoDashboard({ user }) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-gray-900">{emp.name}</p>
-                    <p className="truncate text-xs text-gray-500">{emp.role} · {emp.companyName}</p>
+                    <p className="truncate text-xs text-gray-500">{emp.role}</p>
                     <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-brand-700 ring-1 ring-brand-200">
                       <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -246,7 +366,7 @@ function CeoDashboard({ user }) {
               <Avatar user={{ name: selected.name, initials: selected.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(), avatar: selected.avatar }} size="h-10 w-10 text-sm" />
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-base font-bold text-gray-900">{selected.name}'s Tasks</h2>
-                <p className="truncate text-xs text-gray-400">{selected.role} · {selected.companyName}</p>
+                <p className="truncate text-xs text-gray-400">{selected.role}</p>
               </div>
               <button onClick={() => setSelectedEmail(null)} aria-label="Close panel" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -272,7 +392,14 @@ function CeoDashboard({ user }) {
                   </p>
                   <div className="space-y-2">
                     {group.map((task) => (
-                      <div key={task.id} className={`rounded-xl border p-3.5 ${status === 'completed' ? 'border-brand-100 bg-brand-50/40' : 'border-gray-200'}`}>
+                      <button
+                        key={task.id}
+                        type="button"
+                        onClick={() => setViewingTask(task)}
+                        className={`block w-full rounded-xl border p-3.5 text-left transition hover:border-brand-400 hover:shadow-md ${
+                          status === 'completed' ? 'border-brand-100 bg-brand-50/40' : 'border-gray-200'
+                        }`}
+                      >
                         <div className="flex items-start justify-between gap-2">
                           <h3 className={`text-sm font-medium ${status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                             {task.title}
@@ -285,7 +412,13 @@ function CeoDashboard({ user }) {
                           Priority: <span className="font-medium text-gray-500">{task.priority}</span>
                           {task.due && <> · Due: <span className="font-medium tabular-nums text-gray-500">{task.due}</span></>}
                         </p>
-                      </div>
+                        <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600">
+                          View full progress
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </p>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -294,6 +427,14 @@ function CeoDashboard({ user }) {
           </div>
         )}
       </div>
+
+      {viewingTask && (
+        <TaskProgressModal
+          task={viewingTask}
+          onClose={() => setViewingTask(null)}
+          onStatusChange={changeTaskStatus}
+        />
+      )}
     </div>
   )
 }

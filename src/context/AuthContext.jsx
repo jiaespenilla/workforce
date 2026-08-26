@@ -3,6 +3,7 @@ import { commitPendingSystemSettings } from '../lib/systemSettings'
 import { loadRegisteredCompanies } from '../lib/companies'
 import { getConfiguredRoles } from '../lib/roles'
 import { getStoredPassword, setStoredPassword } from '../lib/passwords'
+import { tryApiLogin } from '../lib/api'
 
 const AuthContext = createContext(null)
 
@@ -202,14 +203,36 @@ export function AuthProvider({ children }) {
     return null
   }
 
+  // Server-side login (cloud mode). Returns a user, throws on bad credentials,
+  // or returns null when no API is configured/unreachable (local fallback).
+  const serverLogin = async (identifier, password) => {
+    const result = await tryApiLogin(identifier, password)
+    if (!result) return null
+    localStorage.setItem('uw_token', result.token)
+    const ru = result.user || {}
+    const name = ru.name || identifier
+    const u = {
+      email: ru.email || identifier,
+      name,
+      role: ru.role,
+      roleLabel: { administrator: 'Administrator', ceo: 'CEO', employee: 'Employee' }[ru.role] || ru.role,
+      usingDefaultPassword: !!ru.usingDefaultPassword,
+      initials: name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(),
+    }
+    setUser(u)
+    localStorage.setItem('uw_user', JSON.stringify(u))
+    return u
+  }
+
   const logout = () => {
     commitPendingSystemSettings()
     setUser(null)
     localStorage.removeItem('uw_user')
+    localStorage.removeItem('uw_token')
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, loginAdmin, loginCeo, logout, updateProfile, changeOwnPassword }}>
+    <AuthContext.Provider value={{ user, login, loginAdmin, loginCeo, logout, updateProfile, changeOwnPassword, serverLogin }}>
       {children}
     </AuthContext.Provider>
   )

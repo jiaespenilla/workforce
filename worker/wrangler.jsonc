@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "unified-workforce-api",
+  "main": "src/index.js",
+  "compatibility_date": "2024-09-23",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "workforce",
+      "database_id": "REPLACE_WITH_YOUR_D1_ID"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "DOCUMENTS",
+      "bucket_name": "workforce-documents"
+    }
+  ],
+  "vars": {
+    // Change this to a long random string before deploying!
+    "AUTH_SECRET": "dev-only-secret-change-me"
+  }
+}

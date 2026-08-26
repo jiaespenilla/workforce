@@ -9,7 +9,7 @@ import { getAllCompanies } from '../lib/companies'
 export default function Login() {
   usePageTitle('Login Page')
   const navigate = useNavigate()
-  const { login, loginAdmin, loginCeo } = useAuth()
+  const { login, loginAdmin, loginCeo, serverLogin } = useAuth()
   const [error, setError] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(() => sessionStorage.getItem('uw_session_expired') === '1')
@@ -18,13 +18,25 @@ export default function Login() {
 
   if (sessionExpired) sessionStorage.removeItem('uw_session_expired')
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     const email = e.target.email.value.trim()
     const password = e.target.password.value
     if (!email || !password) return setError('Please enter your email and password.')
     setError(null)
     const identifier = email.trim().toLowerCase()
+
+    // Cloud mode first — falls back to local demo accounts when no API is configured.
+    let serverUser = null
+    try {
+      serverUser = await serverLogin(identifier, password)
+    } catch (err) {
+      return setError(err.message || 'Sign-in failed.')
+    }
+    if (serverUser) {
+      navigate(serverUser.role === 'administrator' ? '/settings' : '/', { replace: true })
+      return
+    }
 
     if (identifier === 'admin_celestine') {
       const user = loginAdmin(email, password)
