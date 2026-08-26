@@ -5,16 +5,16 @@
   "compatibility_date": "2024-09-23",
   "d1_databases": [
     {
-      "binding": "DB",
+      "binding": "workforce",
       "database_name": "workforce",
-      "database_id": "REPLACE_WITH_YOUR_D1_ID"
+      "database_id": "c5b95327-aa81-41ce-962b-bc694ef56eea"
     }
   ],
   // NOTE: R2 (document file storage) removed for now — requires enabling
   // through the Cloudflare Dashboard. Re-add when needed for Phase 4:
   // "r2_buckets": [{ "binding": "DOCUMENTS", "bucket_name": "workforce-documents" }],
-  "vars": {
-    // Change this to a long random string before deploying!
-    "AUTH_SECRET": "dev-only-secret-change-me"
-  }
+  // AUTH_SECRET is set as a remote SECRET (not here) via:
+  //   wrangler secret put AUTH_SECRET
+  // Never put real secrets in this file.
+  "vars": {}
 }
