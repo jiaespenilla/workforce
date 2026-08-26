@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { usePageTitle } from '../lib/documentMeta'
 import { getAllCompanies, loadRegisteredCompanies } from '../lib/companies'
 import { getConfiguredRoles } from '../lib/roles'
+import { api, apiEnabled } from '../lib/api'
 
 export default function AddEmployee() {
   usePageTitle('Add Employee')
@@ -22,14 +23,21 @@ export default function AddEmployee() {
   })
   const [error, setError] = useState(null)
   const [savedName, setSavedName] = useState(null)
+  const [team, setTeam] = useState(selectedCompany?.employees || [])
 
   const roleOptions = getConfiguredRoles().filter((r) => !r.perms.settings).map((r) => r.name)
+
+  // Keep the team list in sync when the selected company changes.
+  const selectCompany = (id) => {
+    setCompanyId(id)
+    setTeam(getAllCompanies().find((c) => c.id === id)?.employees || [])
+  }
   const selectedCompany = companies.find((c) => c.id === companyId)
   const existingEmployees = selectedCompany?.employees || []
 
   const inputCls = 'mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10'
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault()
     setError(null)
     const cleanName = name.trim()
@@ -47,17 +55,27 @@ export default function AddEmployee() {
     }
 
     try {
-      const updated = loadRegisteredCompanies().map((c) =>
-        c.id === companyId
-          ? { ...c, employees: [...c.employees, { name: cleanName, email: cleanEmail, role: role || 'Unassigned', active: true }] }
-          : c
-      )
-      localStorage.setItem('uw_companies', JSON.stringify(updated))
+      if (apiEnabled()) {
+        // Cloud mode — saved to D1; a login account is created server-side.
+        await api(`/api/companies/${companyId}/employees`, {
+          method: 'POST',
+          body: { name: cleanName, email: cleanEmail, role: role || 'Unassigned', active: true },
+        })
+        setTeam((prev) => [...prev, { name: cleanName, email: cleanEmail, role: role || 'Unassigned', active: true }])
+      } else {
+        const updated = loadRegisteredCompanies().map((c) =>
+          c.id === companyId
+            ? { ...c, employees: [...c.employees, { name: cleanName, email: cleanEmail, role: role || 'Unassigned', active: true }] }
+            : c
+        )
+        localStorage.setItem('uw_companies', JSON.stringify(updated))
+        setTeam((prev) => [...prev, { name: cleanName, email: cleanEmail, role: role || 'Unassigned', active: true }])
+      }
       setSavedName(`${cleanName} (${cleanEmail})`)
       setName('')
       setEmail('')
-    } catch {
-      setError('Unable to save — storage unavailable.')
+    } catch (err) {
+      setError(err.message || 'Unable to save — please try again.')
     }
   }
 
@@ -74,7 +92,7 @@ export default function AddEmployee() {
           <span className="font-medium text-gray-700">Company:</span>
           <select
             value={companyId}
-            onChange={(e) => setCompanyId(e.target.value)}
+            onChange={(e) => selectCompany(e.target.value)}
             disabled={companies.length <= 1 && !!user?.companyName}
             className={inputCls}
           >
@@ -128,10 +146,10 @@ export default function AddEmployee() {
 
       {/* Current team of the selected company */}
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-base font-bold text-gray-900">Current team ({existingEmployees.length})</h2>
+        <h2 className="text-base font-bold text-gray-900">Current team ({team.length})</h2>
         <p className="mt-0.5 text-xs text-gray-400">{selectedCompany?.name || '—'}</p>
         <ul className="mt-4 divide-y divide-gray-100">
-          {existingEmployees.map((emp) => (
+          {team.map((emp) => (
             <li key={emp.email} className="flex items-center justify-between gap-3 py-2.5 text-sm">
               <div>
                 <p className="font-medium text-gray-900">{emp.name}</p>

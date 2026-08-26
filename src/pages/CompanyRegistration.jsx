@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { Logo } from '../components/Layout'
 import { getLegalDocs } from '../lib/legal'
 import { getConfiguredRoles } from '../lib/roles'
+import { api, apiEnabled } from '../lib/api'
 
 const industries = ['Technology', 'Healthcare', 'Retail', 'Manufacturing', 'Finance', 'Education', 'Construction', 'Hospitality', 'Other']
 
@@ -123,7 +124,7 @@ export default function CompanyRegistration() {
     )
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (!bothDocsRead) {
       setLegalError(true)
@@ -171,21 +172,32 @@ export default function CompanyRegistration() {
       owner: { name: ceo.name, title: 'CEO', email: ceo.email },
       employees: members.map((m) => ({ ...m, active: true })),
     }
-    try {
-      const existing = JSON.parse(localStorage.getItem('uw_companies')) || []
-      localStorage.setItem('uw_companies', JSON.stringify([company, ...existing]))
-      const notifications = JSON.parse(localStorage.getItem('uw_notifications')) || []
-      notifications.push({
-        id: `notif-${Date.now()}`,
-        to: NOTIFICATION_RECIPIENT,
-        subject: `New company registration: ${company.name}`,
-        body: `A new company has registered on Unified Workforce.\n\nCompany: ${company.name}\nIndustry: ${company.industry}\nLocation: ${company.city}\nContact email: ${company.contactEmail}\nRegistered: ${company.registered}\n\nTeam (${members.length}):\n${members.map((m) => `- ${m.name} — ${m.role} (${m.email})`).join('\n')}`,
-        createdAt: new Date().toISOString(),
-        status: 'pending-smtp',
-      })
-      localStorage.setItem('uw_notifications', JSON.stringify(notifications))
-    } catch {
-      // storage unavailable — registration still succeeds in UI
+    if (apiEnabled()) {
+      // Cloud mode — saved to the D1 database; admin notification queued server-side.
+      try {
+        await api('/api/companies', { method: 'POST', body: company })
+      } catch (err) {
+        alert(`Registration failed to save: ${err.message}`)
+        return
+      }
+    } else {
+      // Local demo mode
+      try {
+        const existing = JSON.parse(localStorage.getItem('uw_companies')) || []
+        localStorage.setItem('uw_companies', JSON.stringify([company, ...existing]))
+        const notifications = JSON.parse(localStorage.getItem('uw_notifications')) || []
+        notifications.push({
+          id: `notif-${Date.now()}`,
+          to: NOTIFICATION_RECIPIENT,
+          subject: `New company registration: ${company.name}`,
+          body: `A new company has registered on Unified Workforce.\n\nCompany: ${company.name}\nIndustry: ${company.industry}\nLocation: ${company.city}\nContact email: ${company.contactEmail}\nRegistered: ${company.registered}\n\nTeam (${members.length}):\n${members.map((m) => `- ${m.name} — ${m.role} (${m.email})`).join('\n')}`,
+          createdAt: new Date().toISOString(),
+          status: 'pending-smtp',
+        })
+        localStorage.setItem('uw_notifications', JSON.stringify(notifications))
+      } catch {
+        // storage unavailable — registration still succeeds in UI
+      }
     }
     setSubmitted(true)
   }

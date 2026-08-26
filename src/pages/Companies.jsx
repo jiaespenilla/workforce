@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react'
 import { usePageTitle } from '../lib/documentMeta'
-import { useState } from 'react'
 import { loadRegisteredCompanies } from '../lib/companies'
+import { api, apiEnabled } from '../lib/api'
 
 const STATUS_STYLES = {
   pending: 'bg-amber-50 text-amber-700 ring-amber-200',
@@ -379,47 +380,55 @@ function CompanyCard({ company, onView, onApprove, onReject }) {
 export default function Companies() {
   usePageTitle('Companies')
   const [query, setQuery] = useState('')
-  const [companies, setCompanies] = useState(loadRegisteredCompanies)
+  const [companies, setCompanies] = useState(apiEnabled() ? [] : loadRegisteredCompanies)
   const [viewingId, setViewingId] = useState(null)
   const [rejecting, setRejecting] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
   const [approving, setApproving] = useState(null)
 
-  const mutateCompanies = (updater) => {
-    setCompanies((prev) => {
-      const next = updater(prev)
-      localStorage.setItem('uw_companies', JSON.stringify(next))
-      return next
-    })
+  // Cloud mode: companies come from the database.
+  useEffect(() => {
+    if (!apiEnabled()) return
+    api('/api/companies').then(setCompanies).catch(() => {})
+  }, [])
+
+  const mutateCompanies = (updater, apiCall) => {
+    setCompanies((prev) => updater(prev))
+    if (apiEnabled() && apiCall) apiCall().catch((err) => console.error('Sync failed:', err.message))
   }
 
   const handleStatusChange = (id, status) =>
-    mutateCompanies((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)))
+    mutateCompanies(
+      (prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)),
+      () => api(`/api/companies/${id}`, { method: 'PUT', body: { status } })
+    )
 
   // Queue an email to the company owner. Delivers once SMTP is configured;
-  // until then it is stored locally alongside admin notifications.
+  // until then it is stored alongside admin notifications.
   const queueOwnerEmail = (company, kind, reason) => {
-    try {
-      const ownerEmail = company.owner?.email || company.contactEmail || ''
-      if (!ownerEmail) return
-      const notifications = JSON.parse(localStorage.getItem('uw_notifications')) || []
-      notifications.push({
-        id: `notif-${Date.now()}`,
-        to: ownerEmail,
-        subject:
-          kind === 'approved'
-            ? `Your registration for ${company.name} has been approved`
-            : `Update on your registration for ${company.name}`,
-        body:
-          kind === 'approved'
-            ? `Good news!\n\nYour company "${company.name}" has been approved on Unified Workforce.\nTeam members can now sign in with their registered emails.`
-            : `We're sorry — your registration for "${company.name}" was not approved.\n\nReason: ${reason}\n\nYou may contact the system administrator for more details.`,
-        createdAt: new Date().toISOString(),
-        status: 'pending-smtp',
-      })
-      localStorage.setItem('uw_notifications', JSON.stringify(notifications))
-    } catch {
-      // storage unavailable
+    const ownerEmail = company.owner?.email || company.contactEmail || ''
+    if (!ownerEmail) return
+    const payload = {
+      to: ownerEmail,
+      subject:
+        kind === 'approved'
+          ? `Your registration for ${company.name} has been approved`
+          : `Update on your registration for ${company.name}`,
+      body:
+        kind === 'approved'
+          ? `Good news!\n\nYour company "${company.name}" has been approved on Unified Workforce.\nTeam members can now sign in with their registered emails.`
+          : `We're sorry — your registration for "${company.name}" was not approved.\n\nReason: ${reason}\n\nYou may contact the system administrator for more details.`,
+    }
+    if (apiEnabled()) {
+      api('/api/notifications', { method: 'POST', body: payload }).catch(() => {})
+    } else {
+      try {
+        const notifications = JSON.parse(localStorage.getItem('uw_notifications')) || []
+        notifications.push({ id: `notif-${Date.now()}`, ...payload, createdAt: new Date().toISOString(), status: 'pending-smtp' })
+        localStorage.setItem('uw_notifications', JSON.stringify(notifications))
+      } catch {
+        // storage unavailable
+      }
     }
   }
 
@@ -452,19 +461,43 @@ export default function Companies() {
   }
 
   const handleToggleActive = (id) =>
-    mutateCompanies((prev) => prev.map((c) => (c.id === id ? { ...c, active: c.active === false } : c)))
+    mutateCompanies(
+      (prev) => prev.map((c) => (c.id === id ? { ...c, active: c.active === false } : c)),
+      () => api(`/api/companies/${id}`, { method: 'PUT', body: { active: companies.find((c) => c.id === id)?.active === false } })
+    )
 
   const handleToggleEmployee = (id, empEmail) =>
-    mutateCompanies((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? { ...c, employees: c.employees.map((e) => (e.email === empEmail ? { ...e, active: e.active === false } : e)) }
-          : c
-      )
+    mutateCompanies(
+      (prev) =>
+        prev.map((c) =>
+          c.id === id
+            ? { ...c, employees: c.employees.map((e) => (e.email === empEmail ? { ...e, active: e.active === false } : e)) }
+            : c
+        ),
+      () => {
+        const company = companies.find((c) => c.id === id)
+        const emp = company?.employees.find((e) => e.email === empEmail)
+        if (!emp?.id) return Promise.resolve()
+        return api(`/api/employees/${emp.id}`, { method: 'PUT', body: { active: emp.active === false } })
+      }
     )
 
   const handleEditCompany = (id, updates) =>
-    mutateCompanies((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)))
+    mutateCompanies(
+      (prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)),
+      () =>
+        api(`/api/companies/${id}`, {
+          method: 'PUT',
+          body: {
+            name: updates.name,
+            industry: updates.industry,
+            address: updates.address,
+            city: updates.city,
+            contactPhone: updates.contactPhone,
+            contactEmail: updates.contactEmail,
+          },
+        })
+    )
 
   const totalCompanies = companies.length
   const filtered = companies.filter(
