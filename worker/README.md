@@ -1,6 +1,7 @@
 # Unified Workforce API (Cloudflare Worker)
 
-Backend for the People & Organization platform. D1 for data, R2 for documents.
+Backend for the People & Organization platform. D1 for data.
+(R2 document storage is deferred — it requires enabling through the Cloudflare Dashboard.)
 
 ## One-time setup
 
@@ -9,9 +10,8 @@ cd worker
 npm install -g wrangler        # if not installed
 wrangler login                 # opens browser — use your Cloudflare account
 
-# Create the database and bucket, then copy the D1 database_id into wrangler.jsonc
+# Create the database, then copy the D1 database_id into wrangler.jsonc
 wrangler d1 create workforce
-wrangler r2 bucket create workforce-documents
 
 # Apply the schema
 wrangler d1 execute workforce --file=./schema.sql --remote

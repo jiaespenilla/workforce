@@ -10,12 +10,9 @@
       "database_id": "REPLACE_WITH_YOUR_D1_ID"
     }
   ],
-  "r2_buckets": [
-    {
-      "binding": "DOCUMENTS",
-      "bucket_name": "workforce-documents"
-    }
-  ],
+  // NOTE: R2 (document file storage) removed for now — requires enabling
+  // through the Cloudflare Dashboard. Re-add when needed for Phase 4:
+  // "r2_buckets": [{ "binding": "DOCUMENTS", "bucket_name": "workforce-documents" }],
   "vars": {
     // Change this to a long random string before deploying!
     "AUTH_SECRET": "dev-only-secret-change-me"
