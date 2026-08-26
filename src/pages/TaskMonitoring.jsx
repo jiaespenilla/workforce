@@ -1,6 +1,7 @@
 import { usePageTitle } from '../lib/documentMeta'
 import { useState } from 'react'
-import { getAllEmployees } from '../lib/companies'
+import { useAuth } from '../context/AuthContext'
+import { getScopedEmployees } from '../lib/companies'
 
 const columns = [
   { id: 'pending', label: 'Pending' },
@@ -25,13 +26,14 @@ const priorityStyles = {
 }
 
 export default function TaskMonitoring() {
+  const { user } = useAuth()
   usePageTitle('Task Monitoring')
   const [tasks, setTasks] = useState(loadTasks)
   const [dragId, setDragId] = useState(null)
   const [overCol, setOverCol] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ title: '', assignee: '', priority: 'Medium', due: '' })
-  const employees = getAllEmployees()
+  const employees = getScopedEmployees(user)
   const activeEmployees = employees.filter((e) => e.active !== false)
 
   const persist = (next) => {

@@ -1,7 +1,7 @@
 import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getAllEmployees } from '../lib/companies'
+import { getAllEmployees, getScopedEmployees } from '../lib/companies'
 import { getSystemTimeZone } from '../lib/systemSettings'
 
 function currentWeek() {
@@ -27,6 +27,7 @@ function currentWeek() {
 // CEO view — no clock in/out; shows the employees' timesheet with a real-time clock
 // synced to the time zone configured in System Settings.
 function CeoTimeKeeping() {
+  const { user } = useAuth()
   const [now, setNow] = useState(new Date())
   const [view, setView] = useState('week')
   useEffect(() => {
@@ -38,7 +39,7 @@ function CeoTimeKeeping() {
   const week = currentWeek()
   const totalHours = week.reduce((s, d) => s + d.hours, 0)
   const totalOT = week.reduce((s, d) => s + d.ot, 0)
-  const employees = getAllEmployees().filter((e) => e.active !== false)
+  const employees = getScopedEmployees(user).filter((e) => e.active !== false)
 
   return (
     <div className="space-y-6">

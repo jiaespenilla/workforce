@@ -167,7 +167,7 @@ function RolesPanel({ roles, onAdd, onRename, onRemove, onTogglePerm }) {
                     ['timekeeping', 'Time Keeping'],
                     ['tasks', 'Tasks'],
                     ['payroll', 'Payroll'],
-                    ['employees', 'Employees'],
+                    ['employees', 'People'],
                     ['kiosk', 'Kiosk'],
                     ['settings', 'This Console'],
                   ].map(([key, label]) => (

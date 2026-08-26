@@ -28,3 +28,17 @@ export function getAllEmployees() {
     c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id }))
   )
 }
+
+// Company-scoped views: users belonging to a company only ever see their own
+// company's data. Platform accounts (no company attached) see everything.
+export function getScopedCompanies(user) {
+  const all = getAllCompanies()
+  if (user?.companyName) return all.filter((c) => c.name === user.companyName)
+  return all
+}
+
+export function getScopedEmployees(user) {
+  return getScopedCompanies(user).flatMap((c) =>
+    c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id }))
+  )
+}

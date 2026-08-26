@@ -8,12 +8,16 @@
 
 const token = () => localStorage.getItem('uw_token') || ''
 
+// Safe under non-Vite environments where import.meta.env may be undefined.
+const env = (typeof import.meta !== 'undefined' && import.meta.env) || {}
+const API_URL = env.VITE_API_URL || ''
+
 export function apiEnabled() {
-  return Boolean(import.meta.env.VITE_API_URL)
+  return Boolean(API_URL)
 }
 
 export async function api(path, { method = 'GET', body } = {}) {
-  const res = await fetch(`${import.meta.env.VITE_API_URL}${path}`, {
+  const res = await fetch(`${API_URL}${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -35,7 +39,7 @@ export async function api(path, { method = 'GET', body } = {}) {
 export async function tryApiLogin(identifier, password) {
   if (!apiEnabled()) return null
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/login`, {
+    const res = await fetch(`${API_URL}/api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ identifier, password }),

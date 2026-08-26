@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getAllEmployees } from '../lib/companies'
+import { getAllEmployees, getScopedEmployees } from '../lib/companies'
 import Avatar from '../components/Avatar'
 
 const shortcuts = [
