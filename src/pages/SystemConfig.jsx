@@ -1,6 +1,6 @@
 import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
-import { getActiveSettings, getPendingSettings, queueSystemSettings, getSystemTimeZone, isMaintenanceMode, setMaintenanceMode, getSessionTimeoutMinutes, setSessionTimeoutMinutes } from '../lib/systemSettings'
+import { getActiveSettings, getPendingSettings, queueSystemSettings, pushSystemSettingsToServer, getSystemTimeZone, isMaintenanceMode, setMaintenanceMode, getSessionTimeoutMinutes, setSessionTimeoutMinutes } from '../lib/systemSettings'
 import { getLegalDocs, saveLegalDocs } from '../lib/legal'
 import { getConfiguredRoles, saveRolesList, canAction } from '../lib/roles'
 import { getAllCompanies } from '../lib/companies'
@@ -350,14 +350,17 @@ export default function SystemConfig() {
     setTimeout(() => setSaved(false), 3000)
   }
 
-  const saveSystemSettings = (e) => {
+  const saveSystemSettings = async (e) => {
     e.preventDefault()
     const form = e.target
-    queueSystemSettings({
+    const next = {
       name: form.systemName.value.trim() || settings.name,
       version: form.systemVersion.value.trim() || settings.version,
       timezone: form.timezone.value,
-    })
+    }
+    queueSystemSettings(next)
+    // Persist to the server too, so every device picks the change up.
+    await pushSystemSettingsToServer(next)
     flashSaved()
   }
 

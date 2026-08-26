@@ -1,3 +1,5 @@
+import { api, apiEnabled } from './api'
+
 const DEFAULT_SETTINGS = {
   name: 'Unified Workforce',
   version: 'v2.4.1',
@@ -52,6 +54,34 @@ export function setMaintenanceMode(on) {
 export function getSessionTimeoutMinutes() {
   const value = Number(localStorage.getItem('uw_session_timeout'))
   return Number.isFinite(value) && value > 0 ? value : 0
+}
+
+// Pull server-managed system details (cloud mode) into the active settings.
+export async function syncSystemSettingsFromServer() {
+  if (!apiEnabled()) return
+  try {
+    const s = await api('/api/settings')
+    const mapped = {
+      ...(s.system_name ? { name: s.system_name } : {}),
+      ...(s.version ? { version: s.version } : {}),
+      ...(s.timezone ? { timezone: s.timezone } : {}),
+    }
+    if (!Object.keys(mapped).length) return
+    localStorage.setItem('uw_system_settings', JSON.stringify({ ...getActiveSettings(), ...mapped }))
+  } catch {
+    /* offline or unauthenticated — keep local settings */
+  }
+}
+
+// Push system details to the server (cloud mode). Returns an error string or null.
+export async function pushSystemSettingsToServer({ name, version, timezone }) {
+  if (!apiEnabled()) return null
+  try {
+    await api('/api/settings', { method: 'PUT', body: { system_name: name, version, timezone } })
+    return null
+  } catch (err) {
+    return err.message || 'Failed to sync system settings.'
+  }
 }
 
 export function setSessionTimeoutMinutes(minutes) {

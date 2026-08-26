@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import { isMaintenanceMode } from './lib/systemSettings'
+import { isMaintenanceMode, syncSystemSettingsFromServer } from './lib/systemSettings'
 import RequireRole from './components/RequireRole'
 import Layout from './components/Layout'
 import AdminLayout from './components/AdminLayout'
@@ -94,6 +94,15 @@ function MaintenanceGate({ children }) {
   return children
 }
 
+// Applies server-managed system details (name/version/timezone) once signed in.
+function ServerSettingsSync() {
+  const { user } = useAuth()
+  useEffect(() => {
+    if (user) syncSystemSettingsFromServer()
+  }, [user])
+  return null
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -135,6 +144,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
       <SessionManager />
+      <ServerSettingsSync />
     </AuthProvider>
   )
 }
