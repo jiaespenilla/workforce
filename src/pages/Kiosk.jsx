@@ -1,13 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { getAllEmployees } from '../lib/companies'
 import { getActiveSettings } from '../lib/systemSettings'
 import { getSystemIcon } from '../lib/documentMeta'
 import { loadKioskConfig } from './KioskSetup'
 
-// Makes the kiosk installable as a stand-alone app on phones/tablets
-// (Add to Home Screen → launches full-screen like a native app).
+// Makes the kiosk installable as a stand-alone app on phones/tablets.
 function useKioskPwa(systemName, brandLetter) {
   useLayoutEffect(() => {
     const icon = getSystemIcon()
@@ -78,7 +75,6 @@ function FingerprintGlyph({ className }) {
 }
 
 export default function Kiosk() {
-  const { user } = useAuth()
   const settings = getActiveSettings()
   const config = loadKioskConfig()
   const systemName = settings.name
@@ -86,15 +82,13 @@ export default function Kiosk() {
   const brandIcon = getSystemIcon()
 
   const [now, setNow] = useState(new Date())
-  const employees = getAllEmployees().filter((e) => e.active !== false)
-  const [employeeId, setEmployeeId] = useState(null)
-  const employee = employees.find((e) => String(e.email) === String(employeeId)) || employees[0]
-  const [message, setMessage] = useState(null)
-
-  // Auth flow: 'awaiting' → 'punch'. PIN fallback uses its own sub-mode.
-  const [authed, setAuthed] = useState(false)
-  const [pinMode, setPinMode] = useState(false)
+  // identified = the employee matched via credential
+  const [identified, setIdentified] = useState(null)
+  const [authError, setAuthError] = useState(null)
+  const [scanning, setScanning] = useState(false)
   const [pin, setPin] = useState('')
+  const [pinMode, setPinMode] = useState(false)
+  const [message, setMessage] = useState(null)
   const idleTimer = useRef(null)
 
   useEffect(() => {
@@ -107,11 +101,11 @@ export default function Kiosk() {
     const resetIdle = () => {
       if (idleTimer.current) clearTimeout(idleTimer.current)
       idleTimer.current = setTimeout(() => {
-        setAuthed(false)
-        setPinMode(false)
+        setIdentified(null)
         setPin('')
-        setEmployeeId(null)
+        setPinMode(false)
         setMessage(null)
+        setAuthError(null)
       }, Math.max(config.idleTimeout, 10) * 1000)
     }
     resetIdle()
@@ -126,32 +120,69 @@ export default function Kiosk() {
 
   useKioskPwa(systemName, brandLetter)
 
-  if (user?.perms?.kiosk === false) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gradient-to-b from-brand-700 to-emerald-500 p-6 text-white">
-        <p className="text-lg font-semibold">Kiosk access is not enabled for your role.</p>
-        <Link to="/" className="rounded-full bg-white/15 px-4 py-2 text-sm font-medium hover:bg-white/25">Back</Link>
-      </div>
-    )
-  }
-
-  if (employees.length === 0) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gradient-to-b from-brand-700 to-emerald-500 p-6 text-white">
-        <p className="text-lg font-semibold">No active employees found.</p>
-        <Link to="/" className="rounded-full bg-white/15 px-4 py-2 text-sm font-medium hover:bg-white/25">Exit kiosk</Link>
-      </div>
-    )
+  /* Identify the employee from a registered credential.
+     Cloud mode asks the API; local mode matches against uw_credentials and
+     the locally registered fingerprint tokens. */
+  const identify = async (method, value) => {
+    setAuthError(null)
+    setScanning(true)
+    try {
+      let match = null
+      if (import.meta.env.VITE_API_URL) {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/kiosk/identify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ method, value }),
+          })
+          if (res.ok) match = await res.json()
+        } catch {
+          match = null
+        }
+      }
+      if (!match) {
+        // Local fallback — match against locally registered credentials
+        let credMap = {}
+        try { credMap = JSON.parse(localStorage.getItem('uw_credentials')) || {} } catch { credMap = {} }
+        const { getAllEmployees } = await import('../lib/companies')
+        const all = getAllEmployees()
+        for (const [email, c] of Object.entries(credMap)) {
+          const emp = all.find((e) => e.email === email)
+          if (!emp) continue
+          if (method === 'fingerprint' && c.fpToken && c.fpToken === value) match = { email, name: emp.name, company: emp.companyName }
+          if (method === 'pin' && c.pin && c.pin === value) match = { email, name: emp.name, company: emp.companyName }
+          if (method === 'qr' && c.qrCode && c.qrCode === value) match = { email, name: emp.name, company: emp.companyName }
+          if (match) break
+        }
+        // Simulated sensor: exactly one registered fingerprint identifies the person.
+        if (!match && method === 'fingerprint' && value === 'SIM_FP') {
+          const fpEntries = Object.entries(credMap).filter(([, c]) => c.fpToken)
+          if (fpEntries.length === 1) {
+            const [email, c] = fpEntries[0]
+            const emp = all.find((e) => e.email === email)
+            if (emp) match = { email, name: emp.name, company: emp.companyName }
+          }
+        }
+      }
+      if (!match) {
+        setAuthError(`Credential not recognized. Register it in Kiosk Setup first.`)
+        return false
+      }
+      setIdentified(match)
+      return true
+    } finally {
+      setScanning(false)
+    }
   }
 
   const punch = (type) => {
-    if (!employee) return
+    if (!identified) return
     try {
       const punches = JSON.parse(localStorage.getItem('uw_punches')) || []
       punches.push({
-        email: employee.email,
-        name: employee.name,
-        company: employee.companyName,
+        email: identified.email,
+        name: identified.name,
+        company: identified.company,
         type,
         time: new Date().toISOString(),
       })
@@ -161,10 +192,11 @@ export default function Kiosk() {
     }
     setMessage({
       type,
-      text: `${type === 'in' ? 'Checked in' : 'Checked out'} at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Have a great ${type === 'in' ? 'shift' : 'day'}, ${employee.name.split(' ')[0]}!`,
+      text: `${type === 'in' ? 'Checked in' : 'Checked out'} at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Have a great ${type === 'in' ? 'shift' : 'day'}, ${identified.name.split(' ')[0]}!`,
     })
     setTimeout(() => setMessage(null), 5000)
   }
+
 
   const header = (
     <header className="flex items-center justify-between">
@@ -175,7 +207,7 @@ export default function Kiosk() {
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-xl font-black text-brand-600 shadow-lg">{brandLetter}</div>
         )}
         <div className="leading-tight">
-          <span className="block text-lg font-bold">{settings.name}</span>
+          <span className="block text-lg font-bold">{systemName}</span>
           <span className="block text-[11px] font-medium text-emerald-100">Time Kiosk{config.site ? ` · ${config.site}` : ''}</span>
         </div>
       </div>
@@ -183,8 +215,8 @@ export default function Kiosk() {
     </header>
   )
 
-  /* ---------- Authentication screen (per saved Kiosk Setup) ---------- */
-  if (!authed) {
+  /* ---------- Identification screen ---------- */
+  if (!identified) {
     return (
       <div className="flex min-h-screen flex-col bg-gradient-to-b from-brand-800 via-brand-600 to-emerald-500 p-6 text-white">
         {header}
@@ -195,17 +227,22 @@ export default function Kiosk() {
             <>
               <button
                 type="button"
-                onClick={() => setAuthed(true)}
-                aria-label="Touch fingerprint sensor to sign in"
-                className="animate-pulse-slow flex h-44 w-44 transform items-center justify-center rounded-full bg-white/15 ring-4 ring-white/40 shadow-2xl transition hover:scale-105 hover:bg-white/25 active:scale-95"
+                disabled={scanning}
+                onClick={async () => {
+                  // Simulated sensor: matches when exactly one fingerprint is registered.
+                  await identify('fingerprint', 'SIM_FP')
+                }}
+                className="animate-pulse-slow flex h-44 w-44 transform flex-col items-center justify-center gap-2 rounded-full bg-white/15 ring-4 ring-white/40 shadow-2xl transition hover:scale-105 hover:bg-white/25 active:scale-95"
               >
-                <FingerprintGlyph className="h-24 w-24" />
+                <FingerprintGlyph className="h-20 w-20" />
               </button>
-              <p className="-mt-3 text-lg font-semibold">Touch the sensor to sign in</p>
+              <p className="-mt-3 text-center text-lg font-semibold">
+                {scanning ? 'Identifying…' : 'Touch the sensor to clock in / out'}
+              </p>
 
-              {pinMode && (
+              {(config.method === 'fingerprint' ? pinMode : true) && (
                 <div className="w-full rounded-3xl bg-white/10 p-5 ring-1 ring-white/25 backdrop-blur">
-                  <p className="mb-3 text-center text-sm font-bold">Enter your {config.pinLength}-digit PIN:</p>
+                  <p className="mb-3 text-center text-sm font-bold">Or enter your PIN:</p>
                   <div className="mb-4 flex justify-center gap-2.5">
                     {Array.from({ length: config.pinLength }).map((_, i) => (
                       <span key={i} className={`h-3.5 w-3.5 rounded-full ${i < pin.length ? 'bg-white' : 'bg-white/30'}`} />
@@ -216,10 +253,12 @@ export default function Kiosk() {
                       <button
                         key={key}
                         type="button"
-                        onClick={() => {
+                        disabled={scanning}
+                        onClick={async () => {
                           if (key === 'C') setPin('')
                           else if (key === 'OK') {
-                            if (pin.length === config.pinLength) { setAuthed(true); setPinMode(false); setPin('') }
+                            if (pin.length === config.pinLength) await identify('pin', pin)
+                            setPin('')
                           } else if (pin.length < config.pinLength) setPin(pin + key)
                         }}
                         className={`rounded-2xl py-3.5 text-xl font-bold shadow transition active:scale-95 ${
@@ -232,11 +271,6 @@ export default function Kiosk() {
                       </button>
                     ))}
                   </div>
-                  {config.method === 'fingerprint' && (
-                    <button type="button" onClick={() => { setPinMode(false); setPin('') }} className="mt-3 w-full text-center text-xs text-emerald-100 underline hover:text-white">
-                      Back to fingerprint
-                    </button>
-                  )}
                 </div>
               )}
 
@@ -248,93 +282,64 @@ export default function Kiosk() {
             </>
           )}
 
-          {/* PIN primary */}
-          {config.method === 'pin' && !pinMode && (
+          {/* QR */}
+          {config.method === 'qr' && (
             <>
-              <p className="-mb-4 text-lg font-semibold">Enter your {config.pinLength}-digit PIN</p>
+              <div className={`rounded-[2rem] bg-white p-6 shadow-2xl transition ${scanning ? 'animate-pulse-slow' : ''}`}>
+                <QrGlyph className="h-44 w-44 text-gray-900" />
+              </div>
+              <p className="text-lg font-semibold">{scanning ? 'Identifying…' : 'Scan your QR badge to clock in / out'}</p>
               <div className="w-full rounded-3xl bg-white/10 p-5 ring-1 ring-white/25 backdrop-blur">
-                <div className="mb-4 flex justify-center gap-2.5">
-                  {Array.from({ length: config.pinLength }).map((_, i) => (
-                    <span key={i} className={`h-3.5 w-3.5 rounded-full ${i < pin.length ? 'bg-white' : 'bg-white/30'}`} />
-                  ))}
-                </div>
-                <div className="grid grid-cols-3 gap-2.5">
-                  {['1','2','3','4','5','6','7','8','9','C','0','OK'].map((key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => {
-                        if (key === 'C') setPin('')
-                        else if (key === 'OK') {
-                          if (pin.length === config.pinLength) { setAuthed(true); setPin('') }
-                        } else if (pin.length < config.pinLength) setPin(pin + key)
-                      }}
-                      className={`rounded-2xl py-3.5 text-xl font-bold shadow transition active:scale-95 ${
-                        key === 'OK' ? 'bg-white text-brand-700 hover:bg-emerald-50'
-                        : key === 'C' ? 'bg-gray-900/30 hover:bg-gray-900/45'
-                        : 'bg-white/15 ring-1 ring-white/25 hover:bg-white/25'
-                      }`}
-                    >
-                      {key}
-                    </button>
-                  ))}
-                </div>
+                <input
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  onKeyDown={async (e) => { if (e.key === 'Enter' && pin.trim()) await identify('qr', pin.trim()) }}
+                  placeholder="Badge code (manual entry)"
+                  aria-label="Badge code"
+                  className="w-full rounded-xl border-0 px-4 py-3 text-center font-mono text-sm text-gray-900 focus:outline-none focus:ring-4 focus:ring-white/40"
+                />
+                <button
+                  type="button"
+                  disabled={scanning || !pin.trim()}
+                  onClick={async () => { const v = pin.trim(); setPin(''); await identify('qr', v) }}
+                  className="mt-3 w-full rounded-xl bg-white py-3 text-base font-bold text-brand-700 shadow-xl transition hover:bg-emerald-50 disabled:opacity-50"
+                >
+                  Submit badge code
+                </button>
               </div>
             </>
           )}
 
-          {/* QR primary */}
-          {config.method === 'qr' && (
-            <>
-              <div className="animate-pulse-slow rounded-[2rem] bg-white p-6 shadow-2xl">
-                <QrGlyph className="h-44 w-44 text-gray-900" />
-              </div>
-              <p className="text-lg font-semibold">Scan your employee QR badge</p>
-              <button
-                type="button"
-                onClick={() => setAuthed(true)}
-                className="rounded-2xl bg-white px-8 py-3 text-base font-bold text-brand-700 shadow-xl transition hover:bg-emerald-50"
-              >
-                Simulate scan
-              </button>
-            </>
+          {authError && (
+            <div className="w-full rounded-2xl border border-red-300/40 bg-red-600/90 px-5 py-4 text-center text-base font-bold shadow-xl" role="alert">
+              {authError}
+            </div>
           )}
         </main>
 
         <footer className="text-center text-xs text-emerald-100">
-          {config.site ? `Station: ${config.site}` : ''} · Idle timeout: {config.idleTimeout}s
+          {config.site ? `Station: ${config.site}` : ''} · Idle timeout: {config.idleTimeout}s · Credentials are registered in Kiosk Setup
         </footer>
       </div>
     )
   }
 
-  /* ---------- Punch screen ---------- */
+  /* ---------- Punch confirmation screen (person identified) ---------- */
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-brand-700 via-brand-600 to-emerald-500 p-6 text-white">
       {header}
 
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-10 py-8">
-        <div className="text-center">
-          <p className="text-7xl font-black tabular-nums tracking-tight drop-shadow-lg sm:text-8xl">
-            {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </p>
-          <p className="mt-3 text-lg font-medium text-emerald-50">
-            {now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-          </p>
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-8 py-8">
+        <div className="flex flex-col items-center gap-3 rounded-3xl bg-white/10 px-10 py-6 ring-1 ring-white/25 backdrop-blur">
+          <p className="text-sm uppercase tracking-widest text-emerald-100">Welcome,</p>
+          <p className="text-3xl font-black">{identified.name}</p>
+          {identified.company && <p className="text-sm text-emerald-100">{identified.company}</p>}
         </div>
 
-        <div className="w-full">
-          <label htmlFor="kiosk-employee" className="mb-2 block text-center text-sm font-bold uppercase tracking-widest text-emerald-100">
-            Select your name:
-          </label>
-          <select
-            id="kiosk-employee"
-            value={employee?.email || ''}
-            onChange={(e) => setEmployeeId(e.target.value)}
-            className="w-full rounded-2xl border-0 bg-white px-5 py-4 text-center text-lg font-semibold text-gray-900 shadow-xl focus:outline-none focus:ring-4 focus:ring-white/40"
-          >
-            {employees.map((e) => <option key={e.email} value={e.email}>{e.name}</option>)}
-          </select>
+        <div className="text-center">
+          <p className="text-6xl font-black tabular-nums drop-shadow-lg sm:text-7xl">
+            {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </p>
         </div>
 
         <div className="grid w-full grid-cols-2 gap-5">
@@ -364,10 +369,10 @@ export default function Kiosk() {
 
         <button
           type="button"
-          onClick={() => { setAuthed(false); setPin(''); setPinMode(false) }}
+          onClick={() => { setIdentified(null); setPin(''); setPinMode(false); setAuthError(null) }}
           className="text-sm font-medium text-emerald-100 underline hover:text-white"
         >
-          Switch user
+          Not you? Identify again
         </button>
       </main>
 

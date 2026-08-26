@@ -353,8 +353,89 @@ async function apiRoutes(path, method, request, env, url, claims) {
     }
   }
 
-  /* organization reference lists (departments, positions, etc.) */
-  if (path === '/api/org-units' && method === 'GET') {
+  /* kiosk credential identification — public, used by the stand-alone kiosk */
+  if (path === '/api/kiosk/identify' && method === 'POST') {
+    const { method: credMethod, value } = await readJson(request)
+    const v = (value || '').trim()
+    if (!v) return json({ error: 'Credential is required.' }, 400)
+    const rows = await env.DB.prepare(
+      `SELECT ec.*, e.name AS emp_name, e.company_id
+       FROM employee_credentials ec JOIN employees e ON e.email = ec.email`
+    ).all()
+    let match = null
+    for (const row of rows) {
+      if (credMethod === 'fingerprint' && row.fp_token && row.fp_token === v) match = row
+      if (credMethod === 'qr' && row.qr_code && row.qr_code === v) match = row
+      if (credMethod === 'pin' && row.pin_hash && (await hashPassword(v, row.pin_salt)) === row.pin_hash) match = row
+      if (match) break
+    }
+    // Simulated hardware: touching the sensor with no scanner present matches
+    // the only registered fingerprint (if exactly one exists).
+    if (!match && credMethod === 'fingerprint' && v === 'SIM_FP') {
+      const fpRows = rows.filter((r) => r.fp_token)
+      if (fpRows.length === 1) match = fpRows[0]
+    }
+    if (!match) return json({ error: 'Not recognized. Please register your credential first.' }, 404)
+    const emp = await env.DB.prepare('SELECT name, company_id FROM employees WHERE email = ?').bind(match.email).first()
+    const company = await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(emp.company_id).first()
+    return json({ email: match.email, name: emp.name, role: 'employee', company: company?.name || '' })
+  }
+
+  /* kiosk employee directory fallback */
+  if (path === '/api/kiosk/directory' && method === 'GET') {
+    const rows = await env.DB.prepare(
+      `SELECT e.id, e.name, e.email, c.name AS company FROM employees e JOIN companies c ON c.id = e.company_id WHERE e.active = 1`
+    ).all()
+    return json(rows)
+  }
+
+  /* credentials management (admin) */
+  if (path === '/api/credentials/qr' && method === 'POST') {
+    const { email } = await readJson(request)
+    if (!email) return json({ error: 'Email is required.' }, 400)
+    const existing = await env.DB.prepare('SELECT qr_code FROM employee_credentials WHERE email = ?').bind(email.toLowerCase()).first()
+    if (existing?.qr_code) return json({ code: existing.qr_code })
+    const code = 'UWQ-' + (await sha256(email.toLowerCase())).slice(0, 16).toUpperCase()
+    await env.DB.prepare(
+      `INSERT INTO employee_credentials (email, qr_code) VALUES (?, ?)
+       ON CONFLICT(email) DO UPDATE SET qr_code = excluded.qr_code`
+    ).bind(email.toLowerCase(), code).run()
+    return json({ code })
+  }
+  if (path === '/api/credentials' && method === 'POST') {
+    const { email, kind, value } = await readJson(request)
+    if (!email || !kind || !value) return json({ error: 'email, kind and value are required.' }, 400)
+    const e = email.toLowerCase()
+    if (kind === 'fingerprint') {
+      await env.DB.prepare(
+        `INSERT INTO employee_credentials (email, fp_token) VALUES (?, ?)
+         ON CONFLICT(email) DO UPDATE SET fp_token = excluded.fp_token`
+      ).bind(e, value).run()
+    } else if (kind === 'pin') {
+      const salt = crypto.randomUUID()
+      await env.DB.prepare(
+        `INSERT INTO employee_credentials (email, pin_salt, pin_hash) VALUES (?, ?, ?)
+         ON CONFLICT(email) DO UPDATE SET pin_salt = excluded.pin_salt, pin_hash = excluded.pin_hash`
+      ).bind(e, salt, await hashPassword(value, salt)).run()
+    } else {
+      return json({ error: 'Unknown credential kind.' }, 400)
+    }
+    return json({ ok: true })
+  }
+
+  {
+    const m = path.match(/^\/api\/credentials\/([^/]+)$/)
+    if (m && method === 'GET') {
+      const row = await env.DB.prepare('SELECT * FROM employee_credentials WHERE email = ?').bind(decodeURIComponent(m[1]).toLowerCase()).first()
+      return json({
+        fpToken: row?.fp_token || null,
+        pinSet: !!row?.pin_hash,
+        qrCode: row?.qr_code || null,
+      })
+    }
+  }
+
+  /* organization reference lists (departments, positions, etc.) */  if (path === '/api/org-units' && method === 'GET') {
     const kind = url.searchParams.get('kind')
     const rows = kind
       ? await env.DB.prepare('SELECT * FROM org_units WHERE kind = ? ORDER BY name').bind(kind).all()

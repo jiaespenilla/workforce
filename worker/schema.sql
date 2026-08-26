@@ -109,3 +109,12 @@ CREATE TABLE IF NOT EXISTS document_metadata (
   uploaded_by TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS employee_credentials (
+  email TEXT PRIMARY KEY,
+  pin_salt TEXT,
+  pin_hash TEXT,
+  fp_token TEXT,
+  qr_code TEXT UNIQUE,
+  updated_at TEXT DEFAULT (datetime('now'))
+);

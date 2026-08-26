@@ -1,6 +1,10 @@
 import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
+import QRCode from 'qrcode'
 import { getActiveSettings } from '../lib/systemSettings'
+import { api, apiEnabled } from '../lib/api'
+import { getAllCompanies } from '../lib/companies'
+import { getCredential, setFingerprint, setPin, ensureQrCode } from '../lib/credentials'
 
 const CONFIG_KEY = 'uw_kiosk_config'
 
@@ -53,10 +57,83 @@ const methods = [
 
 const SITES = { hq: 'Head Office', branch1: 'Branch 1 — Makati', branch2: 'Branch 2 — Cebu' }
 
+function QrGlyph({ className }) {
+  return (
+    <svg viewBox="0 0 21 21" className={className} fill="currentColor">
+      <path d="M0 0h7v7H0zM2 2v3h3V2zM14 0h7v7h-7zM16 2v3h3V2zM0 14h7v7H0zM2 16v3h3v-3zM10 0h2v2h-2zM10 4h2v2h-2zM4 10h2v2H4zM8 8h2v2H8zM12 10h2v2h-2zM10 14h2v2h-2zM14 14h2v2h-2zM18 14h2v2h-2zM16 10h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z" />
+    </svg>
+  )
+}
+
 export default function KioskSetup() {
   usePageTitle('Kiosk Setup')
   const [config, setConfig] = useState(loadKioskConfig)
   const [saved, setSaved] = useState(false)
+
+  // Credential registration state
+  const companies = getAllCompanies()
+  const [credCompanyId, setCredCompanyId] = useState(companies[0]?.id || '')
+  const credCompany = companies.find((c) => c.id === credCompanyId)
+  const credEmployees = credCompany?.employees || []
+  const [credEmail, setCredEmail] = useState('')
+  const credEmployee = credEmployees.find((e) => e.email === credEmail)
+  const [fpStatus, setFpStatus] = useState(null)   // 'registered' | null
+  const [pinInput, setPinInput] = useState('')
+  const [pinStatus, setPinStatus] = useState(null) // {ok, msg}
+  const [qrImg, setQrImg] = useState(null)
+  const [qrCodeStr, setQrCodeStr] = useState(null)
+  const [credError, setCredError] = useState(null)
+
+  useEffect(() => {
+    setFpStatus(null); setPinStatus(null); setQrImg(null); setQrCodeStr(null); setCredError(null)
+    if (!credEmail) return
+    ;(async () => {
+      try {
+        if (apiEnabled()) {
+          const status = await api(`/api/credentials/${encodeURIComponent(credEmail.toLowerCase())}`)
+          setFpStatus(status.fpToken ? 'registered' : null)
+          setPinStatus(status.pinSet ? { ok: true } : null)
+          if (status.qrCode) {
+            setQrCodeStr(status.qrCode)
+            setQrImg(await QRCode.toDataURL(status.qrCode, { width: 240, margin: 1 }))
+          }
+        } else {
+          const cred = await getCredential(credEmail)
+          setFpStatus(cred.fpToken ? 'registered' : null)
+          setPinStatus(cred.pin ? { ok: true } : null)
+          if (cred.qrCode) {
+            setQrCodeStr(cred.qrCode)
+            setQrImg(await QRCode.toDataURL(cred.qrCode, { width: 240, margin: 1 }))
+          }
+        }
+      } catch { /* ignore */ }
+    })()
+  }, [credEmail])
+
+  const registerFingerprint = async () => {
+    if (!credEmail) return setCredError('Select an employee first.')
+    // Simulated fingerprint capture — a unique device token is generated.
+    const token = 'FP-' + crypto.randomUUID()
+    await setFingerprint(credEmail, token)
+    setFpStatus('registered')
+  }
+
+  const savePin = async () => {
+    if (!credEmail) return setCredError('Select an employee first.')
+    if (pinInput.length < 4 || pinInput.length > 8) return setCredError('PIN must be 4–8 digits.')
+    await setPin(credEmail, pinInput)
+    setPinInput('')
+    setPinStatus({ ok: true })
+    setCredError(null)
+  }
+
+  const generateQr = async () => {
+    if (!credEmail) return setCredError('Select an employee first.')
+    const code = await ensureQrCode(credEmail)
+    setQrCodeStr(code)
+    setQrImg(await QRCode.toDataURL(code, { width: 240, margin: 1 }))
+    setCredError(null)
+  }
 
   const update = (key, value) => setConfig((c) => ({ ...c, [key]: value }))
 
@@ -189,6 +266,94 @@ export default function KioskSetup() {
                     <option value="front">Front camera</option>
                   </select>
                 </label>
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="text-base font-semibold text-gray-900">Credential Registration</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Register each employee's fingerprint, PIN and QR badge. On the kiosk, these credentials identify
+              who is clocking in — no name selection needed.
+            </p>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="font-medium text-gray-700">Company:</span>
+                <select value={credCompanyId} onChange={(e) => { setCredCompanyId(e.target.value); setCredEmail('') }} className={inputCls}>
+                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium text-gray-700">Employee:</span>
+                <select value={credEmail} onChange={(e) => setCredEmail(e.target.value)} className={inputCls}>
+                  <option value="">Select employee…</option>
+                  {credEmployees.map((emp) => <option key={emp.email} value={emp.email}>{emp.name}</option>)}
+                </select>
+              </label>
+            </div>
+
+            {!credEmployee ? (
+              <p className="mt-4 rounded-lg bg-gray-50 px-4 py-3 text-center text-xs text-gray-400">Select an employee to manage their credentials.</p>
+            ) : (
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                {/* Fingerprint */}
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <svg className="h-4 w-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 11c0 3.5-1 5.5-2 7m4-9a9 9 0 00-.5 8m2-10.5c1.6 2 2.3 4.6 1.8 7.2M7.5 6.5A9 9 0 0112 5a9 9 0 015.5 1.9M5 9.5A9 9 0 016.2 8" /></svg>
+                    Fingerprint
+                  </p>
+                  {fpStatus === 'registered' ? (
+                    <>
+                      <p className="mt-2 text-xs font-medium text-brand-700">✓ Registered</p>
+                      <button type="button" onClick={registerFingerprint} className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">Re-capture</button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="mt-2 text-xs text-gray-400">Not registered</p>
+                      <button type="button" onClick={registerFingerprint} className="mt-2 w-full rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">Capture</button>
+                    </>
+                  )}
+                </div>
+
+                {/* PIN */}
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <svg className="h-4 w-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    PIN Code
+                  </p>
+                  {pinStatus?.ok && <p className="mt-2 text-xs font-medium text-brand-700">✓ Set</p>}
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={8}
+                    value={pinInput}
+                    onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+                    placeholder="4–8 digits"
+                    aria-label="New PIN"
+                    className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm tabular-nums focus:border-brand-500 focus:outline-none"
+                  />
+                  <button type="button" onClick={savePin} disabled={!pinInput} className="mt-2 w-full rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-40">
+                    Save PIN
+                  </button>
+                </div>
+
+                {/* QR */}
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <QrGlyph className="h-4 w-4 text-brand-600" />
+                    QR Badge
+                  </p>
+                  {qrImg ? (
+                    <img src={qrImg} alt="Employee QR badge" className="mx-auto mt-2 h-24 w-24 rounded-lg bg-white p-1 ring-1 ring-gray-200" />
+                  ) : (
+                    <p className="mt-2 text-xs text-gray-400">Not generated</p>
+                  )}
+                  <button type="button" onClick={generateQr} className="mt-2 w-full rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">
+                    {qrImg ? 'Regenerate' : 'Generate badge'}
+                  </button>
+                  {qrCodeStr && <p className="mt-1 break-all text-center text-[10px] tabular-nums text-gray-400">{qrCodeStr}</p>}
+                </div>
               </div>
             )}
           </section>
