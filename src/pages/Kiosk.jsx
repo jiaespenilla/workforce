@@ -222,8 +222,8 @@ export default function Kiosk() {
         {header}
 
         <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-8 py-8">
-          {/* Fingerprint */}
-          {(config.method === 'fingerprint' || pinMode) && (
+          {/* Fingerprint screen — shown alone; "Use PIN instead" switches to the PIN screen */}
+          {config.method === 'fingerprint' && !pinMode && (
             <>
               <button
                 type="button"
@@ -240,45 +240,53 @@ export default function Kiosk() {
                 {scanning ? 'Identifying…' : 'Touch the sensor to clock in / out'}
               </p>
 
-              {(config.method === 'fingerprint' ? pinMode : true) && (
-                <div className="w-full rounded-3xl bg-white/10 p-5 ring-1 ring-white/25 backdrop-blur">
-                  <p className="mb-3 text-center text-sm font-bold">Or enter your PIN:</p>
-                  <div className="mb-4 flex justify-center gap-2.5">
-                    {Array.from({ length: config.pinLength }).map((_, i) => (
-                      <span key={i} className={`h-3.5 w-3.5 rounded-full ${i < pin.length ? 'bg-white' : 'bg-white/30'}`} />
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2.5">
-                    {['1','2','3','4','5','6','7','8','9','C','0','OK'].map((key) => (
-                      <button
-                        key={key}
-                        type="button"
-                        disabled={scanning}
-                        onClick={async () => {
-                          if (key === 'C') setPin('')
-                          else if (key === 'OK') {
-                            if (pin.length === config.pinLength) await identify('pin', pin)
-                            setPin('')
-                          } else if (pin.length < config.pinLength) setPin(pin + key)
-                        }}
-                        className={`rounded-2xl py-3.5 text-xl font-bold shadow transition active:scale-95 ${
-                          key === 'OK' ? 'bg-white text-brand-700 hover:bg-emerald-50'
-                          : key === 'C' ? 'bg-gray-900/30 hover:bg-gray-900/45'
-                          : 'bg-white/15 ring-1 ring-white/25 hover:bg-white/25'
-                        }`}
-                      >
-                        {key}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {config.method === 'fingerprint' && config.pinFallback && !pinMode && (
+              {config.pinFallback && (
                 <button type="button" onClick={() => setPinMode(true)} className="text-sm font-medium text-emerald-100 underline hover:text-white">
                   Use PIN instead
                 </button>
               )}
+            </>
+          )}
+
+          {/* PIN screen — its own dedicated view */}
+          {(config.method === 'pin' || pinMode) && (
+            <>
+              <p className="text-lg font-semibold">Enter your {config.pinLength}-digit PIN</p>
+              <div className="w-full rounded-3xl bg-white/10 p-5 ring-1 ring-white/25 backdrop-blur">
+                <div className="mb-4 flex justify-center gap-2.5">
+                  {Array.from({ length: config.pinLength }).map((_, i) => (
+                    <span key={i} className={`h-3.5 w-3.5 rounded-full ${i < pin.length ? 'bg-white' : 'bg-white/30'}`} />
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {['1','2','3','4','5','6','7','8','9','C','0','OK'].map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      disabled={scanning}
+                      onClick={async () => {
+                        if (key === 'C') setPin('')
+                        else if (key === 'OK') {
+                          if (pin.length === config.pinLength) await identify('pin', pin)
+                          setPin('')
+                        } else if (pin.length < config.pinLength) setPin(pin + key)
+                      }}
+                      className={`rounded-2xl py-3.5 text-xl font-bold shadow transition active:scale-95 ${
+                        key === 'OK' ? 'bg-white text-brand-700 hover:bg-emerald-50'
+                        : key === 'C' ? 'bg-gray-900/30 hover:bg-gray-900/45'
+                        : 'bg-white/15 ring-1 ring-white/25 hover:bg-white/25'
+                      }`}
+                    >
+                      {key}
+                    </button>
+                  ))}
+                </div>
+                {config.method === 'fingerprint' && (
+                  <button type="button" onClick={() => { setPinMode(false); setPin('') }} className="mt-3 w-full text-center text-xs text-emerald-100 underline hover:text-white">
+                    Back to fingerprint
+                  </button>
+                )}
+              </div>
             </>
           )}
 

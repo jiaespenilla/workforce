@@ -389,23 +389,27 @@ async function apiRoutes(path, method, request, env, url, claims) {
     return json(rows)
   }
 
-  /* credentials management (admin) */
+  /* credentials management — admins manage anyone; users manage their own */
   if (path === '/api/credentials/qr' && method === 'POST') {
     const { email } = await readJson(request)
     if (!email) return json({ error: 'Email is required.' }, 400)
-    const existing = await env.DB.prepare('SELECT qr_code FROM employee_credentials WHERE email = ?').bind(email.toLowerCase()).first()
+    const target = email.toLowerCase()
+    if (!isAdmin && claims.sub !== target) return json({ error: 'Forbidden' }, 403)
+    const existing = await env.DB.prepare('SELECT qr_code FROM employee_credentials WHERE email = ?').bind(target).first()
     if (existing?.qr_code) return json({ code: existing.qr_code })
-    const code = 'UWQ-' + (await sha256(email.toLowerCase())).slice(0, 16).toUpperCase()
+    const code = 'UWQ-' + (await sha256(target)).slice(0, 16).toUpperCase()
     await env.DB.prepare(
       `INSERT INTO employee_credentials (email, qr_code) VALUES (?, ?)
        ON CONFLICT(email) DO UPDATE SET qr_code = excluded.qr_code`
-    ).bind(email.toLowerCase(), code).run()
+    ).bind(target, code).run()
     return json({ code })
   }
   if (path === '/api/credentials' && method === 'POST') {
     const { email, kind, value } = await readJson(request)
     if (!email || !kind || !value) return json({ error: 'email, kind and value are required.' }, 400)
     const e = email.toLowerCase()
+    // Users may only register their own credentials; admins can register anyone.
+    if (!isAdmin && claims.sub !== e) return json({ error: 'Forbidden' }, 403)
     if (kind === 'fingerprint') {
       await env.DB.prepare(
         `INSERT INTO employee_credentials (email, fp_token) VALUES (?, ?)
@@ -426,7 +430,10 @@ async function apiRoutes(path, method, request, env, url, claims) {
   {
     const m = path.match(/^\/api\/credentials\/([^/]+)$/)
     if (m && method === 'GET') {
-      const row = await env.DB.prepare('SELECT * FROM employee_credentials WHERE email = ?').bind(decodeURIComponent(m[1]).toLowerCase()).first()
+      const targetEmail = decodeURIComponent(m[1]).toLowerCase()
+      // Users may only view their own credentials; admins can view any.
+      if (!isAdmin && claims.sub !== targetEmail) return json({ error: 'Forbidden' }, 403)
+      const row = await env.DB.prepare('SELECT * FROM employee_credentials WHERE email = ?').bind(targetEmail).first()
       return json({
         fpToken: row?.fp_token || null,
         pinSet: !!row?.pin_hash,

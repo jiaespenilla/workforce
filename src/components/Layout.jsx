@@ -119,15 +119,26 @@ export default function Layout({ children }) {
           )}
         </NavLink>
         {user?.role === 'employee' && user?.perms?.kiosk !== false && (
-          <button
-            onClick={() => { setOpen(false); navigate('/kiosk') }}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
+          <NavLink
+            to="/kiosk-credentials"
+            onClick={() => setOpen(false)}
+            className={({ isActive }) =>
+              `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              }`
+            }
           >
-            <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
-            Kiosk Mode
-          </button>
+            {({ isActive }) => (
+              <>
+                <svg className={`h-5 w-5 ${isActive ? 'text-brand-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a3 3 0 01-3 3H8m6 0a3 3 0 00-3-3H8m0 0a3 3 0 100 6m9-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Kiosk Credentials
+              </>
+            )}
+          </NavLink>
         )}
       </nav>
     </>

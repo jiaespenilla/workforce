@@ -18,6 +18,7 @@ import TimeKeeping from './pages/TimeKeeping'
 import Tasks from './pages/Tasks'
 import Payroll from './pages/Payroll'
 import Profile from './pages/Profile'
+import KioskCredentials from './pages/KioskCredentials'
 import People from './pages/People'
 
 // Single /profile route — wraps the page in the layout matching the user's role.
@@ -114,6 +115,7 @@ export default function App() {
           <Route path="/timekeeping" element={<PageGate perm="timekeeping"><TimeKeeping /></PageGate>} />
           <Route path="/tasks" element={<PageGate perm="tasks"><Tasks /></PageGate>} />
           <Route path="/payroll" element={<PageGate perm="payroll"><Payroll /></PageGate>} />
+          <Route path="/kiosk-credentials" element={<PageGate perm="kiosk"><KioskCredentials /></PageGate>} />
           <Route path="/people" element={<PageGate perm="employees"><People /></PageGate>} />
         </Route>
 
