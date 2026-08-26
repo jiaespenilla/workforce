@@ -16,5 +16,14 @@
   // AUTH_SECRET is set as a remote SECRET (not here) via:
   //   wrangler secret put AUTH_SECRET
   // Never put real secrets in this file.
-  "vars": {}
+  "vars": {},
+  // Serve the React app from this same Worker — build the frontend first:
+  //   npm run build        (from the project root)
+  // Then deploy:          wrangler deploy
+  // SPA fallback sends unknown paths (e.g. /login, /kiosk) to index.html.
+  "assets": {
+    "directory": "../dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  }
 }
