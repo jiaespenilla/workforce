@@ -60,9 +60,11 @@ export async function saveCompanyShiftData(companyId, updater) {
 
 /**
  * Decide the punch action for an identified employee, plus overtime detection.
- * - With a shift: first scan of the day is CLOCK-IN; once clocked in, the next
- *   scan is CLOCK-OUT. Clocking out beyond shift-end + OT grace marks OVERTIME.
- * - Without a shift: simple alternation based on their last punch.
+ * - Open shift (no fixed times): every scan alternates clock-in / clock-out.
+ * - With a timed shift: first scan of the day is CLOCK-IN; once clocked in,
+ *   the next scan is CLOCK-OUT. Clocking out beyond shift end + OT grace
+ *   marks OVERTIME.
+ * - Without any shift: simple alternation based on their last punch.
  */
 export function decideAction(punches, shift, now = new Date(), otGraceMinutes = 15) {
   const todayStr = now.toDateString()
@@ -75,6 +77,12 @@ export function decideAction(punches, shift, now = new Date(), otGraceMinutes = 
   const toMinutes = (t) => {
     const [h, m] = (t || '00:00').split(':').map(Number)
     return h * 60 + m
+  }
+
+  // Open shift — flexible, no standard times: scans simply alternate.
+  if (shift?.open) {
+    if (!lastToday) return { action: 'in', overtime: false }
+    return { action: lastToday.type === 'in' ? 'out' : 'in', overtime: false }
   }
 
   if (!shift) {

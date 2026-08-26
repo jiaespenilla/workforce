@@ -4,6 +4,7 @@ import { usePageTitle } from '../lib/documentMeta'
 import { getScopedCompanies, loadRegisteredCompanies } from '../lib/companies'
 import { getConfiguredRoles, canAction } from '../lib/roles'
 import { api, apiEnabled } from '../lib/api'
+import { getCompanyShifts, saveCompanyShiftData } from '../lib/shifts'
 import Avatar from '../components/Avatar'
 
 export default function People() {
@@ -18,6 +19,7 @@ export default function People() {
   const [editingId, setEditingId] = useState(null)
   const [error, setError] = useState(null)
   const [savedName, setSavedName] = useState(null)
+  const [shiftsData, setShiftsData] = useState({ shifts: [], assignments: {} })
 
   const formRef = useRef({ name: '', email: '', role: roleOptions[roleOptions.length - 1] || '' })
   const [, forceRender] = useState(0)
@@ -25,26 +27,51 @@ export default function People() {
 
   // Load companies (scoped to the signed-in user's own company).
   const load = async () => {
+    let scoped
     if (apiEnabled()) {
       try {
         const all = await api('/api/companies')
-        const scoped = user?.companyName ? all.filter((c) => c.name === user.companyName) : all
-        setCompanies(scoped)
-        setCompanyId((prev) => prev || scoped[0]?.id || null)
+        scoped = user?.companyName ? all.filter((c) => c.name === user.companyName) : all
       } catch {
-        setCompanies(getScopedCompanies(user))
+        scoped = getScopedCompanies(user)
       }
     } else {
-      const scoped = getScopedCompanies(user)
-      setCompanies(scoped)
-      setCompanyId((prev) => prev || scoped[0]?.id || null)
+      scoped = getScopedCompanies(user)
+    }
+    setCompanies(scoped)
+    setCompanyId((prev) => prev || scoped[0]?.id || null)
+    if (scoped[0]?.id) {
+      try { setShiftsData(await getCompanyShifts(scoped[0].id)) } catch { /* ignore */ }
     }
   }
 
   useEffect(() => { load() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [])
 
+  // Reload shifts when the selected company changes.
+  useEffect(() => {
+    if (!companyId) return
+    getCompanyShifts(companyId).then(setShiftsData).catch(() => {})
+  }, [companyId])
+
   const company = companies.find((c) => c.id === companyId)
   const people = company?.employees || []
+
+  const assignShift = async (email, shiftId) => {
+    setShiftsData((prev) => ({
+      ...prev,
+      assignments: { ...(prev.assignments || {}), [email]: shiftId || undefined },
+    }))
+    await saveCompanyShiftData(companyId, (d) => ({
+      ...d,
+      assignments: { ...(d.assignments || {}), [email]: shiftId || undefined },
+    }))
+  }
+
+  const shiftName = (emp) => {
+    const sid = (shiftsData.assignments || {})[emp.email]
+    if (!sid) return null
+    return (shiftsData.shifts || []).find((s) => s.id === sid)?.name || null
+  }
 
   const selectCompany = (id) => {
     setCompanyId(id)
@@ -218,6 +245,23 @@ export default function People() {
                     {emp.active !== false ? 'Active' : 'Inactive'}
                   </span>
                   <span className="hidden rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-600 md:inline">{emp.role}</span>
+                  {shiftName(emp) && (
+                    <span className="hidden rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200 lg:inline">
+                      {shiftName(emp)}
+                    </span>
+                  )}
+                  <select
+                    value={(shiftsData.assignments || {})[emp.email] || ''}
+                    onChange={(e) => assignShift(emp.email, e.target.value)}
+                    aria-label={`Shift for ${emp.name}`}
+                    title="Assign shift"
+                    className="hidden w-36 rounded-lg border border-gray-300 px-2 py-1 text-xs focus:border-brand-500 focus:outline-none md:block"
+                  >
+                    <option value="">No shift</option>
+                    {(shiftsData.shifts || []).map((s) => (
+                      <option key={s.id} value={s.id}>{s.open ? `${s.name} (open)` : s.name}</option>
+                    ))}
+                  </select>
                   <div className="flex shrink-0 items-center gap-1">
                     {can('delete') && (
                       <button type="button" onClick={() => toggleStatus(emp)} title={emp.active !== false ? 'Set inactive' : 'Set active'} className="rounded-lg p-2 text-gray-400 transition hover:bg-brand-50 hover:text-brand-600">
