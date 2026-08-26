@@ -85,6 +85,7 @@ export default function Kiosk() {
 
   const [now, setNow] = useState(new Date())
   // identified = the employee matched via credential
+  // result = the automatic punch record (shown until timeout / Done)
   const [result, setResult] = useState(null)
   const [authError, setAuthError] = useState(null)
   const [scanning, setScanning] = useState(false)
@@ -237,7 +238,7 @@ export default function Kiosk() {
   )
 
   /* ---------- Identification screen ---------- */
-  if (!identified) {
+  if (!result) {
     return (
       <div className="flex min-h-screen flex-col bg-gradient-to-b from-brand-800 via-brand-600 to-emerald-500 p-6 text-white">
         {header}
