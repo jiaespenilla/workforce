@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { getActiveSettings } from '../lib/systemSettings'
 import { getSystemIcon } from '../lib/documentMeta'
 import { loadKioskConfig } from './KioskSetup'
+import { getCompanyShifts, decideAction } from '../lib/shifts'
+import { getAllCompanies } from '../lib/companies'
 
 // Makes the kiosk installable as a stand-alone app on phones/tablets.
 function useKioskPwa(systemName, brandLetter) {
@@ -83,7 +85,7 @@ export default function Kiosk() {
 
   const [now, setNow] = useState(new Date())
   // identified = the employee matched via credential
-  const [identified, setIdentified] = useState(null)
+  const [result, setResult] = useState(null)
   const [authError, setAuthError] = useState(null)
   const [scanning, setScanning] = useState(false)
   const [pin, setPin] = useState('')
@@ -101,7 +103,7 @@ export default function Kiosk() {
     const resetIdle = () => {
       if (idleTimer.current) clearTimeout(idleTimer.current)
       idleTimer.current = setTimeout(() => {
-        setIdentified(null)
+        setResult(null)
         setPin('')
         setPinMode(false)
         setMessage(null)
@@ -149,9 +151,9 @@ export default function Kiosk() {
         for (const [email, c] of Object.entries(credMap)) {
           const emp = all.find((e) => e.email === email)
           if (!emp) continue
-          if (method === 'fingerprint' && c.fpToken && c.fpToken === value) match = { email, name: emp.name, company: emp.companyName }
-          if (method === 'pin' && c.pin && c.pin === value) match = { email, name: emp.name, company: emp.companyName }
-          if (method === 'qr' && c.qrCode && c.qrCode === value) match = { email, name: emp.name, company: emp.companyName }
+          if (method === 'fingerprint' && c.fpToken && c.fpToken === value) match = { email, name: emp.name, company: emp.companyName, companyId: emp.companyId }
+          if (method === 'pin' && c.pin && c.pin === value) match = { email, name: emp.name, company: emp.companyName, companyId: emp.companyId }
+          if (method === 'qr' && c.qrCode && c.qrCode === value) match = { email, name: emp.name, company: emp.companyName, companyId: emp.companyId }
           if (match) break
         }
         // Simulated sensor: exactly one registered fingerprint identifies the person.
@@ -165,38 +167,57 @@ export default function Kiosk() {
         }
       }
       if (!match) {
-        setAuthError(`Credential not recognized. Register it in Kiosk Setup first.`)
+        setAuthError('Credential not recognized. Register it in Kiosk Setup first.')
         return false
       }
-      setIdentified(match)
+      await recordPunch(match)
       return true
     } finally {
       setScanning(false)
     }
   }
 
-  const punch = (type) => {
-    if (!identified) return
+  // Automatic clock-in / clock-out based on the employee's assigned shift.
+  const recordPunch = async (match) => {
+    let shift = null
     try {
-      const punches = JSON.parse(localStorage.getItem('uw_punches')) || []
-      punches.push({
-        email: identified.email,
-        name: identified.name,
-        company: identified.company,
-        type,
-        time: new Date().toISOString(),
-      })
-      localStorage.setItem('uw_punches', JSON.stringify(punches))
+      const shiftsData = await getCompanyShifts(match.companyId || company_id_by_name(match))
+      const shiftId = (shiftsData.assignments || {})[match.email]
+      shift = (shiftsData.shifts || []).find((s) => s.id === shiftId) || null
     } catch {
-      // storage unavailable
+      shift = null
     }
-    setMessage({
-      type,
-      text: `${type === 'in' ? 'Checked in' : 'Checked out'} at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Have a great ${type === 'in' ? 'shift' : 'day'}, ${identified.name.split(' ')[0]}!`,
+
+    const nowDate = new Date()
+    let punches = []
+    try { punches = JSON.parse(localStorage.getItem('uw_punches')) || [] } catch { punches = [] }
+    const action = decideAction(punches, shift, nowDate).action
+
+    punches.push({
+      email: match.email,
+      name: match.name,
+      company: match.company,
+      type: action,
+      time: nowDate.toISOString(),
     })
-    setTimeout(() => setMessage(null), 5000)
+    localStorage.setItem('uw_punches', JSON.stringify(punches))
+
+    setResult({
+      name: match.name,
+      action, // 'in' | 'out'
+      time: nowDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      shiftName: shift?.name || null,
+    })
+    setTimeout(() => setResult(null), 6000) // auto-return to auth screen
   }
 
+  function company_id_by_name(companyName) {
+    try {
+      return getAllCompanies().find((c) => c.name === companyName)?.id
+    } catch {
+      return undefined
+    }
+  }
 
   const header = (
     <header className="flex items-center justify-between">
@@ -332,63 +353,39 @@ export default function Kiosk() {
     )
   }
 
-  /* ---------- Punch confirmation screen (person identified) ---------- */
+  /* ---------- Automatic punch result screen ---------- */
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-brand-700 via-brand-600 to-emerald-500 p-6 text-white">
       {header}
 
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-8 py-8">
-        <div className="flex flex-col items-center gap-3 rounded-3xl bg-white/10 px-10 py-6 ring-1 ring-white/25 backdrop-blur">
-          <p className="text-sm uppercase tracking-widest text-emerald-100">Welcome,</p>
-          <p className="text-3xl font-black">{identified.name}</p>
-          {identified.company && <p className="text-sm text-emerald-100">{identified.company}</p>}
+        <div className={`flex w-full flex-col items-center gap-4 rounded-[2rem] bg-white/10 px-10 py-10 ring-1 ring-white/25 backdrop-blur`}>
+          <span className={`flex h-20 w-20 items-center justify-center rounded-full ${result.action === 'in' ? 'bg-brand-500' : 'bg-gray-900'} shadow-xl`}>
+            <svg className="h-11 w-11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </span>
+          <p className="text-center text-4xl font-black tracking-wide">
+            CLOCKED {result.action === 'in' ? 'IN' : 'OUT'}
+          </p>
+          <p className="text-lg font-semibold text-emerald-50">{result.name}</p>
+          <p className="text-sm tabular-nums text-emerald-100">at {result.time}{result.shiftName ? ` · ${result.shiftName} shift` : ''}</p>
         </div>
 
         <div className="text-center">
-          <p className="text-6xl font-black tabular-nums drop-shadow-lg sm:text-7xl">
+          <p className="text-5xl font-black tabular-nums drop-shadow-lg">
             {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </p>
         </div>
 
-        <div className="grid w-full grid-cols-2 gap-5">
-          <button
-            onClick={() => punch('in')}
-            className="group flex flex-col items-center gap-4 rounded-[2rem] bg-white py-12 text-brand-700 shadow-2xl transition-all duration-200 active:scale-95 hover:bg-brand-50"
-          >
-            <span className="flex h-16 w-16 transform items-center justify-center rounded-full bg-brand-600 text-white shadow-lg transition-transform group-hover:scale-110">
-              <svg className="h-9 w-9" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-              </svg>
-            </span>
-            <span className="text-2xl font-extrabold tracking-wide">CHECK IN</span>
-          </button>
-          <button
-            onClick={() => punch('out')}
-            className="group flex flex-col items-center gap-4 rounded-[2rem] bg-gray-900/25 py-12 text-white ring-2 ring-white/60 shadow-2xl transition-all duration-200 active:scale-95 hover:bg-gray-900/35"
-          >
-            <span className="flex h-16 w-16 transform items-center justify-center rounded-full bg-gray-900/40 transition-transform group-hover:scale-110">
-              <svg className="h-9 w-9" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </span>
-            <span className="text-2xl font-extrabold tracking-wide">CHECK OUT</span>
-          </button>
-        </div>
-
         <button
           type="button"
-          onClick={() => { setIdentified(null); setPin(''); setPinMode(false); setAuthError(null) }}
-          className="text-sm font-medium text-emerald-100 underline hover:text-white"
+          onClick={() => setResult(null)}
+          className="rounded-2xl bg-white px-8 py-3 text-base font-bold text-brand-700 shadow-xl transition hover:bg-emerald-50"
         >
-          Not you? Identify again
+          Done
         </button>
       </main>
-
-      {message && (
-        <div className={`fixed bottom-8 left-1/2 z-50 w-[90%] max-w-md -translate-x-1/2 rounded-2xl px-6 py-5 text-center text-lg font-bold shadow-2xl ${message.type === 'in' ? 'bg-white text-brand-700' : 'bg-gray-900 text-white'}`}>
-          {message.text}
-        </div>
-      )}
     </div>
   )
 }

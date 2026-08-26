@@ -220,6 +220,10 @@ async function apiRoutes(path, method, request, env, url, claims) {
   }
 
   /* settings */
+  if (path === '/api/settings' && method === 'GET') {
+    const rows = await env.DB.prepare('SELECT key, value FROM settings').all()
+    return json(Object.fromEntries(rows.map((r) => [r.key, r.value])))
+  }
   if (path === '/api/settings' && method === 'PUT') {
     const body = await readJson(request)
     for (const [key, value] of Object.entries(body)) {
@@ -378,7 +382,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
     if (!match) return json({ error: 'Not recognized. Please register your credential first.' }, 404)
     const emp = await env.DB.prepare('SELECT name, company_id FROM employees WHERE email = ?').bind(match.email).first()
     const company = await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(emp.company_id).first()
-    return json({ email: match.email, name: emp.name, role: 'employee', company: company?.name || '' })
+    return json({ email: match.email, name: emp.name, role: 'employee', company: company?.name || '', companyId: emp.company_id })
   }
 
   /* kiosk employee directory fallback */

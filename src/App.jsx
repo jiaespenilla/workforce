@@ -19,6 +19,7 @@ import Tasks from './pages/Tasks'
 import Payroll from './pages/Payroll'
 import Profile from './pages/Profile'
 import KioskCredentials from './pages/KioskCredentials'
+import ShiftSchedules from './pages/ShiftSchedules'
 import People from './pages/People'
 
 // Single /profile route — wraps the page in the layout matching the user's role.
@@ -30,6 +31,16 @@ function ProfileRoute() {
     <MaintenanceGate>
       <Layout><Profile /></Layout>
     </MaintenanceGate>
+  )
+}
+
+// Renders content inside the correct layout for the user's role.
+function ChromeByRole({ children }) {
+  const { user } = useAuth()
+  return user?.role === 'administrator' ? (
+    <AdminLayout>{children}</AdminLayout>
+  ) : (
+    <MaintenanceGate><Layout>{children}</Layout></MaintenanceGate>
   )
 }
 
@@ -97,6 +108,8 @@ export default function App() {
           <Route path="/kiosk-setup" element={<KioskSetup />} />
         </Route>
 
+        <Route path="/shifts" element={<PageGate perm="shifts"><ChromeByRole><ShiftSchedules /></ChromeByRole></PageGate>} />
+
         {/* Single /profile route — renders inside the right chrome for the user's role */}
         <Route
           path="/profile"
@@ -115,7 +128,7 @@ export default function App() {
           <Route path="/timekeeping" element={<PageGate perm="timekeeping"><TimeKeeping /></PageGate>} />
           <Route path="/tasks" element={<PageGate perm="tasks"><Tasks /></PageGate>} />
           <Route path="/payroll" element={<PageGate perm="payroll"><Payroll /></PageGate>} />
-          <Route path="/kiosk-credentials" element={<PageGate perm="kiosk"><KioskCredentials /></PageGate>} />
+          <Route path="/kiosk-credentials" element={<PageGate perm="kiosk"><KioskCredentials /></PageGate>} />`r`n          <Route path="/shifts" element={<PageGate perm="shifts"><ShiftSchedules /></PageGate>} />
           <Route path="/people" element={<PageGate perm="employees"><People /></PageGate>} />
         </Route>
 
