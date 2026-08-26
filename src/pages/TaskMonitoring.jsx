@@ -1,6 +1,7 @@
 import { usePageTitle } from '../lib/documentMeta'
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { canAction } from '../lib/roles'
 import { getScopedEmployees } from '../lib/companies'
 
 const columns = [
@@ -72,7 +73,7 @@ export default function TaskMonitoring() {
             Monitor tasks across all companies and assign new work to active employees.
           </p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 self-start rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700">
+        <button hidden={!canAction(user?.perms, 'tasks', 'add')} onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 self-start rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700">
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
           </svg>
@@ -163,13 +164,15 @@ export default function TaskMonitoring() {
                   </span>
                   <span className="shrink-0 tabular-nums">Due {task.due || '—'}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => deleteTask(task.id)}
-                  className="mt-2 hidden text-[11px] font-medium text-red-500 hover:text-red-600 group-hover:block"
-                >
-                  Remove task
-                </button>
+                {canAction(user?.perms, 'tasks', 'delete') && (
+                  <button
+                    type="button"
+                    onClick={() => deleteTask(task.id)}
+                    className="mt-2 hidden text-[11px] font-medium text-red-500 hover:text-red-600 group-hover:block"
+                  >
+                    Remove task
+                  </button>
+                )}
               </div>
             ))}
 

@@ -106,7 +106,8 @@ export default function App() {
           }
         />
 
-        <Route path="/kiosk" element={<RequireRole role="employee"><MaintenanceGate><Kiosk /></MaintenanceGate></RequireRole>} />
+        {/* Stand-alone kiosk — publicly accessible, no login required */}
+        <Route path="/kiosk" element={<Kiosk />} />
 
         <Route element={<RequireRole roles={['employee', 'ceo']}><MaintenanceGate><Layout /></MaintenanceGate></RequireRole>}>
           <Route path="/" element={<PageGate perm="dashboard"><Dashboard /></PageGate>} />

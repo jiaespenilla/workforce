@@ -39,3 +39,8 @@ export function getTeamRoleOptions() {
 export function saveRolesList(roles) {
   localStorage.setItem('uw_roles', JSON.stringify(roles))
 }
+
+// Action-level permissions (Add / Edit / Delete per module). Absent = allowed.
+export function canAction(perms, module, action) {
+  return perms?.actions?.[module]?.[action] !== false
+}

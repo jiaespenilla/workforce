@@ -2,7 +2,7 @@ import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
 import { getActiveSettings, getPendingSettings, queueSystemSettings, getSystemTimeZone, isMaintenanceMode, setMaintenanceMode, getSessionTimeoutMinutes, setSessionTimeoutMinutes } from '../lib/systemSettings'
 import { getLegalDocs, saveLegalDocs } from '../lib/legal'
-import { getConfiguredRoles, saveRolesList } from '../lib/roles'
+import { getConfiguredRoles, saveRolesList, canAction } from '../lib/roles'
 import { getAllCompanies } from '../lib/companies'
 import { getSystemIcon, setSystemIcon, applyFavicon } from '../lib/documentMeta'
 import OrgPanel from './OrgPanel'
@@ -179,6 +179,30 @@ function RolesPanel({ roles, onAdd, onRename, onRemove, onTogglePerm }) {
                       <span>{label}</span>
                     </label>
                   ))}
+                </div>
+
+                {/* Action-level permissions */}
+                <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50 p-3">
+                  <p className="mb-2.5 text-[11px] font-bold uppercase tracking-wide text-gray-400">Action buttons shown to this role:</p>
+                  <div className="space-y-2">
+                    {[
+                      ['people', 'People', [['add', 'Add'], ['edit', 'Edit'], ['delete', 'Delete / Status']]],
+                      ['tasks', 'Tasks (CEO)', [['add', 'Add'], ['delete', 'Delete']]],
+                    ].map(([module, moduleLabel, actions]) => (
+                      <div key={module} className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+                        <span className="w-20 shrink-0 font-semibold text-gray-700">{moduleLabel}</span>
+                        {actions.map(([action, label]) => (
+                          <label key={action} className="flex cursor-pointer items-center gap-2">
+                            <Toggle
+                              checked={canAction(r.perms, module, action)}
+                              onChange={(value) => onTogglePerm(i, `actions.${module}.${action}`, value)}
+                            />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {isOpen && members.length > 0 && (
@@ -515,7 +539,23 @@ export default function SystemConfig() {
               onRemove={removeRole}
               onTogglePerm={(index, key, value) =>
                 mutateRoles((prev) =>
-                  prev.map((r, i) => (i === index ? { ...r, perms: { ...r.perms, [key]: value } } : r))
+                  prev.map((r, i) => {
+                    if (i !== index) return r
+                    const base = { ...(r.perms || {}) }
+                    if (key.includes('.')) {
+                      // nested path e.g. "actions.people.add"
+                      const parts = key.split('.')
+                      let node = base
+                      for (let p = 0; p < parts.length - 1; p++) {
+                        node[parts[p]] = { ...(node[parts[p]] || {}) }
+                        node = node[parts[p]]
+                      }
+                      node[parts[parts.length - 1]] = value
+                    } else {
+                      base[key] = value
+                    }
+                    return { ...r, perms: base }
+                  })
                 )
               }
             />

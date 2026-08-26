@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { usePageTitle } from '../lib/documentMeta'
 import { getScopedCompanies, loadRegisteredCompanies } from '../lib/companies'
-import { getConfiguredRoles } from '../lib/roles'
+import { getConfiguredRoles, canAction } from '../lib/roles'
 import { api, apiEnabled } from '../lib/api'
 import Avatar from '../components/Avatar'
 
@@ -10,6 +10,7 @@ export default function People() {
   usePageTitle('People')
   const { user } = useAuth()
   const roleOptions = getConfiguredRoles().filter((r) => !r.perms.settings).map((r) => r.name)
+  const can = (action) => canAction(user?.perms, 'people', action)
 
   const [companies, setCompanies] = useState(() => (apiEnabled() ? [] : getScopedCompanies(user)))
   const [companyId, setCompanyId] = useState(null)
@@ -149,14 +150,15 @@ export default function People() {
         </p>
       )}
 
-      {/* Add employee */}
+      {/* Add employee — hidden when the role lacks the Add permission */}
+      {can('add') ? (
       <form onSubmit={addEmployee} className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <button
           type="button"
           onClick={() => setShowAdd(!showAdd)}
           className="flex w-full items-center justify-between text-left"
         >
-          <span className="text-base font-bold text-gray-900">Add team member</span>
+          <span className={`text-base font-bold ${can('add') ? 'text-gray-900' : 'text-gray-300'}`}>Add team member{!can('add') && ' (not permitted for your role)'}</span>
           <svg className={`h-5 w-5 text-gray-400 transition-transform ${showAdd ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
@@ -186,6 +188,11 @@ export default function People() {
           </>
         )}
       </form>
+      ) : (
+        <div className="rounded-xl border-2 border-dashed border-gray-200 bg-white p-6 text-center text-xs text-gray-400">
+          Adding team members is not permitted for your role. Contact the system administrator.
+        </div>
+      )}
 
       {/* People table */}
       <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -212,19 +219,25 @@ export default function People() {
                   </span>
                   <span className="hidden rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-600 md:inline">{emp.role}</span>
                   <div className="flex shrink-0 items-center gap-1">
-                    <button type="button" onClick={() => toggleStatus(emp)} title={emp.active !== false ? 'Set inactive' : 'Set active'} className="rounded-lg p-2 text-gray-400 transition hover:bg-brand-50 hover:text-brand-600">
-                      {emp.active !== false ? (
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" /></svg>
-                      ) : (
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      )}
-                    </button>
-                    <button type="button" onClick={() => setEditingId(emp.email)} title="Edit" className="rounded-lg p-2 text-gray-400 transition hover:bg-brand-50 hover:text-brand-600">
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                    </button>
-                    <button type="button" onClick={() => deleteEmployee(emp)} title="Remove" className="rounded-lg p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-600">
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
+                    {can('delete') && (
+                      <button type="button" onClick={() => toggleStatus(emp)} title={emp.active !== false ? 'Set inactive' : 'Set active'} className="rounded-lg p-2 text-gray-400 transition hover:bg-brand-50 hover:text-brand-600">
+                        {emp.active !== false ? (
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" /></svg>
+                        ) : (
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        )}
+                      </button>
+                    )}
+                    {can('edit') && (
+                      <button type="button" onClick={() => setEditingId(emp.email)} title="Edit" className="rounded-lg p-2 text-gray-400 transition hover:bg-brand-50 hover:text-brand-600">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                      </button>
+                    )}
+                    {can('delete') && (
+                      <button type="button" onClick={() => deleteEmployee(emp)} title="Remove" className="rounded-lg p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-600">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

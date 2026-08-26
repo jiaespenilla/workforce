@@ -1,5 +1,6 @@
 import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getAllEmployees, getScopedEmployees } from '../lib/companies'
 import { getSystemTimeZone } from '../lib/systemSettings'
@@ -120,20 +121,27 @@ export default function TimeKeeping() {
   usePageTitle('Time Keeping')
   const { user } = useAuth()
   const [view, setView] = useState('week')
-  const [clockedIn, setClockedIn] = useState(false)
-  const [punches, setPunches] = useState([])
   const week = currentWeek()
 
   if (user?.role === 'ceo') {
     return <CeoTimeKeeping />
   }
 
-  const punch = (type) => {
-    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    setPunches((p) => [...p, { type, time: now }])
-    if (type === 'Clock In') setClockedIn(true)
-    else setClockedIn(false)
-  }
+  // Clock in/out happens only via the kiosk — this page shows a read-only
+  // history of the signed-in user's kiosk punches.
+  const myPunches = (() => {
+    try {
+      return (JSON.parse(localStorage.getItem('uw_punches')) || [])
+        .filter((p) => p.email === user?.email)
+        .slice()
+        .reverse()
+    } catch {
+      return []
+    }
+  })()
+  const lastPunch = myPunches[0] || null
+  const isClockedIn = lastPunch?.type === 'in'
+  const todayPunches = myPunches.filter((p) => new Date(p.time).toDateString() === new Date().toDateString())
 
   const totalHours = week.reduce((s, d) => s + d.hours, 0)
   const totalOT = week.reduce((s, d) => s + d.ot, 0)
@@ -142,38 +150,24 @@ export default function TimeKeeping() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Time Keeping</h1>
-        <p className="mt-1 text-sm text-gray-500">Track attendance, timesheets and overtime.</p>
+        <p className="mt-1 text-sm text-gray-500">Your attendance records from kiosk punches.</p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className={`rounded-xl p-6 text-center shadow-sm ${clockedIn ? 'bg-gradient-to-br from-brand-600 to-emerald-500 text-white' : 'border border-gray-200 bg-white'}`}>
-          <p className={`text-sm font-medium ${clockedIn ? 'text-brand-100' : 'text-gray-500'}`}>Current status</p>
-          <p className={`mt-2 text-xl font-bold ${clockedIn ? '' : 'text-gray-900'}`}>
-            {clockedIn ? `Clocked In · ${punches[punches.length - 1]?.time || ''}` : punches.length ? 'Clocked Out' : 'Not clocked in'}
+        <div className={`rounded-xl p-6 shadow-sm ${isClockedIn ? 'bg-gradient-to-br from-brand-600 to-emerald-500 text-white' : 'border border-gray-200 bg-white'}`}>
+          <p className={`text-sm font-medium ${isClockedIn ? 'text-emerald-100' : 'text-gray-500'}`}>Current status</p>
+          <p className={`mt-2 text-xl font-bold ${isClockedIn ? '' : 'text-gray-900'}`}>
+            {isClockedIn ? `Clocked In · ${new Date(lastPunch.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : lastPunch ? 'Clocked Out' : 'Not clocked in today'}
           </p>
-          <div className="mt-4 flex justify-center gap-3">
-            <button
-              onClick={() => punch('Clock In')}
-              disabled={clockedIn}
-              className="rounded-lg bg-white px-6 py-2.5 text-sm font-semibold text-brand-700 shadow hover:bg-brand-50 disabled:opacity-40"
-            >
-              Clock In
-            </button>
-            <button
-              onClick={() => punch('Clock Out')}
-              disabled={!clockedIn}
-              className="rounded-lg bg-gray-900 px-6 py-2.5 text-sm font-semibold text-white shadow hover:bg-gray-800 disabled:opacity-40"
-            >
-              Clock Out
-            </button>
-          </div>
-          <ul className="mt-4 space-y-1 text-xs">
-            {punches.map((p, i) => (
-              <li key={i} className={clockedIn || i % 2 === 0 ? 'text-brand-100/90' : 'text-gray-500'}>
-                {p.type}: <span className="font-semibold tabular-nums">{p.time}</span>
-              </li>
+          <div className="mt-4 space-y-1 text-xs">
+            {todayPunches.length === 0 && <li className={isClockedIn ? 'text-emerald-100/90' : 'text-gray-400'}>No punches yet today — use the kiosk to clock in.</li>}
+            {todayPunches.map((p, i) => (
+              <p key={i} className={isClockedIn || i % 2 === 0 ? 'text-emerald-50/90' : 'text-gray-500'}>
+                {p.type === 'in' ? 'Clock In' : 'Clock Out'}:{' '}
+                <span className="font-semibold tabular-nums">{new Date(p.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </p>
             ))}
-          </ul>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4 lg:col-span-2 lg:content-start">
