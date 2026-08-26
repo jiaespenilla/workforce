@@ -10,7 +10,11 @@ const token = () => localStorage.getItem('uw_token') || ''
 
 // Safe under non-Vite environments where import.meta.env may be undefined.
 const env = (typeof import.meta !== 'undefined' && import.meta.env) || {}
-const API_URL = env.VITE_API_URL || ''
+// In production the app and API are served from the same Worker, so fall back
+// to same-origin. Localhost keeps offline/demo mode unless VITE_API_URL is set.
+const isLocalhost =
+  typeof location !== 'undefined' && /^(localhost|127\.0\.0\.1|\[::1|\*.localhost)$/.test(location.hostname)
+const API_URL = env.VITE_API_URL || (typeof location !== 'undefined' && !isLocalhost ? location.origin : '')
 
 export function apiEnabled() {
   return Boolean(API_URL)
