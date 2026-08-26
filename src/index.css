@@ -3,6 +3,8 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 
+  /* Green & white primary palette (emerald scale).
+     brand-600 (#059669) meets WCAG AA (4.5:1) against white for text. */
   --color-brand-50: #ecfdf5;
   --color-brand-100: #d1fae5;
   --color-brand-200: #a7f3d0;
@@ -11,9 +13,23 @@
   --color-brand-500: #10b981;
   --color-brand-600: #059669;
   --color-brand-700: #047857;
+  --color-brand-800: #065f46;
+  --color-brand-900: #064e3b;
 }
 
 body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Accessible keyboard focus everywhere */
+:focus-visible {
+  outline: 2px solid var(--color-brand-600);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+::selection {
+  background-color: var(--color-brand-100);
+  color: var(--color-brand-900);
 }

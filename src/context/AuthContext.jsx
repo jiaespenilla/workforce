@@ -1,6 +1,8 @@
 import { createContext, useContext, useState } from 'react'
 import { commitPendingSystemSettings } from '../lib/systemSettings'
 import { loadRegisteredCompanies } from '../lib/companies'
+import { getConfiguredRoles } from '../lib/roles'
+import { getStoredPassword, setStoredPassword } from '../lib/passwords'
 
 const AuthContext = createContext(null)
 
@@ -9,7 +11,7 @@ const ADMIN_CREDENTIALS = {
   password: 'Celest!ne2026!',
 }
 
-const CEO_EMAIL = 'ceo@unifiedworkforce.com'
+const CEO_EMAIL = 'ceo@celestsolutions.com'
 const CEO_DEFAULT_PASSWORD = 'P@ssw0rd2026!'
 const COMPANY_DEFAULT_PASSWORD = 'P@ssw0rd2026!'
 
@@ -19,10 +21,6 @@ export function getCeoEmail() {
 
 function getCeoPassword() {
   return localStorage.getItem('uw_ceo_password') || CEO_DEFAULT_PASSWORD
-}
-
-function getRoleLabel(role) {
-  return { administrator: 'Administrator', ceo: 'CEO', employee: 'Employee' }[role] || role
 }
 
 // Resolve an email against registered companies (owner or any listed employee).
@@ -38,8 +36,12 @@ function findCompanyAccount(email) {
   return null
 }
 
-export function changeCeoPassword(newPassword) {
-  localStorage.setItem('uw_ceo_password', newPassword)
+function readProfiles() {
+  try {
+    return JSON.parse(localStorage.getItem('uw_profiles')) || {}
+  } catch {
+    return {}
+  }
 }
 
 export function AuthProvider({ children }) {
@@ -50,6 +52,11 @@ export function AuthProvider({ children }) {
       return null
     }
   })
+
+  const persistUser = (u) => {
+    setUser(u)
+    localStorage.setItem('uw_user', JSON.stringify(u))
+  }
 
   const login = (email, password) => {
     const identifier = email.trim().toLowerCase()
@@ -64,24 +71,48 @@ export function AuthProvider({ children }) {
     if (!account) {
       throw new Error('ACCOUNT_NOT_FOUND')
     }
-    if (password !== COMPANY_DEFAULT_PASSWORD && password !== getCeoPassword()) {
+
+    const expected = getStoredPassword(identifier) || COMPANY_DEFAULT_PASSWORD
+    if (password !== expected) {
       return null
     }
 
     const { company, emp } = account
-    const isOwner = (company.owner?.email || '').trim().toLowerCase() === identifier
+    const identifierOwner =
+      (company.owner?.email || '').trim().toLowerCase() === identifier ||
+      company.employees[0]?.email?.trim().toLowerCase() === identifier
+    // CEO access: registered as the account owner, has the CEO role, or is the first listed member.
+    const isOwner = identifierOwner || emp.role?.toLowerCase() === 'ceo'
     const role = isOwner ? 'ceo' : 'employee'
-    const name = emp.name || company.owner?.name || 'Company User'
+
+    // Saved profile details override registration defaults.
+    const profile = readProfiles()[identifier] || {}
+    const name = profile.name || emp.name || company.owner?.name || 'Company User'
+
+    // Attach the permissions of the matching role configured in System Configuration.
+    let perms = null
+    if (isOwner) {
+      perms =
+        getConfiguredRoles().find((r) => r.name.toLowerCase() === 'ceo')?.perms ||
+        { dashboard: true, timekeeping: true, tasks: true, payroll: true, kiosk: false, settings: false }
+    } else {
+      const roleName = (emp.role || '').trim().toLowerCase()
+      perms = getConfiguredRoles().find((r) => r.name.toLowerCase() === roleName)?.perms || null
+    }
+
     const u = {
       email: identifier,
       name,
       role,
       roleLabel: isOwner ? 'CEO' : emp.role || 'Employee',
       companyName: company.name,
+      perms,
+      phone: profile.phone || '',
+      avatar: profile.avatar || null,
+      usingDefaultPassword: !getStoredPassword(identifier),
       initials: name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(),
     }
-    setUser(u)
-    localStorage.setItem('uw_user', JSON.stringify(u))
+    persistUser(u)
     return u
   }
 
@@ -92,15 +123,19 @@ export function AuthProvider({ children }) {
     ) {
       return null
     }
+    const profile = readProfiles()[ADMIN_CREDENTIALS.username] || {}
+    const name = profile.name || 'Aizl Jo Bornillo'
     const u = {
       email: ADMIN_CREDENTIALS.username,
-      name: 'Aizl Jo Bornillo',
+      name,
       role: 'administrator',
       roleLabel: 'Administrator',
-      initials: 'AJ',
+      phone: profile.phone || '',
+      avatar: profile.avatar || null,
+      usingDefaultPassword: false,
+      initials: name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(),
     }
-    setUser(u)
-    localStorage.setItem('uw_user', JSON.stringify(u))
+    persistUser(u)
     return u
   }
 
@@ -108,16 +143,63 @@ export function AuthProvider({ children }) {
     if (email.trim().toLowerCase() !== CEO_EMAIL || password !== getCeoPassword()) {
       return null
     }
+    const profile = readProfiles()[CEO_EMAIL] || {}
+    const name = profile.name || 'Celestine Espenilla'
     const u = {
       email: CEO_EMAIL,
-      name: 'Celestine Espenilla',
+      name,
       role: 'ceo',
       roleLabel: 'CEO',
-      initials: 'CE',
+      phone: profile.phone || '',
+      avatar: profile.avatar || null,
+      usingDefaultPassword: !localStorage.getItem('uw_ceo_password'),
+      initials: name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(),
     }
-    setUser(u)
-    localStorage.setItem('uw_user', JSON.stringify(u))
+    persistUser(u)
     return u
+  }
+
+  // Update the signed-in user's profile (name / phone / avatar).
+  const updateProfile = (updates) => {
+    if (!user) return
+    const profiles = readProfiles()
+    profiles[user.email] = { ...(profiles[user.email] || {}), ...updates }
+    localStorage.setItem('uw_profiles', JSON.stringify(profiles))
+    persistUser({
+      ...user,
+      ...(updates.name ? { name: updates.name, initials: updates.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase() } : {}),
+      ...(updates.phone !== undefined ? { phone: updates.phone } : {}),
+      ...(updates.avatar !== undefined ? { avatar: updates.avatar } : {}),
+    })
+  }
+
+  // Change the signed-in user's password. Returns error string or null on success.
+  const changeOwnPassword = (currentPassword, newPassword) => {
+    if (!user) return 'Not signed in.'
+    const expected =
+      user.email === CEO_EMAIL
+        ? getCeoPassword()
+        : user.email === ADMIN_CREDENTIALS.username
+          ? ADMIN_CREDENTIALS.password
+          : getStoredPassword(user.email) || COMPANY_DEFAULT_PASSWORD
+    if (currentPassword !== expected) {
+      return 'Current password is incorrect.'
+    }
+    if (!newPassword || newPassword.length < 8) {
+      return 'New password must be at least 8 characters.'
+    }
+    if (newPassword === COMPANY_DEFAULT_PASSWORD) {
+      return 'New password cannot be the default password.'
+    }
+    if (user.email === CEO_EMAIL) {
+      localStorage.setItem('uw_ceo_password', newPassword)
+    } else if (user.email === ADMIN_CREDENTIALS.username) {
+      return 'The administrator password cannot be changed here.'
+    } else {
+      setStoredPassword(user.email, newPassword)
+    }
+    persistUser({ ...user, usingDefaultPassword: false })
+    return null
   }
 
   const logout = () => {
@@ -126,7 +208,11 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('uw_user')
   }
 
-  return <AuthContext.Provider value={{ user, login, loginAdmin, loginCeo, logout }}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider value={{ user, login, loginAdmin, loginCeo, logout, updateProfile, changeOwnPassword }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {

@@ -37,3 +37,25 @@ export function getSystemTimeZone() {
   const tz = getActiveSettings().timezone || ''
   return tz.split(') ')[1] || 'Asia/Manila'
 }
+
+// Maintenance mode — when enabled, only administrators can use the system.
+export function isMaintenanceMode() {
+  return localStorage.getItem('uw_maintenance') === 'on'
+}
+
+export function setMaintenanceMode(on) {
+  if (on) localStorage.setItem('uw_maintenance', 'on')
+  else localStorage.removeItem('uw_maintenance')
+}
+
+// Idle session time-out in minutes. 0 disables auto-logout. Applies immediately.
+export function getSessionTimeoutMinutes() {
+  const value = Number(localStorage.getItem('uw_session_timeout'))
+  return Number.isFinite(value) && value > 0 ? value : 0
+}
+
+export function setSessionTimeoutMinutes(minutes) {
+  const value = Number(minutes)
+  if (Number.isFinite(value) && value > 0) localStorage.setItem('uw_session_timeout', String(Math.floor(value)))
+  else localStorage.removeItem('uw_session_timeout')
+}

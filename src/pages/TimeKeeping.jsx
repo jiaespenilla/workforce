@@ -1,3 +1,4 @@
+import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getAllEmployees } from '../lib/companies'
@@ -50,7 +51,7 @@ function CeoTimeKeeping() {
           <p className="text-sm font-semibold tabular-nums text-gray-900">
             {now.toLocaleTimeString([], { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </p>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-500">
             {now.toLocaleDateString([], { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} · {tz}
           </p>
         </div>
@@ -87,7 +88,7 @@ function CeoTimeKeeping() {
                 <tr key={`${emp.companyId}-${emp.email}`} className="hover:bg-gray-50">
                   <td className="px-6 py-3">
                     <p className="font-medium text-gray-900">{emp.name}</p>
-                    <p className="text-xs text-gray-400">{emp.role}</p>
+                    <p className="text-xs text-gray-500">{emp.role}</p>
                   </td>
                   <td className="px-6 py-3 text-gray-600">{emp.companyName}</td>
                   <td className="px-6 py-3 tabular-nums text-gray-700">—</td>
@@ -99,7 +100,7 @@ function CeoTimeKeeping() {
               ))}
               {employees.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-xs text-gray-400">No active employees yet.</td>
+                  <td colSpan={5} className="px-6 py-8 text-center text-xs text-gray-500">No active employees yet.</td>
                 </tr>
               )}
             </tbody>
@@ -115,6 +116,7 @@ function CeoTimeKeeping() {
 }
 
 export default function TimeKeeping() {
+  usePageTitle('Time Keeping')
   const { user } = useAuth()
   const [view, setView] = useState('week')
   const [clockedIn, setClockedIn] = useState(false)
@@ -183,7 +185,7 @@ export default function TimeKeeping() {
             <div key={label} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <p className="text-sm font-medium text-gray-500">{label}</p>
               <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
-              <p className="mt-0.5 text-xs text-gray-400">{sub}</p>
+              <p className="mt-0.5 text-xs text-gray-500">{sub}</p>
             </div>
           ))}
         </div>

@@ -2,13 +2,26 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getAllEmployees } from '../lib/companies'
+import Avatar from '../components/Avatar'
 
 const shortcuts = [
   { to: '/timekeeping', label: 'Clock In / Out', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
   { to: '/tasks', label: 'My Tasks', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
   { to: '/payroll', label: 'Run Payroll', icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
-  { to: '/settings', label: 'Settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z' },
+  { to: '/profile', label: 'My Profile', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
 ]
+
+const STATUS_LABELS = {
+  pending: 'Pending',
+  inprogress: 'In Progress',
+  completed: 'Completed',
+}
+
+const STATUS_STYLES = {
+  pending: 'bg-gray-100 text-gray-600',
+  inprogress: 'bg-amber-100 text-amber-700',
+  completed: 'bg-brand-100 text-brand-700',
+}
 
 function loadAllTasks() {
   try {
@@ -21,6 +34,23 @@ function loadAllTasks() {
 
 function loadMyTasks(name) {
   return loadAllTasks().filter((t) => t.assignee && t.assignee.startsWith(`${name} (`) && t.status !== 'completed')
+}
+
+// Latest punch per employee email — a person is "clocked in" when their most
+// recent kiosk punch is a check-in for the current shift.
+function getClockInState() {
+  let punches = []
+  try {
+    punches = JSON.parse(localStorage.getItem('uw_punches')) || []
+  } catch {
+    punches = []
+  }
+  const latest = {}
+  for (const p of punches) {
+    const prev = latest[p.email]
+    if (!prev || new Date(p.time) > new Date(prev.time)) latest[p.email] = p
+  }
+  return latest
 }
 
 const weekData = [
@@ -49,40 +79,120 @@ function Chart() {
   )
 }
 
-const STATUS_LABELS = {
-  pending: 'Pending',
-  inprogress: 'In Progress',
-  completed: 'Completed',
+/* ---------- Task export helpers (PDF via print, Word via .doc, plain copy) ---------- */
+
+function buildReportHtml(tasks) {
+  const rows = tasks
+    .map((t) => `<tr>
+      <td>${t.title}</td>
+      <td>${t.assignee}</td>
+      <td>${STATUS_LABELS[t.status] || t.status}</td>
+      <td>${t.priority}</td>
+      <td>${t.due || '—'}</td>
+    </tr>`)
+    .join('')
+  return `<html xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8">
+    <style>body{font-family:Arial,sans-serif;font-size:12px}h1{font-size:18px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:6px;text-align:left}th{background:#ecfdf5}</style>
+    </head><body><h1>All Employee Tasks Report</h1><p>Generated ${new Date().toLocaleString()}</p>
+    <table><thead><tr><th>Task</th><th>Assignee</th><th>Status</th><th>Priority</th><th>Due</th></tr></thead><tbody>${rows}</tbody></table></body></html>`
 }
 
-const STATUS_STYLES = {
-  pending: 'bg-gray-100 text-gray-600',
-  inprogress: 'bg-amber-100 text-amber-700',
-  completed: 'bg-brand-100 text-brand-700',
+function buildReportText(tasks) {
+  return [
+    `ALL EMPLOYEE TASKS REPORT — generated ${new Date().toLocaleString()}`,
+    ''.padEnd(60, '='),
+
+    ...tasks.map(
+      (t) =>
+        `[${STATUS_LABELS[t.status] || t.status}] ${t.title}\n    Assignee: ${t.assignee} · Priority: ${t.priority} · Due: ${t.due || '—'}`
+    ),
+  ].join('\n')
 }
 
-// CEO view — active employees (excluding the CEO); click an employee to see their tasks.
+function downloadFile(content, filename, mime) {
+  const blob = new Blob([content], { type: mime })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function TaskExportToolbar({ tasks }) {
+  if (tasks.length === 0) return null
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(buildReportText(tasks))
+      alert('Task report copied to clipboard.')
+    } catch {
+      alert('Unable to access the clipboard.')
+    }
+  }
+
+  const word = () =>
+    downloadFile('\ufeff' + buildReportHtml(tasks), 'employee-tasks-report.doc', 'application/msword')
+
+  const pdf = () => {
+    const win = window.open('', '_blank')
+    if (!win) return alert('Please allow pop-ups to export as PDF.')
+    win.document.write(buildReportHtml(tasks))
+    win.document.close()
+    win.focus()
+    win.print()
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button onClick={copy} title="Copy report" className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-brand-400 hover:text-brand-700">Copy</button>
+      <button onClick={word} title="Download as Word document" className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-brand-400 hover:text-brand-700">Word</button>
+      <button onClick={pdf} title="Export as PDF (print)" className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700">PDF</button>
+    </div>
+  )
+}
+
+/* ---------- CEO dashboard ---------- */
+
 function CeoDashboard({ user }) {
   const [selectedEmail, setSelectedEmail] = useState(null)
   const employees = getAllEmployees().filter((e) => e.active !== false && e.email !== user.email)
-  const selected = employees.find((e) => e.email === selectedEmail)
+  const clockState = getClockInState()
+  const allTasks = loadAllTasks()
+
+  // "Active" = currently clocked-in via the kiosk for their shift.
+  const clockedInEmployees = employees.filter((e) => clockState[e.email]?.type === 'in')
+  const selected = clockedInEmployees.find((e) => e.email === selectedEmail)
   const selectedTasks = selected
-    ? loadAllTasks().filter((t) => t.assignee === `${selected.name} (${selected.companyName})`)
+    ? allTasks.filter((t) => t.assignee === `${selected.name} (${selected.companyName})`)
     : []
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">CEO Overview</p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900">Active Employees</h1>
-        <p className="mt-1 text-sm text-gray-500">{employees.length} active employee{employees.length !== 1 ? 's' : ''} across your organization. Click an employee to view their tasks.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">CEO Overview</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900">Active Employees</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            {clockedInEmployees.length} currently clocked-in via kiosk · click an employee to view their tasks.
+          </p>
+        </div>
+        <div className="shrink-0">
+          <p className="mb-1 text-right text-[11px] font-medium uppercase tracking-wide text-gray-400">Export all tasks ({allTasks.length})</p>
+          <TaskExportToolbar tasks={allTasks} />
+        </div>
       </div>
 
-      <div className={selected ? 'grid gap-4 lg:grid-cols-2' : ''}>
+      <div className={selected ? 'grid items-start gap-6 lg:grid-cols-[1fr_minmax(320px,420px)]' : ''}>
+        {/* Clocked-in employee list */}
         <div className="space-y-3">
-          {employees.map((emp) => {
-            const taskCount = loadAllTasks().filter(
+          {clockedInEmployees.map((emp) => {
+            const punch = clockState[emp.email]
+            const openCount = allTasks.filter(
               (t) => t.assignee === `${emp.name} (${emp.companyName})` && t.status !== 'completed'
+            ).length
+            const doneCount = allTasks.filter(
+              (t) => t.assignee === `${emp.name} (${emp.companyName})` && t.status === 'completed'
             ).length
             const isSelected = emp.email === selectedEmail
             return (
@@ -90,62 +200,97 @@ function CeoDashboard({ user }) {
                 key={`${emp.companyId}-${emp.email}`}
                 type="button"
                 onClick={() => setSelectedEmail(isSelected ? null : emp.email)}
-                className={`flex w-full items-center gap-4 rounded-xl border bg-white px-5 py-4 text-left shadow-sm transition hover:border-brand-300 hover:bg-brand-50/50 ${
-                  isSelected ? 'border-brand-400 ring-2 ring-brand-200' : 'border-gray-200'
+                className={`w-full rounded-xl border bg-white px-5 py-4 text-left shadow-sm transition hover:border-brand-300 hover:bg-brand-50/50 ${
+                  isSelected ? 'border-brand-500 ring-2 ring-brand-200' : 'border-gray-200'
                 }`}
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
-                  {emp.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()}
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <Avatar user={{ name: emp.name, initials: emp.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(), avatar: emp.avatar }} size="h-11 w-11 text-sm" />
+                    <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-brand-500" title="Currently clocked in" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-gray-900">{emp.name}</p>
+                    <p className="truncate text-xs text-gray-500">{emp.role} · {emp.companyName}</p>
+                    <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-brand-700 ring-1 ring-brand-200">
+                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      In since {new Date(punch.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-center">
+                    <p className="text-lg font-bold tabular-nums text-gray-900">{openCount}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400">open · {doneCount} done</p>
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-gray-900">{emp.name}</p>
-                  <p className="truncate text-xs text-gray-500">{emp.role} · {emp.companyName}</p>
-                </div>
-                <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
-                  taskCount > 0 ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200' : 'bg-gray-100 text-gray-500'
-                }`}>
-                  {taskCount} open task{taskCount !== 1 ? 's' : ''}
-                </span>
-                <svg className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${isSelected ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
               </button>
             )
           })}
-          {employees.length === 0 && (
-            <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center">
-              <p className="text-sm text-gray-500">No active employees yet.</p>
+
+          {clockedInEmployees.length === 0 && (
+            <div className="rounded-xl border-2 border-dashed border-gray-300 bg-white p-10 text-center">
+              <svg className="mx-auto mb-3 h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm font-medium text-gray-900">No one is clocked in right now</p>
+              <p className="mt-1 text-xs text-gray-500">Employees appear here once they check in through the kiosk.</p>
             </div>
           )}
         </div>
 
+        {/* Selected employee's tasks */}
         {selected && (
-          <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">{selected.name}'s Tasks</h2>
-              <p className="text-xs text-gray-400">{selected.role} · {selected.companyName}</p>
+          <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-lg lg:sticky lg:top-20">
+            <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
+              <Avatar user={{ name: selected.name, initials: selected.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(), avatar: selected.avatar }} size="h-10 w-10 text-sm" />
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-base font-bold text-gray-900">{selected.name}'s Tasks</h2>
+                <p className="truncate text-xs text-gray-400">{selected.role} · {selected.companyName}</p>
+              </div>
+              <button onClick={() => setSelectedEmail(null)} aria-label="Close panel" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
+
             {selectedTasks.length === 0 && (
-              <div className="flex min-h-[160px] items-center justify-center rounded-xl border-2 border-dashed border-gray-200 text-sm text-gray-400">
+              <div className="flex min-h-[120px] items-center justify-center rounded-xl border-2 border-dashed border-gray-200 text-sm text-gray-400">
                 No tasks assigned yet.
               </div>
             )}
-            {selectedTasks.map((task) => (
-              <div key={task.id} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className={`text-sm font-medium ${task.status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
-                    {task.title}
-                  </h3>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${STATUS_STYLES[task.status] || ''}`}>
-                    {STATUS_LABELS[task.status] || task.status}
-                  </span>
+
+            {['pending', 'inprogress', 'completed'].map((status) => {
+              const group = selectedTasks.filter((t) => t.status === status)
+              if (group.length === 0) return null
+              return (
+                <div key={status}>
+                  <p className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-gray-400">
+                    {STATUS_LABELS[status]}
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 tabular-nums">{group.length}</span>
+                  </p>
+                  <div className="space-y-2">
+                    {group.map((task) => (
+                      <div key={task.id} className={`rounded-xl border p-3.5 ${status === 'completed' ? 'border-brand-100 bg-brand-50/40' : 'border-gray-200'}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className={`text-sm font-medium ${status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                            {task.title}
+                          </h3>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${STATUS_STYLES[status]}`}>
+                            {STATUS_LABELS[status]}
+                          </span>
+                        </div>
+                        <p className="mt-1.5 text-[11px] text-gray-400">
+                          Priority: <span className="font-medium text-gray-500">{task.priority}</span>
+                          {task.due && <> · Due: <span className="font-medium tabular-nums text-gray-500">{task.due}</span></>}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <p className="mt-2 text-xs text-gray-500">
-                  Priority: <span className="font-medium text-gray-700">{task.priority}</span>
-                  {task.due && <> · Due <span className="font-medium tabular-nums text-gray-700">{task.due}</span></>}
-                </p>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

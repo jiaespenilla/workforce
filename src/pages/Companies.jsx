@@ -1,3 +1,4 @@
+import { usePageTitle } from '../lib/documentMeta'
 import { useState } from 'react'
 import { loadRegisteredCompanies } from '../lib/companies'
 
@@ -29,31 +30,36 @@ function StatusPill({ on }) {
 function DetailRow({ label, value }) {
   return (
     <div>
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{label}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">{label}</p>
       <p className="mt-0.5 text-sm font-medium text-gray-900">{value || '—'}</p>
     </div>
   )
 }
 
 const EDIT_FIELDS = [
-  ['name', 'Company name'],
-  ['industry', 'Industry'],
-  ['address', 'Address'],
-  ['city', 'City'],
-  ['country', 'Country'],
-  ['contactPhone', 'Contact phone'],
-  ['contactEmail', 'Contact email', 'email'],
+  ['name', 'Company name:'],
+  ['industry', 'Industry:'],
+  ['address', 'Address:'],
+  ['city', 'City:'],
+  ['contactPhone', 'Contact phone:'],
+  ['contactEmail', 'Contact email:', 'email'],
 ]
 
-function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmployee, onEditCompany }) {
-  const [tab, setTab] = useState('details')
-  const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState(() => ({
+function buildCompanyForm(company) {
+  return {
     ...Object.fromEntries(EDIT_FIELDS.map(([key]) => [key, company[key] || ''])),
     ownerName: company.owner?.name || '',
     ownerTitle: company.owner?.title || '',
     ownerEmail: company.owner?.email || '',
-  }))
+  }
+}
+
+function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmployee, onEditCompany }) {
+  const [tab, setTab] = useState('details')
+  const [editing, setEditing] = useState(false)
+  // Form is (re)built from the current company every time Edit starts —
+  // this keeps it in sync with what the details view displays.
+  const [form, setForm] = useState(() => buildCompanyForm(company))
   const status = company.status || 'pending'
   const initials = company.name
     .split(' ')
@@ -92,7 +98,7 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
                 {STATUS_LABELS[status]}
               </span>
               <StatusPill on={company.active !== false} />
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-gray-500">
                 {company.employees.length} employees · {activeCount} active
               </span>
             </div>
@@ -100,7 +106,10 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
           {!editing && tab === 'details' && (
             <button
               type="button"
-              onClick={() => setEditing(true)}
+              onClick={() => {
+                setForm(buildCompanyForm(company))
+                setEditing(true)
+              }}
               className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-brand-400 hover:text-brand-700"
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -109,7 +118,7 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
               Edit
             </button>
           )}
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-600">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -129,7 +138,7 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
               }}
               disabled={editing}
               className={`rounded-t-lg px-4 py-2 text-sm font-medium transition ${
-                editing ? 'cursor-not-allowed text-gray-300' :
+                editing ? 'cursor-not-allowed text-gray-500' :
                 tab === id ? 'border-b-2 border-brand-600 text-brand-700' : 'text-gray-500 hover:text-gray-800'
               }`}
             >
@@ -141,7 +150,7 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
         {tab === 'details' && !editing && (
           <div className="space-y-6 p-6">
             <section>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Company Information</h3>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Company Information</h3>
               <div className="grid gap-4 sm:grid-cols-2">
                 <DetailRow label="Industry" value={company.industry} />
                 <DetailRow label="Registered" value={company.registered} />
@@ -152,7 +161,7 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
             </section>
 
             <section>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Owner / Administrator</h3>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Owner / Administrator</h3>
               <div className="grid gap-4 sm:grid-cols-2">
                 <DetailRow label="Name" value={company.owner?.name || company.employees[0]?.name} />
                 <DetailRow label="Job title" value={company.owner?.title} />
@@ -180,10 +189,10 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
         {tab === 'details' && editing && (
           <div className="space-y-5 p-6">
             <section>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Company Information</h3>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Company Information</h3>
               <div className="grid gap-3 sm:grid-cols-2">
                 {EDIT_FIELDS.map(([key, label, type]) => (
-                  <label key={key} className={`block text-sm ${key === 'address' ? 'sm:col-span-2' : ''}`}>
+                  <label key={key} className={`block text-sm ${key === 'Address:' ? 'sm:col-span-2' : ''}`}>
                     <span className="font-medium text-gray-700">{label}</span>
                     <input
                       type={type || 'text'}
@@ -197,18 +206,18 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
             </section>
 
             <section>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Owner / Administrator</h3>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Owner / Administrator</h3>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block text-sm">
-                  <span className="font-medium text-gray-700">Owner name</span>
+                  <span className="font-medium text-gray-700">Owner name:</span>
                   <input value={form.ownerName} onChange={(e) => setForm({ ...form, ownerName: e.target.value })} className={`mt-1 ${inputCls}`} />
                 </label>
                 <label className="block text-sm">
-                  <span className="font-medium text-gray-700">Job title</span>
+                  <span className="font-medium text-gray-700">Job title:</span>
                   <input value={form.ownerTitle} onChange={(e) => setForm({ ...form, ownerTitle: e.target.value })} className={`mt-1 ${inputCls}`} />
                 </label>
                 <label className="block text-sm sm:col-span-2">
-                  <span className="font-medium text-gray-700">Owner email</span>
+                  <span className="font-medium text-gray-700">Owner email:</span>
                   <input type="email" value={form.ownerEmail} onChange={(e) => setForm({ ...form, ownerEmail: e.target.value })} className={`mt-1 ${inputCls}`} />
                 </label>
               </div>
@@ -218,12 +227,7 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
               <button
                 type="button"
                 onClick={() => {
-                  setForm({
-                    ...Object.fromEntries(EDIT_FIELDS.map(([key]) => [key, company[key] || ''])),
-                    ownerName: company.owner?.name || '',
-                    ownerTitle: company.owner?.title || '',
-                    ownerEmail: company.owner?.email || '',
-                  })
+                  setForm(buildCompanyForm(company))
                   setEditing(false)
                 }}
                 className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
@@ -256,7 +260,7 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
                   <tr key={emp.email}>
                     <td className="py-3">
                       <p className="font-medium text-gray-900">{emp.name}</p>
-                      <p className="text-xs text-gray-400">{emp.email}</p>
+                      <p className="text-xs text-gray-500">{emp.email}</p>
                     </td>
                     <td className="py-3 text-gray-600">{emp.role}</td>
                     <td className="py-3">
@@ -272,12 +276,12 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
                 ))}
                 {company.employees.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="py-6 text-center text-xs text-gray-400">No employees yet.</td>
+                    <td colSpan={3} className="py-6 text-center text-xs text-gray-500">No employees yet.</td>
                   </tr>
                 )}
               </tbody>
             </table>
-            <p className="mt-4 text-[11px] text-gray-400">Click an employee's status pill to switch between Active and Inactive.</p>
+            <p className="mt-4 text-[11px] text-gray-500">Click an employee's status pill to switch between Active and Inactive.</p>
           </div>
         )}
       </div>
@@ -285,7 +289,7 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
   )
 }
 
-function CompanyCard({ company, onView, onApproveReject }) {
+function CompanyCard({ company, onView, onApprove, onReject }) {
   const [open, setOpen] = useState(false)
   const status = company.status || 'pending'
   const initials = company.name
@@ -322,7 +326,7 @@ function CompanyCard({ company, onView, onApproveReject }) {
           {activeCount}/{company.employees.length} active
         </span>
         <svg
-          className={`h-5 w-5 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`h-5 w-5 shrink-0 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`}
           fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -350,14 +354,14 @@ function CompanyCard({ company, onView, onApproveReject }) {
                 <div className="ml-auto flex gap-2">
                   <button
                     type="button"
-                    onClick={() => onApproveReject(company.id, 'approved')}
+                    onClick={() => onApprove(company)}
                     className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
                   >
                     Approve
                   </button>
                   <button
                     type="button"
-                    onClick={() => onApproveReject(company.id, 'rejected')}
+                    onClick={() => onReject(company)}
                     className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
                   >
                     Reject
@@ -373,9 +377,13 @@ function CompanyCard({ company, onView, onApproveReject }) {
 }
 
 export default function Companies() {
+  usePageTitle('Companies')
   const [query, setQuery] = useState('')
   const [companies, setCompanies] = useState(loadRegisteredCompanies)
   const [viewingId, setViewingId] = useState(null)
+  const [rejecting, setRejecting] = useState(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [approving, setApproving] = useState(null)
 
   const mutateCompanies = (updater) => {
     setCompanies((prev) => {
@@ -387,6 +395,61 @@ export default function Companies() {
 
   const handleStatusChange = (id, status) =>
     mutateCompanies((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)))
+
+  // Queue an email to the company owner. Delivers once SMTP is configured;
+  // until then it is stored locally alongside admin notifications.
+  const queueOwnerEmail = (company, kind, reason) => {
+    try {
+      const ownerEmail = company.owner?.email || company.contactEmail || ''
+      if (!ownerEmail) return
+      const notifications = JSON.parse(localStorage.getItem('uw_notifications')) || []
+      notifications.push({
+        id: `notif-${Date.now()}`,
+        to: ownerEmail,
+        subject:
+          kind === 'approved'
+            ? `Your registration for ${company.name} has been approved`
+            : `Update on your registration for ${company.name}`,
+        body:
+          kind === 'approved'
+            ? `Good news!\n\nYour company "${company.name}" has been approved on Unified Workforce.\nTeam members can now sign in with their registered emails.`
+            : `We're sorry — your registration for "${company.name}" was not approved.\n\nReason: ${reason}\n\nYou may contact the system administrator for more details.`,
+        createdAt: new Date().toISOString(),
+        status: 'pending-smtp',
+      })
+      localStorage.setItem('uw_notifications', JSON.stringify(notifications))
+    } catch {
+      // storage unavailable
+    }
+  }
+
+  const handleApprove = (company) => {
+    setApproving(company)
+  }
+
+  const handleApproveConfirm = () => {
+    if (!approving) return
+    handleStatusChange(approving.id, 'approved')
+    queueOwnerEmail(approving, 'approved')
+    setApproving(null)
+  }
+
+  const handleRejectRequest = (company) => {
+    setRejecting(company)
+    setRejectReason('')
+  }
+
+  const handleRejectConfirm = () => {
+    if (!rejecting) return
+    if (!rejectReason.trim()) {
+      alert('Please provide a reason for rejecting this registration.')
+      return
+    }
+    handleStatusChange(rejecting.id, 'rejected')
+    queueOwnerEmail(rejecting, 'rejected', rejectReason.trim())
+    setRejecting(null)
+    setRejectReason('')
+  }
 
   const handleToggleActive = (id) =>
     mutateCompanies((prev) => prev.map((c) => (c.id === id ? { ...c, active: c.active === false } : c)))
@@ -403,6 +466,7 @@ export default function Companies() {
   const handleEditCompany = (id, updates) =>
     mutateCompanies((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)))
 
+  const totalCompanies = companies.length
   const filtered = companies.filter(
     (c) =>
       c.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -410,37 +474,51 @@ export default function Companies() {
   )
   const totalEmployees = companies.reduce((sum, c) => sum + c.employees.length, 0)
   const activeEmployees = companies.reduce((sum, c) => sum + c.employees.filter((e) => e.active !== false).length, 0)
+  const inactiveCompanies = companies.filter((c) => c.active === false).length
   const pendingCount = companies.filter((c) => (c.status || 'pending') === 'pending').length
   const viewing = companies.find((c) => c.id === viewingId)
 
+  const stats = [
+    { label: 'Companies', value: totalCompanies, tone: 'text-brand-700 bg-brand-50 ring-brand-200' },
+    { label: 'Active employees', value: `${activeEmployees}/${totalEmployees}`, tone: 'text-emerald-700 bg-emerald-50 ring-emerald-200' },
+    { label: 'Inactive companies', value: inactiveCompanies, tone: 'text-gray-600 bg-gray-100 ring-gray-200' },
+    { label: 'Pending approval', value: pendingCount, tone: `${pendingCount > 0 ? 'text-amber-700 bg-amber-50 ring-amber-200' : 'text-gray-600 bg-gray-100 ring-gray-200'}` },
+  ]
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Administration</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Administration Console</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900">Companies</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            {companies.length} compan{companies.length !== 1 ? 'ies' : 'y'} · {activeEmployees}/{totalEmployees} employees active.
-            {pendingCount > 0 && (
-              <span className="ml-2 font-medium text-amber-600">{pendingCount} pending approval.</span>
-            )}
-          </p>
+          <p className="mt-1 text-sm text-gray-500">Review registrations, manage status and view team members.</p>
         </div>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search companies…"
-          className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10 sm:w-64"
+          placeholder="Search company or industry…"
+          aria-label="Search companies"
+          className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10 sm:w-72"
         />
       </div>
 
-      <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {stats.map((s) => (
+          <div key={s.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums ring-1 ${s.tone}`}>{s.value}</p>
+            <p className="mt-2 text-xs font-medium uppercase tracking-wide text-gray-500">{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
         {filtered.map((c) => (
           <CompanyCard
             key={c.id}
             company={c}
             onView={setViewingId}
-            onApproveReject={handleStatusChange}
+            onApprove={handleApprove}
+            onReject={handleRejectRequest}
           />
         ))}
         {filtered.length === 0 && (
@@ -452,12 +530,100 @@ export default function Companies() {
 
       {viewing && (
         <CompanyDetailsModal
+          key={viewing.id}
           company={viewing}
           onClose={() => setViewingId(null)}
           onToggleActive={handleToggleActive}
           onToggleEmployee={handleToggleEmployee}
           onEditCompany={handleEditCompany}
         />
+      )}
+
+      {approving && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setApproving(null)}>
+          <div className="absolute inset-0 bg-gray-900/50" />
+          <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="h-1.5 w-full bg-gradient-to-r from-brand-600 to-emerald-400" />
+            <div className="px-6 py-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100">
+                  <svg className="h-5 w-5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold text-gray-900">Approve registration</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-gray-500">
+                    You are about to approve <span className="font-semibold text-gray-900">{approving.name}</span>.
+                  </p>
+                </div>
+              </div>
+
+              <dl className="mt-4 space-y-2 rounded-xl border border-gray-200 bg-gray-50 p-4 text-xs">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-gray-400">Owner:</dt>
+                  <dd className="text-right font-medium text-gray-700">{approving.owner?.name || approving.employees[0]?.name || '—'}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-gray-400">Owner email:</dt>
+                  <dd className="text-right font-medium text-gray-700">{approving.owner?.email || approving.contactEmail || '—'}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-gray-400">Team members:</dt>
+                  <dd className="text-right font-medium text-gray-700">{approving.employees.length}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-gray-400">Notification email:</dt>
+                  <dd className="text-right text-gray-500">Queued — sends once SMTP is configured</dd>
+                </div>
+              </dl>
+
+              <p className="mt-3 text-xs text-gray-400">Team members will be able to sign in with their registered emails after approval.</p>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
+              <button onClick={() => setApproving(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+                Cancel
+              </button>
+              <button onClick={handleApproveConfirm} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700">
+                Approve registration
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rejecting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setRejecting(null)}>
+          <div className="absolute inset-0 bg-gray-900/50" />
+          <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-gray-100 px-6 py-4">
+              <h3 className="text-base font-bold text-gray-900">Reject registration</h3>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Provide a reason for rejecting <span className="font-semibold">{rejecting.name}</span>. This will be
+                emailed to the owner ({rejecting.owner?.email || rejecting.contactEmail || 'email unavailable'}) once SMTP is configured.
+              </p>
+            </div>
+            <div className="px-6 py-4">
+              <label htmlFor="reject-reason" className="block text-sm font-medium text-gray-700">Reason:</label>
+              <textarea
+                id="reject-reason"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={4}
+                placeholder="e.g. Incomplete business documentation."
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+              />
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-3">
+              <button onClick={() => setRejecting(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+                Cancel
+              </button>
+              <button onClick={handleRejectConfirm} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
+                Reject registration
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

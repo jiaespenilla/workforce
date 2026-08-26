@@ -1,3 +1,4 @@
+import { usePageTitle } from '../lib/documentMeta'
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import TaskMonitoring from './TaskMonitoring'
@@ -27,6 +28,7 @@ function loadMyTasks(name) {
 }
 
 export default function Tasks() {
+  usePageTitle('Tasks')
   const { user } = useAuth()
   return user?.role === 'ceo' ? <TaskMonitoring /> : <EmployeeTasks name={user?.name || ''} />
 }
@@ -95,7 +97,7 @@ function EmployeeTasks({ name }) {
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className={`text-sm font-medium ${task.status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                  <h3 className={`text-sm font-medium ${task.status === 'completed' ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
                     {task.title}
                   </h3>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${priorityStyles[task.priority]}`}>{task.priority}</span>
@@ -113,7 +115,7 @@ function EmployeeTasks({ name }) {
             ))}
 
             {tasks.filter((t) => t.status === col.id).length === 0 && (
-              <div className="flex flex-1 items-center justify-center rounded-xl border-2 border-dashed border-gray-200 text-sm text-gray-400">
+              <div className="flex flex-1 items-center justify-center rounded-xl border-2 border-dashed border-gray-200 text-sm text-gray-500">
                 Drop tasks here
               </div>
             )}

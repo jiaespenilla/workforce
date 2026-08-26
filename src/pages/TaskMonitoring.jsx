@@ -1,3 +1,4 @@
+import { usePageTitle } from '../lib/documentMeta'
 import { useState } from 'react'
 import { getAllEmployees } from '../lib/companies'
 
@@ -24,6 +25,7 @@ const priorityStyles = {
 }
 
 export default function TaskMonitoring() {
+  usePageTitle('Task Monitoring')
   const [tasks, setTasks] = useState(loadTasks)
   const [dragId, setDragId] = useState(null)
   const [overCol, setOverCol] = useState(null)
@@ -145,7 +147,7 @@ export default function TaskMonitoring() {
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className={`text-sm font-medium ${task.status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                  <h3 className={`text-sm font-medium ${task.status === 'completed' ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
                     {task.title}
                   </h3>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${priorityStyles[task.priority]}`}>{task.priority}</span>
@@ -170,7 +172,7 @@ export default function TaskMonitoring() {
             ))}
 
             {tasks.filter((t) => t.status === col.id).length === 0 && (
-              <div className="flex flex-1 items-center justify-center rounded-xl border-2 border-dashed border-gray-200 text-sm text-gray-400">
+              <div className="flex flex-1 items-center justify-center rounded-xl border-2 border-dashed border-gray-200 text-sm text-gray-500">
                 Drop tasks here
               </div>
             )}
@@ -199,7 +201,7 @@ export default function TaskMonitoring() {
                 <tr key={`${emp.companyId}-${emp.email}`} className="hover:bg-gray-50">
                   <td className="px-5 py-3">
                     <p className="font-medium text-gray-900">{emp.name}</p>
-                    <p className="text-xs text-gray-400">{emp.email}</p>
+                    <p className="text-xs text-gray-500">{emp.email}</p>
                   </td>
                   <td className="px-5 py-3 text-gray-600">{emp.companyName}</td>
                   <td className="px-5 py-3 text-gray-600">{emp.role}</td>

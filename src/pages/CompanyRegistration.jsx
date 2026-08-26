@@ -1,59 +1,175 @@
-import { useState } from 'react'
+import { usePageTitle } from '../lib/documentMeta'
+import { useRef, useState } from 'react'
 import { Logo } from '../components/Layout'
+import { getLegalDocs } from '../lib/legal'
+import { getConfiguredRoles } from '../lib/roles'
 
 const industries = ['Technology', 'Healthcare', 'Retail', 'Manufacturing', 'Finance', 'Education', 'Construction', 'Hospitality', 'Other']
 
 const NOTIFICATION_RECIPIENT = 'jiaespenilla@gmail.com'
 
+function LegalModal({ title, content, onConfirm, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-gray-900/50" />
+      <div
+        className="relative flex max-h-[80vh] w-full max-w-xl flex-col rounded-2xl bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <h3 className="text-base font-bold text-gray-900">{title}</h3>
+          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="overflow-y-auto whitespace-pre-line px-6 py-4 text-sm leading-relaxed text-gray-600">{content}</div>
+        <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-3">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
+          <button onClick={onConfirm} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+            I have read and understood
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const inputCls = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10'
+
 export default function CompanyRegistration() {
+  usePageTitle('Company Registration')
   const [logoName, setLogoName] = useState(null)
   const [submitted, setSubmitted] = useState(false)
+  const [people, setPeople] = useState(() => {
+    const roles = getConfiguredRoles().filter((r) => !r.perms?.settings).map((r) => r.name)
+    return [{ name: '', email: '', role: roles[0] || '' }]
+  })
+  const [showBulkPaste, setShowBulkPaste] = useState(false)
+  const [bulkText, setBulkText] = useState('')
+  const [bulkError, setBulkError] = useState(null)
+  const [legalView, setLegalView] = useState(null)
+  const [readDocs, setReadDocs] = useState({ terms: false, privacy: false })
+  const [legalError, setLegalError] = useState(false)
+  const agreementRef = useRef(null)
+  // Only roles actually configured by the administrator — no sample/fallback roles.
+  const roleOptions = getConfiguredRoles().filter((r) => !r.perms?.settings).map((r) => r.name)
+  const legal = getLegalDocs()
+
+  const confirmRead = (doc) => {
+    setReadDocs((prev) => ({ ...prev, [doc]: true }))
+    setLegalView(null)
+  }
+  const bothDocsRead = readDocs.terms && readDocs.privacy
+  const [agree, setAgree] = useState(false)
+
+  const setPerson = (i, field, value) =>
+    setPeople((prev) => prev.map((p, idx) => (idx === i ? { ...p, [field]: value } : p)))
+
+  const addPerson = () =>
+    setPeople((prev) => {
+      const roles = getConfiguredRoles().filter((r) => !r.perms?.settings).map((r) => r.name)
+      return [...prev, { name: '', email: '', role: roles[roles.length - 1] || '' }]
+    })
+
+  const removePerson = (i) => setPeople((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev))
+
+  const parseBulk = () => {
+    const rows = bulkText
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [name, email, role] = line.split(',').map((s) => s.trim())
+        return { name: name || '', email: email || '', role: roleOptions.includes(role) ? role : roleOptions[roleOptions.length - 1] || '' }
+      })
+      .filter((r) => r.name || r.email)
+    if (rows.length === 0) {
+      setBulkError('No valid rows found. Use one person per line: Name, Email, Role.')
+      return
+    }
+    setBulkError(null)
+    setPeople((prev) => {
+      // Keep valid existing rows, then append parsed ones. First row stays CEO.
+      const kept = prev.filter((p, i) => i === 0 || p.name || p.email)
+      const merged = [...kept]
+      for (const row of rows) merged.push(row)
+      return merged
+    })
+    setBulkText('')
+    setShowBulkPaste(false)
+  }
 
   if (submitted) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-        <div className="max-w-md rounded-2xl border border-brand-200 bg-white p-10 text-center shadow-lg">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-100">
-            <svg className="h-7 w-7 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-10">
+        <div className="max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white text-center shadow-lg">
+          <div className="h-2 w-full bg-gradient-to-r from-brand-600 to-emerald-400" />
+          <div className="p-10">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-100">
+              <svg className="h-7 w-7 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h1 className="text-xl font-bold text-gray-900">Registration submitted!</h1>
+            <p className="mt-2 text-sm leading-relaxed text-gray-500">
+              Your company and team are now pending review by an administrator. Once approved, each team member can sign in with their registered email.
+            </p>
+            <a href="/login" className="mt-6 inline-block rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">Go to login</a>
           </div>
-          <h1 className="text-xl font-bold text-gray-900">Registration submitted!</h1>
-          <p className="mt-2 text-sm text-gray-500">Your application is now pending review. We'll notify you once an administrator approves your registration.</p>
-          <a href="/login" className="mt-6 inline-block rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">Go to login</a>
         </div>
       </div>
     )
   }
 
-  const inputCls = 'mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200'
-
   const handleSubmit = (e) => {
     e.preventDefault()
+    if (!bothDocsRead) {
+      setLegalError(true)
+      agreementRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
     const form = e.target
     const data = Object.fromEntries(new FormData(form).entries())
+
+    const members = people
+      .map((p) => ({
+        name: p.name.trim(),
+        email: p.email.trim().toLowerCase(),
+        role: p.role || 'Unassigned',
+      }))
+      .filter((p) => p.name && p.email)
+
+    if (members.length === 0) {
+      alert('Please add at least one team member with a name and email.')
+      return
+    }
+    // Ensure emails are unique
+    const emails = new Set()
+    for (const m of members) {
+      if (emails.has(m.email)) {
+        alert(`Duplicate email: ${m.email}. Each team member needs a unique email.`)
+        return
+      }
+      emails.add(m.email)
+    }
+
+    const ceo = members.find((m) => m.role === 'CEO') || members[0]
     const company = {
       id: `reg-${Date.now()}`,
       name: data.companyName || 'Unnamed Company',
       industry: data.industry,
       address: data.address,
       city: data.city,
-      country: data.country,
       contactPhone: data.contactPhone,
-      contactEmail: data.contactEmail || data.ownerEmail,
+      contactEmail: data.contactEmail || ceo.email,
       registered: new Date().toISOString().slice(0, 10),
       logoName,
       status: 'pending',
       active: true,
-      owner: { name: data.ownerName, title: data.jobTitle, email: data.ownerEmail },
-      employees: [
-        {
-          name: data.ownerName || 'Owner',
-          email: data.ownerEmail || '',
-          role: data.jobTitle || 'Administrator',
-          active: true,
-        },
-      ],
+      owner: { name: ceo.name, title: 'CEO', email: ceo.email },
+      employees: members.map((m) => ({ ...m, active: true })),
     }
     try {
       const existing = JSON.parse(localStorage.getItem('uw_companies')) || []
@@ -63,7 +179,7 @@ export default function CompanyRegistration() {
         id: `notif-${Date.now()}`,
         to: NOTIFICATION_RECIPIENT,
         subject: `New company registration: ${company.name}`,
-        body: `A new company has registered on Unified Workforce.\n\nCompany: ${company.name}\nIndustry: ${company.industry}\nLocation: ${company.city}, ${company.country}\nContact email: ${company.contactEmail}\nRegistered: ${company.registered}\n\nOwner: ${company.employees[0].name} (${company.employees[0].email})`,
+        body: `A new company has registered on Unified Workforce.\n\nCompany: ${company.name}\nIndustry: ${company.industry}\nLocation: ${company.city}\nContact email: ${company.contactEmail}\nRegistered: ${company.registered}\n\nTeam (${members.length}):\n${members.map((m) => `- ${m.name} — ${m.role} (${m.email})`).join('\n')}`,
         createdAt: new Date().toISOString(),
         status: 'pending-smtp',
       })
@@ -75,100 +191,243 @@ export default function CompanyRegistration() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-600 via-brand-500 to-emerald-400 px-4 py-10">
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-8 flex items-center justify-center"><Logo light /></div>
-        <form
-          className="space-y-8 rounded-2xl bg-white p-6 shadow-xl sm:p-10"
-          onSubmit={handleSubmit}
-        >
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Company Registration</h1>
-            <p className="mt-1 text-sm text-gray-500">Set up your organization on Unified Workforce.</p>
-          </div>
+    <div className="min-h-screen bg-gradient-to-b from-brand-700 via-brand-600 to-emerald-500 px-4 py-8 sm:py-12">
+      {legalView && (
+        <LegalModal
+          title={legalView === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
+          content={legal[legalView]}
+          onConfirm={() => confirmRead(legalView)}
+          onClose={() => setLegalView(null)}
+        />
+      )}
 
-          <section>
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-brand-600">Company Information</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+      <div className="mx-auto max-w-2xl">
+        <div className="mb-6 flex items-center justify-between">
+          <Logo light />
+          <span className="hidden rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white ring-1 ring-white/25 sm:inline">
+            Step 1 of 1 · Registration
+          </span>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl bg-white p-6 shadow-xl sm:p-8">
+          {/* Section 1 — Company */}
+          <section aria-labelledby="sec-company">
+            <div className="mb-4 flex items-center gap-3">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">1</span>
+              <div>
+                <h2 id="sec-company" className="text-base font-bold text-gray-900">Company information</h2>
+                <p className="text-xs text-gray-500">Tell us about your organization.</p>
+              </div>
+            </div>
+
+            <label className="mb-3 block cursor-pointer rounded-xl border-2 border-dashed border-gray-300 px-4 py-5 text-center text-sm text-gray-500 transition hover:border-brand-400 hover:bg-brand-50/60">
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => setLogoName(e.target.files?.[0]?.name)} />
+              <svg className="mx-auto mb-1 h-7 w-7 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+              {logoName ? <span className="font-medium text-brand-700">{logoName}</span> : 'Upload company logo (optional)'}
+            </label>
+
+            <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-sm sm:col-span-2">
-                <span className="font-medium text-gray-700">Company name *</span>
-                <input name="companyName" required placeholder="Acme Corporation" className={inputCls} />
+                <span className="font-medium text-gray-700">Company name: *</span>
+                <input name="companyName" required placeholder="Acme Corporation" className={`mt-1 ${inputCls}`} />
               </label>
               <label className="block text-sm sm:col-span-2">
-                <span className="font-medium text-gray-700">Address *</span>
-                <input name="address" required placeholder="123 Main St, Suite 100" className={inputCls} />
+                <span className="font-medium text-gray-700">Address: *</span>
+                <input name="address" required placeholder="123 Main St, Suite 100" className={`mt-1 ${inputCls}`} />
               </label>
               <label className="block text-sm">
-                <span className="font-medium text-gray-700">City *</span>
-                <input name="city" required className={inputCls} />
+                <span className="font-medium text-gray-700">City: *</span>
+                <input name="city" required placeholder="Makati" className={`mt-1 ${inputCls}`} />
               </label>
               <label className="block text-sm">
-                <span className="font-medium text-gray-700">Country *</span>
-                <input name="country" required className={inputCls} />
-              </label>
-              <label className="block text-sm">
-                <span className="font-medium text-gray-700">Contact phone *</span>
-                <input name="contactPhone" required type="tel" placeholder="+1 (555) 000-0000" className={inputCls} />
-              </label>
-              <label className="block text-sm">
-                <span className="font-medium text-gray-700">Contact email *</span>
-                <input name="contactEmail" required type="email" placeholder="info@company.com" className={inputCls} />
-              </label>
-              <label className="block text-sm">
-                <span className="font-medium text-gray-700">Industry / business type *</span>
-                <select name="industry" required className={inputCls}>
+                <span className="font-medium text-gray-700">Industry: *</span>
+                <select name="industry" required className={`mt-1 ${inputCls}`}>
                   {industries.map((i) => <option key={i}>{i}</option>)}
                 </select>
               </label>
-              <label className="block text-sm">
-                <span className="font-medium text-gray-700">Number of employees</span>
-                <select className={inputCls}>
-                  <option>1–10</option><option>11–50</option><option>51–200</option><option>201–1000</option><option>1000+</option>
-                </select>
+              <label className="block text-sm sm:col-span-2">
+                <span className="font-medium text-gray-700">Contact phone: *</span>
+                <input name="contactPhone" required type="tel" placeholder="+63 917 000 0000" className={`mt-1 ${inputCls}`} />
+              </label>
+              <label className="block text-sm sm:col-span-2">
+                <span className="font-medium text-gray-700">Contact email: *</span>
+                <input name="contactEmail" required type="email" placeholder="info@company.com" className={`mt-1 ${inputCls}`} />
               </label>
             </div>
-            <div className="mt-4">
-              <span className="block text-sm font-medium text-gray-700">Company logo</span>
-              <label className="mt-1 flex cursor-pointer items-center gap-3 rounded-lg border-2 border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500 hover:border-brand-400 hover:bg-brand-50 transition">
-                <svg className="h-8 w-8 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+          </section>
+
+          <hr className="border-gray-100" />
+
+          {/* Section 2 — Team (bulk) */}
+          <section aria-labelledby="sec-team">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">2</span>
+                <div>
+                  <h2 id="sec-team" className="text-base font-bold text-gray-900">Team members</h2>
+                  <p className="text-xs text-gray-500">Add your CEO and employees — they'll use these emails to sign in.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBulkPaste(!showBulkPaste)}
+                className="shrink-0 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-100"
+              >
+                {showBulkPaste ? 'Cancel paste' : 'Bulk paste'}
+              </button>
+            </div>
+
+            {showBulkPaste && (
+              <div className="mb-4 rounded-xl border border-brand-200 bg-brand-50/60 p-4">                <label className="block text-xs font-medium text-brand-800" htmlFor="bulk-paste">
+                  Paste your team list — one person per line: <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">Name, Email, Role</code>
+                </label>
+                <textarea
+                  id="bulk-paste"
+                  value={bulkText}
+                  onChange={(e) => setBulkText(e.target.value)}
+                  rows={5}
+                  placeholder={'Juan Dela Cruz, juan@acme.com, Employee\nMaria Santos, maria@acme.com, HR Manager'}
+                  className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
+                />
+                {bulkError && <p className="mt-1 text-xs font-medium text-red-600">{bulkError}</p>}
+                <button type="button" onClick={parseBulk} className="mt-2 rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white hover:bg-brand-700">
+                  Add to list
+                </button>
+              </div>
+            )}
+
+            {roleOptions.length === 0 && (
+              <p className="mb-3 rounded-lg bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
+                No roles have been configured by the system administrator yet — role selection is unavailable. You can still register team members.
+              </p>
+            )}
+
+            <div className="space-y-3">
+              {people.map((person, i) => (
+                <div key={i} className={`grid gap-2 rounded-xl border p-3 sm:grid-cols-[1fr_1fr_auto_auto] ${i === 0 ? 'border-brand-200 bg-brand-50/40' : 'border-gray-200'}`}>
+                  <span className="col-span-full mb-0.5 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                    {i === 0 && <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[10px] text-white">Account owner · CEO access</span>}
+                    Member {i + 1}
+                  </span>
+                  <input
+                    value={person.name}
+                    onChange={(e) => setPerson(i, 'name', e.target.value)}
+                    placeholder="Full name *"
+                    aria-label={`Member ${i + 1} full name`}
+                    className={inputCls}
+                  />
+                  <input
+                    value={person.email}
+                    onChange={(e) => setPerson(i, 'email', e.target.value)}
+                    placeholder="name@company.com *"
+                    type="email"
+                    aria-label={`Member ${i + 1} email`}
+                    className={inputCls}
+                  />
+                  <select
+                    value={person.role}
+                    onChange={(e) => setPerson(i, 'role', e.target.value)}
+                    aria-label={`Member ${i + 1} role`}
+                    disabled={roleOptions.length === 0}
+                    className={`${inputCls} sm:w-36`}
+                  >
+                    {roleOptions.length === 0 ? (
+                      <option value="">No roles available</option>
+                    ) : (
+                      roleOptions.map((r) => <option key={r}>{r}</option>)
+                    )}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => removePerson(i)}
+                    disabled={people.length === 1}
+                    title={people.length === 1 ? 'At least one member is required' : 'Remove'}
+                    aria-label={`Remove member ${i + 1}`}
+                    className="flex items-center justify-center rounded-lg px-3 py-2 text-red-500 transition enabled:hover:bg-red-50 enabled:hover:text-red-600 disabled:opacity-30"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={addPerson}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand-300 py-3 text-sm font-semibold text-brand-700 transition hover:border-brand-400 hover:bg-brand-50"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Add team member
+            </button>
+          </section>
+
+          <hr className="border-gray-100" />
+
+          {/* Section 3 — Agreement */}
+          <section aria-labelledby="sec-agreement" ref={agreementRef}>
+            <div className="mb-4 flex items-center gap-3">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">3</span>
+              <h2 id="sec-agreement" className="text-base font-bold text-gray-900">Agreement</h2>
+            </div>
+
+            <label className={`flex items-start gap-3 rounded-xl border p-4 text-sm text-gray-600 transition ${
+              legalError && !bothDocsRead ? 'border-red-300 bg-red-50 ring-2 ring-red-200' : 'border-gray-200 bg-gray-50'
+            }`}>
+              <input
+                type="checkbox"
+                checked={agree}
+                onChange={(e) => setAgree(e.target.checked)}
+                disabled={!bothDocsRead}
+                required
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-brand-600 focus:ring-brand-500 disabled:opacity-40"
+              />
+              <span>
+                I have read and agree to the{' '}
+                <button type="button" onClick={() => setLegalView('terms')} className="font-semibold text-brand-600 underline hover:text-brand-700">Terms &amp; Conditions:</button>
+                {' '}{readDocs.terms ? '✓' : ''}{' '}and{' '}
+                <button type="button" onClick={() => setLegalView('privacy')} className="font-semibold text-brand-600 underline hover:text-brand-700">Privacy Policy:</button>.
+                {' '}{readDocs.privacy ? '✓' : ''}
+              </span>
+            </label>
+            {!bothDocsRead && (
+              <div
+                className={`mt-2 flex items-start gap-2.5 rounded-xl p-4 text-xs leading-relaxed ring-1 transition ${
+                  legalError ? 'bg-red-50 text-red-700 ring-red-200' : 'bg-amber-50 text-amber-800 ring-amber-200'
+                }`}
+                role={legalError ? 'alert' : undefined}
+              >
+                <svg className={`mt-0.5 h-4 w-4 shrink-0 ${legalError ? 'text-red-500' : 'text-amber-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                <span>{logoName ? logoName : 'Click to upload a PNG or SVG logo'}</span>
-                <input type="file" accept="image/*" className="hidden" onChange={(e) => setLogoName(e.target.files?.[0]?.name)} />
-              </label>
-            </div>
+                <span>
+                  {legalError ? (
+                    <>
+                      <span className="font-bold">Before you can submit:</span> please open and read both the{' '}
+                      <button type="button" onClick={() => setLegalView('terms')} className="font-semibold underline">Terms &amp; Conditions</button> and{' '}
+                      <button type="button" onClick={() => setLegalView('privacy')} className="font-semibold underline">Privacy Policy</button>,
+                      then confirm each using “I have read and understood”.
+                    </>
+                  ) : (
+                    <>You must open and read both documents before you can agree and submit.</>
+                  )}
+                </span>
+              </div>
+            )}
           </section>
 
-          <section>
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-brand-600">Owner / Administrator</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="font-medium text-gray-700">Full name *</span>
-                <input name="ownerName" required className={inputCls} />
-              </label>
-              <label className="block text-sm">
-                <span className="font-medium text-gray-700">Job title *</span>
-                <input name="jobTitle" required placeholder="CEO" className={inputCls} />
-              </label>
-              <label className="block text-sm">
-                <span className="font-medium text-gray-700">Email address *</span>
-                <input name="ownerEmail" required type="email" className={inputCls} />
-              </label>
-              <label className="block text-sm">
-                <span className="font-medium text-gray-700">Phone number *</span>
-                <input name="ownerPhone" required type="tel" className={inputCls} />
-              </label>
-            </div>
-          </section>
-
-          <label className="flex items-start gap-3 text-sm text-gray-600">
-            <input required type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-400" />
-            <span>I agree to the <a href="#" className="font-medium text-brand-600 underline">Terms &amp; Conditions</a> and <a href="#" className="font-medium text-brand-600 underline">Privacy Policy</a>.</span>
-          </label>
-
-          <button type="submit" className="w-full rounded-lg bg-brand-600 py-3 text-sm font-semibold text-white hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-300 focus:ring-offset-2">
-            Submit registration
+          <button
+            type="submit"
+            className="w-full rounded-xl bg-brand-600 py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-500/30"
+          >
+            Submit registration ({people.length} member{people.length !== 1 ? 's' : ''})
           </button>
+
           <p className="text-center text-sm text-gray-500">
             Already registered? <a href="/login" className="font-medium text-brand-600 hover:text-brand-700">Sign in</a>
           </p>

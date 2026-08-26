@@ -1,3 +1,4 @@
+import { usePageTitle } from '../lib/documentMeta'
 import { useMemo, useState } from 'react'
 
 const employees = []
@@ -14,6 +15,7 @@ function peso(n) {
 }
 
 export default function Payroll() {
+  usePageTitle('Payroll')
   const [tab, setTab] = useState('records')
   const [selected, setSelected] = useState(null)
 
@@ -79,7 +81,7 @@ export default function Payroll() {
 
           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
             {rows.length === 0 ? (
-              <div className="p-10 text-center text-sm text-gray-400">
+              <div className="p-10 text-center text-sm text-gray-500">
                 No employee payroll records yet. Employee salary details will appear here once configured.
               </div>
             ) : (
@@ -101,7 +103,7 @@ export default function Payroll() {
                   <tr key={r.id} className="hover:bg-gray-50">
                     <td className="px-6 py-3">
                       <div className="font-medium text-gray-900">{r.name}</div>
-                      <div className="text-xs text-gray-400">{r.role}</div>
+                      <div className="text-xs text-gray-500">{r.role}</div>
                     </td>
                     <td className="px-6 py-3 text-gray-600">{r.type}</td>
                     <td className="px-6 py-3 tabular-nums text-gray-700">{peso(r.base)}</td>
@@ -129,7 +131,7 @@ export default function Payroll() {
             <div key={d.label} className="flex items-center justify-between rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <div>
                 <p className="text-sm font-medium text-gray-900">{d.label}</p>
-                <p className="text-xs text-gray-400">{d.pct}% of gross pay · statutory</p>
+                <p className="text-xs text-gray-500">{d.pct}% of gross pay · statutory</p>
               </div>
               <input type="number" defaultValue={d.pct} step="0.5" className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm tabular-nums focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200" data-i={i} />
             </div>
@@ -151,7 +153,7 @@ export default function Payroll() {
               <button className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Schedule &amp; Run</button>
             </div>
           </div>
-          <div className="rounded-xl border-2 border-dashed border-gray-200 bg-white p-10 text-center text-sm text-gray-400">
+          <div className="rounded-xl border-2 border-dashed border-gray-200 bg-white p-10 text-center text-sm text-gray-500">
             No payroll runs yet. Your run history will appear here.
           </div>
         </div>
@@ -160,7 +162,7 @@ export default function Payroll() {
       {tab === 'payslips' && (
         <div className="mx-auto max-w-xl">
           {!selected ? (
-            <div className="rounded-xl border-2 border-dashed border-gray-200 bg-white p-10 text-center text-sm text-gray-400">
+            <div className="rounded-xl border-2 border-dashed border-gray-200 bg-white p-10 text-center text-sm text-gray-500">
               Select an employee from the Records tab to view their payslip.
             </div>
           ) : (
