@@ -149,8 +149,16 @@ function mapCompany(row, employees) {
 export default {
   async fetch(request, env) {
     try {
-      await ensureSeed(env)
-      return await route(request, env)
+      const url = new URL(request.url)
+
+      // API requests → router (seeds the database on first use)
+      if (url.pathname.startsWith('/api/')) {
+        await ensureSeed(env)
+        return await route(request, env)
+      }
+
+      // Everything else → the React app (static assets, SPA fallback)
+      return env.ASSETS.fetch(request)
     } catch (err) {
       return json({ error: err.message || 'Server error' }, err.status || 500)
     }
@@ -159,7 +167,7 @@ export default {
 
 async function route(request, env) {
   const url = new URL(request.url)
-  const path = url.pathname.replace(/\/+$/, '')
+  const path = url.pathname.replace(/\/+$/, '') || '/'
   const method = request.method
 
   if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors() })
@@ -187,7 +195,6 @@ async function route(request, env) {
 
   return json({ error: 'Not found' }, 404)
 }
-
 async function apiRoutes(path, method, request, env, url, claims) {
   const isAdmin = claims.role === 'administrator'
 
