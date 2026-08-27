@@ -9,6 +9,33 @@ export function loadNotifications() {
   }
 }
 
+// Cloud mode: fetch from D1 via Worker. Falls back to localStorage.
+export async function fetchNotifications() {
+  try {
+    const { api, apiEnabled } = await import('./api')
+    if (!apiEnabled()) return loadNotifications()
+    const rows = await api('/api/notifications')
+    // Worker returns {id,to,subject,body,createdAt} — normalize to local shape
+    if (Array.isArray(rows)) return rows.slice().reverse()
+    return loadNotifications()
+  } catch {
+    return loadNotifications()
+  }
+}
+
+export async function clearNotificationsRemote() {
+  try {
+    const { api, apiEnabled } = await import('./api')
+    if (!apiEnabled()) {
+      clearNotifications()
+      return
+    }
+    await api('/api/notifications', { method: 'DELETE' })
+  } catch {
+    clearNotifications()
+  }
+}
+
 export function queueNotification({ to, subject, body }) {
   try {
     const notifications = JSON.parse(localStorage.getItem('uw_notifications')) || []

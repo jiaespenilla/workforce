@@ -604,6 +604,21 @@ async function ensureUser(env, email, name, role, password) {
 async function queueNotification(env, { to, subject, body }) {
   if (!to) return
   await env.DB.prepare('INSERT INTO notifications (to_email, subject, body) VALUES (?, ?, ?)').bind(to.toLowerCase(), subject, body || '').run()
+  // Best-effort transactional email via Cloudflare Email Service (requires send_email binding + verified domain).
+  // Falls back to in-app notification if Email Service not configured — notification is always stored in DB.
+  if (env.EMAIL) {
+    try {
+      await env.EMAIL.send({
+        from: { email: 'noreply@celestsolutions.workers.dev', name: 'CadensIQ' },
+        to,
+        subject,
+        text: body || '',
+        html: `<div style="font-family:sans-serif;white-space:pre-line">${(body || '').replace(/</g, '&lt;')}</div>`,
+      })
+    } catch (e) {
+      console.error('EMAIL send failed (check wrangler email sending enable + verified domain):', e.message)
+    }
+  }
 }
 
 function mapTask(row) {

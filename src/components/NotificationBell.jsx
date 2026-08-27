@@ -4,8 +4,10 @@ import { useAuth } from '../context/AuthContext'
 import { getSystemTimeZone } from '../lib/systemSettings'
 import {
   loadNotifications,
+  fetchNotifications,
   markNotificationsRead,
   clearNotifications,
+  clearNotificationsRemote,
   getNotificationsReadAt,
   ADMIN_RECIPIENT,
 } from '../lib/notifications'
@@ -22,8 +24,14 @@ export default function NotificationBell() {
   const ref = useRef(null)
 
   useEffect(() => {
-    const t = setInterval(() => setNotifications(loadNotifications()), 5000)
-    return () => clearInterval(t)
+    let cancelled = false
+    const load = async () => {
+      const data = await fetchNotifications()
+      if (!cancelled) setNotifications(data)
+    }
+    load()
+    const t = setInterval(load, 5000)
+    return () => { cancelled = true; clearInterval(t) }
   }, [])
 
   useEffect(() => {
@@ -73,7 +81,7 @@ export default function NotificationBell() {
             <p className="text-sm font-bold text-gray-900">Notifications</p>
             {visible.length > 0 && (
               <button
-                onClick={() => { clearNotifications(); setNotifications([]) }}
+                onClick={async () => { await clearNotificationsRemote(); setNotifications([]) }}
                 className="text-xs font-medium text-gray-400 hover:text-red-500"
               >
                 Clear all

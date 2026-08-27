@@ -17,6 +17,9 @@
   //   wrangler secret put AUTH_SECRET
   // Never put real secrets in this file.
   "vars": {},
+  // Transactional email — requires domain onboarding via `wrangler email sending enable <domain>`
+  // or Dashboard > Email > Email Sending. Gracefully no-ops if not configured.
+  "send_email": [{ "name": "EMAIL" }],
   // Serve the React app from this same Worker — build the frontend first:
   //   npm run build        (from the project root)
   // Then deploy:          wrangler deploy
