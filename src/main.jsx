@@ -7,13 +7,14 @@ import { resetDataIfNeeded } from './lib/dataVersion'
 import { applyFavicon } from './lib/documentMeta'
 import { cleanStaleLocalStorage } from './lib/api'
 import { prefetchServerSettings } from './lib/systemSettings'
+import { prefetchRoles } from './lib/roles'
 
 cleanStaleLocalStorage()
 resetDataIfNeeded()
 applyFavicon()
 
-// Fetch server settings before rendering so the UI shows correct data immediately.
-prefetchServerSettings().then(() => {
+// Fetch server data before rendering so the UI shows correct data immediately.
+Promise.all([prefetchServerSettings(), prefetchRoles()]).then(() => {
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
       <BrowserRouter>

@@ -31,11 +31,28 @@ function loadLocalRoles() {
   }
 }
 
+// In-memory cache populated at startup in cloud mode.
+let _serverRoles = null
+
+// Pre-fetch roles from the server once at startup so getConfiguredRoles()
+// returns correct data immediately (no flash of seeded defaults).
+export async function prefetchRoles() {
+  if (!apiEnabled()) return
+  try {
+    const roles = await api('/api/roles')
+    _serverRoles = roles.map((r) => ({ ...r, perms: normalizePerms(r.perms) }))
+    localStorage.setItem('uw_roles', JSON.stringify(_serverRoles))
+  } catch {
+    // offline — keep localStorage or empty
+  }
+}
+
 export async function fetchRoles() {
   if (apiEnabled()) {
     try {
       const roles = await api('/api/roles')
-      return roles.map((r) => ({ ...r, perms: normalizePerms(r.perms) }))
+      _serverRoles = roles.map((r) => ({ ...r, perms: normalizePerms(r.perms) }))
+      return _serverRoles
     } catch {
       return loadLocalRoles()
     }
@@ -44,6 +61,7 @@ export async function fetchRoles() {
 }
 
 export function getConfiguredRoles() {
+  if (_serverRoles) return _serverRoles
   return loadLocalRoles()
 }
 
@@ -70,6 +88,7 @@ export async function saveRolesList(roles) {
       // Fall back to local storage on error
     }
   }
+  _serverRoles = roles
   localStorage.setItem('uw_roles', JSON.stringify(roles))
 }
 
