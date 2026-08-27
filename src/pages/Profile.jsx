@@ -60,11 +60,13 @@ export default function Profile() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 px-4 sm:px-0">
-      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-        <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Account</p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">My Profile</h1>
-        <p className="mt-1 text-sm leading-relaxed text-gray-500">Manage your personal details and account security. Updates apply across phone and desktop.</p>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Account</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">My Profile</h1>
+          <p className="mt-1 text-sm leading-relaxed text-gray-500">Manage your personal details and account security.</p>
+        </div>
       </div>
 
       {user.usingDefaultPassword && (
