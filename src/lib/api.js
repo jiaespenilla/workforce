@@ -20,6 +20,24 @@ export function apiEnabled() {
   return Boolean(API_URL)
 }
 
+// Clear stale localStorage data left over from local-mode usage.
+// Only runs once per session via the CLEANED flag.
+const CLEANED_KEY = 'uw_local_cleaned'
+const DATA_KEYS = [
+  'uw_companies', 'uw_ceo_tasks', 'uw_punches', 'uw_roles',
+  'uw_org_units', 'uw_shift_schedules', 'uw_notifications',
+  'uw_profiles', 'uw_passwords', 'uw_ceo_password',
+  'uw_legal', 'uw_system_settings', 'uw_pending_system_settings',
+  'uw_maintenance', 'uw_session_timeout',
+]
+
+export function cleanStaleLocalStorage() {
+  if (!apiEnabled()) return
+  if (localStorage.getItem(CLEANED_KEY)) return
+  for (const key of DATA_KEYS) localStorage.removeItem(key)
+  localStorage.setItem(CLEANED_KEY, '1')
+}
+
 export async function api(path, { method = 'GET', body } = {}) {
   const res = await fetch(`${API_URL}${path}`, {
     method,

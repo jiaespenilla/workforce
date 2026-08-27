@@ -5,7 +5,9 @@ import App from './App'
 import './index.css'
 import { resetDataIfNeeded } from './lib/dataVersion'
 import { applyFavicon } from './lib/documentMeta'
+import { cleanStaleLocalStorage } from './lib/api'
 
+cleanStaleLocalStorage()
 resetDataIfNeeded()
 applyFavicon()
 
