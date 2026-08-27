@@ -3,18 +3,30 @@ import { useAuth } from '../context/AuthContext'
 import { usePageTitle } from '../lib/documentMeta'
 import { getCompanyShifts, saveCompanyShiftData } from '../lib/shifts'
 import { getScopedCompanies, loadRegisteredCompanies } from '../lib/companies'
+import { api, apiEnabled } from '../lib/api'
 
 // Shift Schedules — define shifts per company and assign them to employees.
 export default function ShiftSchedules() {
   usePageTitle('Shift Schedules')
   const { user } = useAuth()
-  const companies = user?.companyName ? getScopedCompanies(user) : loadRegisteredCompanies()
+  const [companies, setCompanies] = useState(() => user?.companyName ? getScopedCompanies(user) : [])
 
-  const [companyId, setCompanyId] = useState(companies[0]?.id || '')
+  const [companyId, setCompanyId] = useState('')
   const [data, setData] = useState({ shifts: [], assignments: {} })
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(false)
   const [newShift, setNewShift] = useState({ name: '', start: '08:00', end: '17:00', open: false })
+
+  useEffect(() => {
+    if (apiEnabled()) {
+      api('/api/companies').then((all) => {
+        setCompanies(all)
+        if (all.length > 0) setCompanyId(all[0].id)
+      }).catch(() => setCompanies(loadRegisteredCompanies()))
+    } else {
+      setCompanies(loadRegisteredCompanies())
+    }
+  }, [])
 
   useEffect(() => {
     if (!companyId) return
