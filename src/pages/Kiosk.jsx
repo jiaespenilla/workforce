@@ -5,6 +5,7 @@ import { getSystemIcon } from '../lib/documentMeta'
 import { loadKioskConfig } from './KioskSetup'
 import { getCompanyShifts, decideAction } from '../lib/shifts'
 import { getAllCompanies } from '../lib/companies'
+import { api, apiEnabled } from '../lib/api'
 
 // Makes the kiosk installable as a stand-alone app on phones/tablets.
 function useKioskPwa(systemName, brandLetter) {
@@ -199,17 +200,31 @@ export default function Kiosk() {
 
     const nowDate = new Date()
     let punches = []
-    try { punches = JSON.parse(localStorage.getItem('uw_punches')) || [] } catch { punches = [] }
+    if (apiEnabled()) {
+      try {
+        punches = await api(`/api/attendance?email=${encodeURIComponent(match.email)}`)
+      } catch {
+        punches = []
+      }
+    } else {
+      try { punches = JSON.parse(localStorage.getItem('uw_punches')) || [] } catch { punches = [] }
+    }
     const action = decideAction(punches, shift, nowDate).action
 
-    punches.push({
+    const punchRecord = {
       email: match.email,
       name: match.name,
       company: match.company,
       type: action,
       time: nowDate.toISOString(),
-    })
-    localStorage.setItem('uw_punches', JSON.stringify(punches))
+    }
+
+    if (apiEnabled()) {
+      await api('/api/attendance', { method: 'POST', body: { email: match.email, company_id: match.companyId || company_id_by_name(match), type: action, time: nowDate.toISOString() } }).catch(() => {})
+    } else {
+      punches.push(punchRecord)
+      localStorage.setItem('uw_punches', JSON.stringify(punches))
+    }
 
     setResult({
       name: match.name,

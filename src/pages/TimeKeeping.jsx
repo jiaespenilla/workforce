@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getAllEmployees, getScopedEmployees } from '../lib/companies'
 import { getSystemTimeZone } from '../lib/systemSettings'
+import { api, apiEnabled } from '../lib/api'
 
 function currentWeek() {
   const now = new Date()
@@ -31,16 +32,28 @@ function CeoTimeKeeping() {
   const { user } = useAuth()
   const [now, setNow] = useState(new Date())
   const [view, setView] = useState('week')
+  const [attendance, setAttendance] = useState([])
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
 
+  useEffect(() => {
+    if (apiEnabled()) {
+      api('/api/attendance').then(setAttendance).catch(() => setAttendance([]))
+    }
+  }, [])
+
   const tz = getSystemTimeZone()
-  const week = currentWeek()
-  const totalHours = week.reduce((s, d) => s + d.hours, 0)
-  const totalOT = week.reduce((s, d) => s + d.ot, 0)
   const employees = getScopedEmployees(user).filter((e) => e.active !== false)
+
+  // Get today's attendance for each employee
+  const todayStr = now.toDateString()
+  const getTodayPunches = (email) => attendance.filter((p) => p.email === email && new Date(p.time).toDateString() === todayStr)
+  const getLastPunch = (email) => {
+    const today = getTodayPunches(email)
+    return today.length > 0 ? today[today.length - 1] : null
+  }
 
   return (
     <div className="space-y-6">
@@ -86,20 +99,34 @@ function CeoTimeKeeping() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {employees.map((emp) => (
-                <tr key={`${emp.companyId}-${emp.email}`} className="hover:bg-gray-50">
-                  <td className="px-6 py-3">
-                    <p className="font-medium text-gray-900">{emp.name}</p>
-                    <p className="text-xs text-gray-500">{emp.role}</p>
-                  </td>
-                  <td className="px-6 py-3 text-gray-600">{emp.companyName}</td>
-                  <td className="px-6 py-3 tabular-nums text-gray-700">—</td>
-                  <td className="px-6 py-3 tabular-nums text-gray-700">—</td>
-                  <td className="px-6 py-3">
-                    <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500">No record today</span>
-                  </td>
-                </tr>
-              ))}
+              {employees.map((emp) => {
+                const todayPunches = getTodayPunches(emp.email)
+                const lastPunch = getLastPunch(emp.email)
+                const clockIn = todayPunches.find((p) => p.type === 'in')
+                const clockOut = todayPunches.find((p) => p.type === 'out')
+                const status = lastPunch?.type === 'in' ? 'Clocked in' : clockOut ? 'Clocked out' : 'No record today'
+                const statusStyle = lastPunch?.type === 'in'
+                  ? 'bg-brand-100 text-brand-700'
+                  : clockOut ? 'bg-gray-100 text-gray-600' : 'bg-gray-100 text-gray-500'
+                return (
+                  <tr key={`${emp.companyId}-${emp.email}`} className="hover:bg-gray-50">
+                    <td className="px-6 py-3">
+                      <p className="font-medium text-gray-900">{emp.name}</p>
+                      <p className="text-xs text-gray-500">{emp.role}</p>
+                    </td>
+                    <td className="px-6 py-3 text-gray-600">{emp.companyName}</td>
+                    <td className="px-6 py-3 tabular-nums text-gray-700">
+                      {clockIn ? new Date(clockIn.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                    </td>
+                    <td className="px-6 py-3 tabular-nums text-gray-700">
+                      {clockOut ? new Date(clockOut.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                    </td>
+                    <td className="px-6 py-3">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusStyle}`}>{status}</span>
+                    </td>
+                  </tr>
+                )
+              })}
               {employees.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-xs text-gray-500">No active employees yet.</td>
@@ -109,8 +136,8 @@ function CeoTimeKeeping() {
           </table>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-6 py-3 text-sm">
-          <span className="text-gray-500">Weekly totals</span>
-          <span className="font-semibold text-gray-900">{totalHours.toFixed(1)}h regular · {totalOT.toFixed(1)}h overtime</span>
+          <span className="text-gray-500">Today's attendance</span>
+          <span className="font-semibold text-gray-900">{employees.filter((e) => getLastPunch(e.email)?.type === 'in').length} currently clocked in</span>
         </div>
       </div>
     </div>
@@ -121,7 +148,25 @@ export default function TimeKeeping() {
   usePageTitle('Time Keeping')
   const { user } = useAuth()
   const [view, setView] = useState('week')
+  const [myPunches, setMyPunches] = useState([])
   const week = currentWeek()
+
+  useEffect(() => {
+    if (apiEnabled() && user?.email) {
+      api(`/api/attendance?email=${encodeURIComponent(user.email)}`)
+        .then((records) => setMyPunches(records.slice().reverse()))
+        .catch(() => setMyPunches([]))
+    } else {
+      try {
+        setMyPunches((JSON.parse(localStorage.getItem('uw_punches')) || [])
+          .filter((p) => p.email === user?.email)
+          .slice()
+          .reverse())
+      } catch {
+        setMyPunches([])
+      }
+    }
+  }, [user?.email])
 
   if (user?.role === 'ceo') {
     return <CeoTimeKeeping />
@@ -129,16 +174,6 @@ export default function TimeKeeping() {
 
   // Clock in/out happens only via the kiosk — this page shows a read-only
   // history of the signed-in user's kiosk punches.
-  const myPunches = (() => {
-    try {
-      return (JSON.parse(localStorage.getItem('uw_punches')) || [])
-        .filter((p) => p.email === user?.email)
-        .slice()
-        .reverse()
-    } catch {
-      return []
-    }
-  })()
   const lastPunch = myPunches[0] || null
   const isClockedIn = lastPunch?.type === 'in'
   const todayPunches = myPunches.filter((p) => new Date(p.time).toDateString() === new Date().toDateString())
@@ -172,10 +207,10 @@ export default function TimeKeeping() {
 
         <div className="grid grid-cols-2 gap-4 lg:col-span-2 lg:content-start">
           {[
-            ['Hours this week', `${totalHours.toFixed(1)}h`, 'of 40h target'],
-            ['Overtime', `${totalOT.toFixed(1)}h`, 'rate ×1.25'],
-            ['Attendance rate', '—', 'no records yet'],
-            ['Late arrivals', '0', 'this month'],
+            ['Clock in/out', isClockedIn ? 'Clocked In' : 'Clocked Out', lastPunch ? new Date(lastPunch.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'No punches yet'],
+            ['Today\'s punches', String(todayPunches.length), 'total scans'],
+            ['Status', isClockedIn ? 'Active' : 'Off duty', isClockedIn ? 'Working now' : 'Use kiosk to clock in'],
+            ['Last action', lastPunch?.type === 'in' ? 'Clock In' : 'Clock Out', lastPunch ? new Date(lastPunch.time).toLocaleDateString() : '—'],
           ].map(([label, value, sub]) => (
             <div key={label} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <p className="text-sm font-medium text-gray-500">{label}</p>

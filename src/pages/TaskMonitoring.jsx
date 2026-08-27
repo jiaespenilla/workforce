@@ -1,8 +1,9 @@
 import { usePageTitle } from '../lib/documentMeta'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { canAction } from '../lib/roles'
 import { getScopedEmployees } from '../lib/companies'
+import { api, apiEnabled } from '../lib/api'
 
 const columns = [
   { id: 'pending', label: 'Pending' },
@@ -10,7 +11,7 @@ const columns = [
   { id: 'completed', label: 'Completed' },
 ]
 
-function loadTasks() {
+function loadLocalTasks() {
   try {
     const stored = JSON.parse(localStorage.getItem('uw_ceo_tasks'))
     return Array.isArray(stored) ? stored : []
@@ -29,7 +30,7 @@ const priorityStyles = {
 export default function TaskMonitoring() {
   const { user } = useAuth()
   usePageTitle('Task Monitoring')
-  const [tasks, setTasks] = useState(loadTasks)
+  const [tasks, setTasks] = useState([])
   const [dragId, setDragId] = useState(null)
   const [overCol, setOverCol] = useState(null)
   const [showForm, setShowForm] = useState(false)
@@ -37,27 +38,47 @@ export default function TaskMonitoring() {
   const employees = getScopedEmployees(user)
   const activeEmployees = employees.filter((e) => e.active !== false)
 
-  const persist = (next) => {
-    localStorage.setItem('uw_ceo_tasks', JSON.stringify(next))
-    return next
-  }
+  useEffect(() => {
+    if (apiEnabled()) {
+      api('/api/tasks').then(setTasks).catch(() => setTasks(loadLocalTasks()))
+    } else {
+      setTasks(loadLocalTasks())
+    }
+  }, [])
 
-  const addTask = (e) => {
+  const addTask = async (e) => {
     e.preventDefault()
     if (!form.title.trim() || !form.assignee) return
-    setTasks((t) => persist([...t, { ...form, id: Date.now(), status: 'pending' }]))
+    if (apiEnabled()) {
+      try {
+        const created = await api('/api/tasks', { method: 'POST', body: form })
+        setTasks((t) => [...t, created])
+      } catch {
+        setTasks((t) => [...t, { ...form, id: Date.now(), status: 'pending' }])
+      }
+    } else {
+      setTasks((t) => [...t, { ...form, id: Date.now(), status: 'pending' }])
+    }
     setForm({ title: '', assignee: '', priority: 'Medium', due: '' })
     setShowForm(false)
   }
 
-  const drop = (status) => {
+  const drop = async (status) => {
     if (dragId == null) return
-    setTasks((t) => persist(t.map((task) => (task.id === dragId ? { ...task, status } : task))))
+    setTasks((t) => t.map((task) => (task.id === dragId ? { ...task, status } : task)))
+    if (apiEnabled()) {
+      await api(`/api/tasks/${dragId}`, { method: 'PUT', body: { status } }).catch(() => {})
+    }
     setDragId(null)
     setOverCol(null)
   }
 
-  const deleteTask = (id) => setTasks((t) => persist(t.filter((task) => task.id !== id)))
+  const deleteTask = async (id) => {
+    setTasks((t) => t.filter((task) => task.id !== id))
+    if (apiEnabled()) {
+      await api(`/api/tasks/${id}`, { method: 'DELETE' }).catch(() => {})
+    }
+  }
 
   const counts = Object.fromEntries(columns.map((c) => [c.id, tasks.filter((t) => t.status === c.id).length]))
 

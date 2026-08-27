@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getAllEmployees, getScopedEmployees } from '../lib/companies'
+import { api, apiEnabled } from '../lib/api'
 import Avatar from '../components/Avatar'
 
 const shortcuts = [
@@ -23,7 +24,7 @@ const STATUS_STYLES = {
   completed: 'bg-brand-100 text-brand-700',
 }
 
-function loadAllTasks() {
+function loadLocalAllTasks() {
   try {
     const stored = JSON.parse(localStorage.getItem('uw_ceo_tasks'))
     return Array.isArray(stored) ? stored : []
@@ -32,13 +33,13 @@ function loadAllTasks() {
   }
 }
 
-function loadMyTasks(name) {
-  return loadAllTasks().filter((t) => t.assignee && t.assignee.startsWith(`${name} (`) && t.status !== 'completed')
+function loadLocalMyTasks(name) {
+  return loadLocalAllTasks().filter((t) => t.assignee && t.assignee.startsWith(`${name} (`) && t.status !== 'completed')
 }
 
 // Latest punch per employee email — a person is "clocked in" when their most
 // recent kiosk punch is a check-in for the current shift.
-function getClockInState() {
+function getLocalClockInState() {
   let punches = []
   try {
     punches = JSON.parse(localStorage.getItem('uw_punches')) || []
@@ -265,9 +266,26 @@ function TaskProgressModal({ task, onClose, onStatusChange }) {
 function CeoDashboard({ user }) {
   const [selectedEmail, setSelectedEmail] = useState(null)
   const [viewingTask, setViewingTask] = useState(null)
+  const [allTasks, setAllTasks] = useState([])
+  const [clockState, setClockState] = useState({})
   const employees = getAllEmployees().filter((e) => e.active !== false && e.email !== user.email)
-  const clockState = getClockInState()
-  const allTasks = loadAllTasks()
+
+  useEffect(() => {
+    if (apiEnabled()) {
+      api('/api/tasks').then(setAllTasks).catch(() => setAllTasks(loadLocalAllTasks()))
+      api('/api/attendance').then((records) => {
+        const latest = {}
+        for (const p of records) {
+          const prev = latest[p.email]
+          if (!prev || new Date(p.time) > new Date(prev.time)) latest[p.email] = p
+        }
+        setClockState(latest)
+      }).catch(() => setClockState(getLocalClockInState()))
+    } else {
+      setAllTasks(loadLocalAllTasks())
+      setClockState(getLocalClockInState())
+    }
+  }, [])
 
   // "Active" = currently clocked-in via the kiosk for their shift.
   const clockedInEmployees = employees.filter((e) => clockState[e.email]?.type === 'in')
@@ -276,14 +294,12 @@ function CeoDashboard({ user }) {
     ? allTasks.filter((t) => t.assignee === `${selected.name} (${selected.companyName})`)
     : []
 
-  const changeTaskStatus = (taskId, status) => {
-    try {
-      const all = JSON.parse(localStorage.getItem('uw_ceo_tasks')) || []
-      localStorage.setItem('uw_ceo_tasks', JSON.stringify(all.map((t) => (t.id === taskId ? { ...t, status } : t))))
-    } catch {
-      // storage unavailable
-    }
+  const changeTaskStatus = async (taskId, status) => {
+    setAllTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status } : t)))
     setViewingTask((prev) => (prev && prev.id === taskId ? { ...prev, status } : prev))
+    if (apiEnabled()) {
+      await api(`/api/tasks/${taskId}`, { method: 'PUT', body: { status } }).catch(() => {})
+    }
   }
 
 
@@ -451,9 +467,31 @@ export default function Dashboard() {
     return <CeoDashboard user={user} />
   }
 
+  const [allTasks, setAllTasks] = useState([])
+  const [clockState, setClockState] = useState({})
+
+  useEffect(() => {
+    if (apiEnabled()) {
+      api('/api/tasks')
+        .then((all) => setAllTasks(all.filter((t) => t.assignee && t.assignee.startsWith(`${user?.name || ''} (`) && t.status !== 'completed')))
+        .catch(() => setAllTasks(loadLocalMyTasks(user?.name || '')))
+      api('/api/attendance').then((records) => {
+        const latest = {}
+        for (const p of records) {
+          const prev = latest[p.email]
+          if (!prev || new Date(p.time) > new Date(prev.time)) latest[p.email] = p
+        }
+        setClockState(latest)
+      }).catch(() => setClockState(getLocalClockInState()))
+    } else {
+      setAllTasks(loadLocalMyTasks(user?.name || ''))
+      setClockState(getLocalClockInState())
+    }
+  }, [user?.name])
+
   const employees = getAllEmployees()
   const activeCount = employees.filter((e) => e.active !== false).length
-  const myTasks = loadMyTasks(user?.name || '')
+  const myTasks = allTasks
   const firstName = (user?.name || '').split(' ')[0] || 'there'
 
   const stats = [

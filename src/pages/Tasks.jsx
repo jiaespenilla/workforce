@@ -1,6 +1,7 @@
 import { usePageTitle } from '../lib/documentMeta'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { api, apiEnabled } from '../lib/api'
 import TaskMonitoring from './TaskMonitoring'
 
 const columns = [
@@ -16,7 +17,7 @@ const priorityStyles = {
   Low: 'bg-gray-100 text-gray-600',
 }
 
-function loadMyTasks(name) {
+function loadLocalMyTasks(name) {
   try {
     const stored = JSON.parse(localStorage.getItem('uw_ceo_tasks'))
     return Array.isArray(stored)
@@ -34,25 +35,26 @@ export default function Tasks() {
 }
 
 function EmployeeTasks({ name }) {
-  const [tasks, setTasks] = useState(() => loadMyTasks(name))
+  const [tasks, setTasks] = useState([])
   const [dragId, setDragId] = useState(null)
   const [overCol, setOverCol] = useState(null)
 
-  const drop = (status) => {
+  useEffect(() => {
+    if (apiEnabled()) {
+      api('/api/tasks')
+        .then((all) => setTasks(all.filter((t) => t.assignee && t.assignee.startsWith(`${name} (`))))
+        .catch(() => setTasks(loadLocalMyTasks(name)))
+    } else {
+      setTasks(loadLocalMyTasks(name))
+    }
+  }, [name])
+
+  const drop = async (status) => {
     if (dragId == null) return
-    setTasks((t) => {
-      const next = t.map((task) => (task.id === dragId ? { ...task, status } : task))
-      try {
-        const all = JSON.parse(localStorage.getItem('uw_ceo_tasks')) || []
-        localStorage.setItem(
-          'uw_ceo_tasks',
-          JSON.stringify(all.map((task) => (task.id === dragId ? { ...task, status } : task)))
-        )
-      } catch {
-        // ignore storage errors
-      }
-      return next
-    })
+    setTasks((t) => t.map((task) => (task.id === dragId ? { ...task, status } : task)))
+    if (apiEnabled()) {
+      await api(`/api/tasks/${dragId}`, { method: 'PUT', body: { status } }).catch(() => {})
+    }
     setDragId(null)
     setOverCol(null)
   }
@@ -102,15 +104,7 @@ function EmployeeTasks({ name }) {
                   </h3>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${priorityStyles[task.priority]}`}>{task.priority}</span>
                 </div>
-                <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-                  <span className="flex items-center gap-1.5">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-100 text-[10px] font-bold text-brand-700">
-                      {task.assignee.split(' ').map((n) => n[0]).slice(0, 2).join('')}
-                    </span>
-                    {task.assignee}
-                  </span>
-                  <span className="tabular-nums">Due {task.due || '—'}</span>
-                </div>
+                <p className="mt-2 text-xs text-gray-500 tabular-nums">Due {task.due || '—'}</p>
               </div>
             ))}
 

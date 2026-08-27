@@ -400,6 +400,29 @@ async function apiRoutes(path, method, request, env, url, claims) {
     return json(rows)
   }
 
+  /* attendance — clock-in/out punches */
+  if (path === '/api/attendance' && method === 'GET') {
+    const email = url.searchParams.get('email')
+    const date = url.searchParams.get('date')
+    let sql = 'SELECT * FROM attendance'
+    const params = []
+    const conditions = []
+    if (email) { conditions.push('email = ?'); params.push(email.toLowerCase()) }
+    if (date) { conditions.push("time LIKE ?"); params.push(`${date}%`) }
+    if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ')
+    sql += ' ORDER BY id DESC'
+    const rows = await env.DB.prepare(sql).bind(...params).all().then((r) => r.results)
+    return json(rows)
+  }
+  if (path === '/api/attendance' && method === 'POST') {
+    const { email, company_id, type, time, overtime } = await readJson(request)
+    if (!email || !type) return json({ error: 'email and type are required.' }, 400)
+    const result = await env.DB.prepare(
+      'INSERT INTO attendance (email, company_id, type, time, overtime) VALUES (?, ?, ?, ?, ?)'
+    ).bind(email.toLowerCase(), company_id || null, type, time || new Date().toISOString(), overtime ? 1 : 0).run()
+    return json({ id: result.meta.last_row_id, email: email.toLowerCase(), type, time: time || new Date().toISOString() }, 201)
+  }
+
   /* credentials management — admins manage anyone; users manage their own */
   if (path === '/api/credentials/qr' && method === 'POST') {
     const { email } = await readJson(request)

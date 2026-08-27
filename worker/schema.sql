@@ -118,3 +118,13 @@ CREATE TABLE IF NOT EXISTS employee_credentials (
   qr_code TEXT UNIQUE,
   updated_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS attendance (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL,
+  company_id TEXT,
+  type TEXT NOT NULL,                -- in | out
+  time TEXT NOT NULL,
+  overtime INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
