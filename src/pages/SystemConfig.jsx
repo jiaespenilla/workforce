@@ -7,6 +7,7 @@ import { getAllCompanies } from '../lib/companies'
 import { getSystemIcon, setSystemIcon, applyFavicon } from '../lib/documentMeta'
 import { SYSTEM_ICON_PRESETS } from '../lib/iconPresets'
 import { api, apiEnabled } from '../lib/api'
+import { loadVersionHistory, saveVersionHistory, seedInitialHistory } from '../lib/versionHistory'
 import OrgPanel from './OrgPanel'
 
 const TABS = [
@@ -16,6 +17,7 @@ const TABS = [
   ['legal', 'Terms & Policies', 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'],
   ['organization', 'Organization', 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4'],
   ['system', 'System Status', 'M13 10V3L4 14h7v7l9-11h-7z'],
+  ['version', 'Version Control', 'M9 5h6M9 12h6M9 19h6m-3-7a3 3 0 110 6 3 3 0 010-6zm-7 7a2 2 0 012-2h14a2 2 0 012 2v1a2 2 0 01-2 2H6a2 2 0 01-2-2v-1z'],
 ]
 
 // Controlled toggle — persists via onChange (used for role permissions & maintenance).
@@ -408,6 +410,181 @@ function StatusPanel({ settings }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function VersionPanel({ settings, onSaved }) {
+  const [history, setHistory] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showAdd, setShowAdd] = useState(false)
+  const [version, setVersion] = useState(settings.version || 'v0.1.0')
+  const [status, setStatus] = useState('development')
+  const [changes, setChanges] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [editChanges, setEditChanges] = useState('')
+  const [editStatus, setEditStatus] = useState('development')
+
+  useEffect(() => {
+    let cancelled = false
+    loadVersionHistory().then((list) => {
+      if (cancelled) return
+      if (!list.length) {
+        const seeded = seedInitialHistory(settings.version)
+        saveVersionHistory(seeded).then(()=>{})
+        setHistory(seeded)
+      } else {
+        setHistory(list)
+      }
+      setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [settings.version])
+
+  const handleAdd = async (e) => {
+    e.preventDefault()
+    if (!version.trim() || !changes.trim()) return
+    const entry = {
+      id: `v-${Date.now()}`,
+      version: version.trim(),
+      status,
+      changes: changes.trim(),
+      date: new Date().toISOString().slice(0, 10),
+      author: 'Admin',
+    }
+    const next = [entry, ...history]
+    setHistory(next)
+    await saveVersionHistory(next)
+    // Also sync system version if changed
+    if (entry.version !== settings.version) {
+      queueSystemSettings({ ...settings, version: entry.version })
+      await pushSystemSettingsToServer({ name: settings.name, version: entry.version, timezone: settings.timezone })
+      onSaved?.()
+    }
+    setChanges('')
+    setShowAdd(false)
+  }
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this version entry?')) return
+    const next = history.filter((h)=>h.id!==id)
+    setHistory(next)
+    await saveVersionHistory(next)
+  }
+
+  const startEdit = (entry) => {
+    setEditingId(entry.id)
+    setEditChanges(entry.changes)
+    setEditStatus(entry.status)
+  }
+
+  const saveEdit = async (id) => {
+    const next = history.map((h)=> h.id===id ? {...h, changes: editChanges.trim() || h.changes, status: editStatus} : h)
+    setHistory(next)
+    await saveVersionHistory(next)
+    setEditingId(null)
+  }
+
+  if (loading) return <p className="py-8 text-center text-sm text-gray-400">Loading version history…</p>
+
+  return (
+    <div className="space-y-5">
+      <div className="border-b border-gray-100 pb-4">
+        <h2 className="text-base font-bold text-gray-900">Version Control</h2>
+        <p className="mt-0.5 text-sm text-gray-500">Track system changes — current build is <span className="font-semibold">{settings.version}</span> in <span className={`rounded-full px-2 py-0.5 text-xs font-bold uppercase ${status==='development'?'bg-amber-100 text-amber-800':'bg-emerald-100 text-emerald-800'}`}>{history[0]?.status || 'development'}</span>. Add entries as you develop.</p>
+      </div>
+
+      <div className="rounded-xl border border-brand-200 bg-brand-50/60 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Current Version</p>
+            <p className="mt-1 text-2xl font-bold text-gray-900">{settings.version}</p>
+            <p className="text-xs text-gray-500">{settings.name} · {history[0]?.date || new Date().toISOString().slice(0,10)} · {history[0]?.status || 'development'}</p>
+          </div>
+          <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${ (history[0]?.status||'development')==='development' ? 'bg-amber-500 text-white' : (history[0]?.status==='production' ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white')}`}>{history[0]?.status || 'development'}</span>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-gray-900">Changelog — What changed ({history.length})</h3>
+        <button type="button" onClick={()=>setShowAdd(!showAdd)} className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white hover:bg-brand-700">{showAdd ? 'Cancel' : '+ Add version'}</button>
+      </div>
+
+      {showAdd && (
+        <form onSubmit={handleAdd} className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="block text-xs">
+              <span className="font-medium text-gray-700">Version: *</span>
+              <input value={version} onChange={(e)=>setVersion(e.target.value)} required placeholder="v0.2.0" className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none" />
+            </label>
+            <label className="block text-xs">
+              <span className="font-medium text-gray-700">Status: *</span>
+              <select value={status} onChange={(e)=>setStatus(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                <option value="development">Development</option>
+                <option value="staging">Staging</option>
+                <option value="production">Production</option>
+                <option value="archived">Archived</option>
+              </select>
+            </label>
+            <label className="block text-xs">
+              <span className="font-medium text-gray-700">Date:</span>
+              <input type="date" defaultValue={new Date().toISOString().slice(0,10)} disabled className="mt-1 w-full rounded-lg border border-gray-100 bg-white px-3 py-2 text-sm text-gray-400" />
+            </label>
+          </div>
+          <label className="block text-xs">
+            <span className="font-medium text-gray-700">What changed: *</span>
+            <textarea value={changes} onChange={(e)=>setChanges(e.target.value)} required rows={3} placeholder="e.g., Added favicon presets, per-company kiosk, location management, inactive handling..." className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none" />
+          </label>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={()=>setShowAdd(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-medium text-gray-600">Cancel</button>
+            <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white">Add to history</button>
+          </div>
+          <p className="text-[11px] text-gray-400">Adding will also update System version to the entered version and sync to D1 for all devices.</p>
+        </form>
+      )}
+
+      <div className="divide-y divide-gray-100 rounded-xl border border-gray-200">
+        {history.length===0 && <p className="p-6 text-center text-xs text-gray-400">No versions yet — add your first development entry.</p>}
+        {history.map((h, idx)=>(
+          <div key={h.id} className="p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="flex items-center gap-2 text-sm font-bold text-gray-900">
+                  {h.version} {idx===0 && <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">Current</span>}
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${h.status==='development'?'bg-amber-100 text-amber-800':h.status==='production'?'bg-emerald-100 text-emerald-800':h.status==='staging'?'bg-blue-100 text-blue-800':'bg-gray-100 text-gray-500'}`}>{h.status}</span>
+                </p>
+                <p className="mt-0.5 text-xs text-gray-400">{h.date} · by {h.author}</p>
+              </div>
+              <div className="flex gap-1">
+                {editingId===h.id ? (
+                  <>
+                    <button type="button" onClick={()=>saveEdit(h.id)} className="rounded-lg bg-brand-600 px-2 py-1 text-xs font-semibold text-white">Save</button>
+                    <button type="button" onClick={()=>setEditingId(null)} className="rounded-lg border border-gray-300 px-2 py-1 text-xs">Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" onClick={()=>startEdit(h)} className="rounded-lg border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">Edit</button>
+                    <button type="button" onClick={()=>handleDelete(h.id)} className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">Delete</button>
+                  </>
+                )}
+              </div>
+            </div>
+            {editingId===h.id ? (
+              <div className="mt-3 space-y-2">
+                <select value={editStatus} onChange={(e)=>setEditStatus(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1 text-xs">
+                  <option value="development">Development</option>
+                  <option value="staging">Staging</option>
+                  <option value="production">Production</option>
+                  <option value="archived">Archived</option>
+                </select>
+                <textarea value={editChanges} onChange={(e)=>setEditChanges(e.target.value)} rows={3} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs" />
+              </div>
+            ) : (
+              <p className="mt-2 whitespace-pre-line text-xs leading-relaxed text-gray-600">{h.changes}</p>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -823,6 +1000,8 @@ export default function SystemConfig() {
           {tab === 'organization' && <OrgPanel />}
 
           {tab === 'system' && <StatusPanel settings={settings} />}
+
+          {tab === 'version' && <VersionPanel settings={settings} onSaved={flashSaved} />}
         </div>
       </div>
     </div>

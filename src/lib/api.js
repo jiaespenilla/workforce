@@ -27,7 +27,7 @@ const DATA_KEYS = [
   'uw_companies', 'uw_ceo_tasks', 'uw_punches', 'uw_roles',
   'uw_org_units', 'uw_shift_schedules', 'uw_company_locations', 'uw_kiosk_configs', 'uw_kiosk_config', 'uw_notifications',
   'uw_profiles', 'uw_passwords', 'uw_ceo_password',
-  'uw_legal', 'uw_system_settings', 'uw_pending_system_settings',
+  'uw_legal', 'uw_system_settings', 'uw_pending_system_settings', 'uw_version_history',
   'uw_maintenance', 'uw_session_timeout',
 ]
 
