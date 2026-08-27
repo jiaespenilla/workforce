@@ -1,10 +1,11 @@
 import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
-import { getActiveSettings, getPendingSettings, queueSystemSettings, pushSystemSettingsToServer, getSystemTimeZone, isMaintenanceMode, setMaintenanceMode, getSessionTimeoutMinutes, setSessionTimeoutMinutes } from '../lib/systemSettings'
+import { getActiveSettings, getPendingSettings, queueSystemSettings, pushSystemSettingsToServer, pushSystemIconToServer, getSystemTimeZone, isMaintenanceMode, setMaintenanceMode, getSessionTimeoutMinutes, setSessionTimeoutMinutes } from '../lib/systemSettings'
 import { getLegalDocs, saveLegalDocs } from '../lib/legal'
 import { getConfiguredRoles, saveRolesList, canAction } from '../lib/roles'
 import { getAllCompanies } from '../lib/companies'
 import { getSystemIcon, setSystemIcon, applyFavicon } from '../lib/documentMeta'
+import { SYSTEM_ICON_PRESETS } from '../lib/iconPresets'
 import OrgPanel from './OrgPanel'
 
 const TABS = [
@@ -511,45 +512,69 @@ export default function SystemConfig() {
                 </label>
               </div>
 
-              {/* System icon (favicon) */}
+              {/* System icon (favicon) — upload kept, plus 3 preset choices (synced to D1) */}
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                 <p className="text-sm font-medium text-gray-900">System icon (favicon)</p>
                 <p className="mt-0.5 text-xs text-gray-500">
-                  Displayed on the browser tab next to the page title. Recommended size: 64×64px PNG.
+                  Displayed on the browser tab next to the page title. Recommended size: 64×64px PNG. Choose a preset or upload your own — synced across devices.
                 </p>
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  {systemIcon ? (
-                    <>
-                      <img src={systemIcon} alt="System icon preview" className="h-12 w-12 rounded-lg border border-gray-200 bg-white object-contain p-1" />
+                {/* Current preview + remove when set */}
+                {systemIcon && (
+                  <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-brand-200 bg-white p-3">
+                    <img src={systemIcon} alt="System icon preview" className="h-12 w-12 rounded-lg border border-gray-200 bg-white object-contain p-1" />
+                    <span className="text-xs text-gray-500">Current</span>
+                    <button
+                      type="button"
+                      onClick={() => { setSystemIcon(null); setSystemIconState(null); pushSystemIconToServer('') }}
+                      className="ml-auto rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                    >
+                      Remove icon
+                    </button>
+                  </div>
+                )}
+                {/* Preset selection — 3 choices */}
+                <div className="mt-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Or choose a preset</p>
+                  <div className="mt-2 grid grid-cols-3 gap-3">
+                    {SYSTEM_ICON_PRESETS.map((preset) => (
                       <button
+                        key={preset.id}
                         type="button"
-                        onClick={() => { setSystemIcon(null); setSystemIconState(null) }}
-                        className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                        onClick={() => { setSystemIcon(preset.src); setSystemIconState(preset.src); pushSystemIconToServer(preset.src) }}
+                        className={`rounded-xl border-2 bg-white p-3 transition ${systemIcon === preset.src ? 'border-brand-600 ring-2 ring-brand-200' : 'border-gray-200 hover:border-brand-200'}`}
+                        title={preset.label}
                       >
-                        Remove icon
+                        <img src={preset.src} alt={preset.label} className="h-10 w-10 mx-auto object-contain" />
+                        <span className="mt-1 block text-[10px] font-medium text-gray-600">{preset.label}</span>
                       </button>
-                    </>
-                  ) : (
-                    <label className="cursor-pointer rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-xs font-semibold text-brand-700 transition hover:bg-brand-100">
-                      Upload icon
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (!file) return
-                          const reader = new FileReader()
-                          reader.onload = () => {
-                            const dataUrl = reader.result
-                            setSystemIcon(dataUrl)
-                            setSystemIconState(dataUrl)
-                          }
-                          reader.readAsDataURL(file)
-                        }}
-                      />
-                    </label>
-                  )}
+                    ))}
+                  </div>
+                </div>
+                {/* Upload — always visible, not removed */}
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <label className="cursor-pointer rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-xs font-semibold text-brand-700 transition hover:bg-brand-100">
+                    Upload icon
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        if (file.size > 500 * 1024) { alert('Please choose an image under 500KB.'); e.target.value=''; return }
+                        const reader = new FileReader()
+                        reader.onload = () => {
+                          const dataUrl = reader.result
+                          setSystemIcon(dataUrl)
+                          setSystemIconState(dataUrl)
+                          pushSystemIconToServer(dataUrl)
+                        }
+                        reader.readAsDataURL(file)
+                        e.target.value = ''
+                      }}
+                    />
+                  </label>
+                  <span className="text-xs text-gray-400">PNG/SVG, &lt;500KB. Upload coexists with presets.</span>
                 </div>
               </div>
               <div className="flex justify-end gap-3 border-t border-gray-100 pt-5">

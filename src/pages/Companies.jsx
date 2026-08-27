@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { usePageTitle } from '../lib/documentMeta'
 import { loadRegisteredCompanies } from '../lib/companies'
 import { api, apiEnabled } from '../lib/api'
+import { getCompanyLocations, addCompanyLocation, renameCompanyLocation, removeCompanyLocation } from '../lib/locations'
 
 const STATUS_STYLES = {
   pending: 'bg-amber-50 text-amber-700 ring-amber-200',
@@ -61,6 +62,23 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
   // Form is (re)built from the current company every time Edit starts —
   // this keeps it in sync with what the details view displays.
   const [form, setForm] = useState(() => buildCompanyForm(company))
+  const [locations, setLocations] = useState([])
+  const [newLocationName, setNewLocationName] = useState('')
+  const [editingLocId, setEditingLocId] = useState(null)
+  const [editingLocName, setEditingLocName] = useState('')
+  const [locError, setLocError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    getCompanyLocations(company.id).then((locs) => { if (!cancelled) setLocations(locs) })
+    return () => { cancelled = true }
+  }, [company.id])
+
+  useEffect(() => {
+    if (tab === 'locations') {
+      getCompanyLocations(company.id).then(setLocations)
+    }
+  }, [tab, company.id])
   const status = company.status || 'pending'
   const initials = company.name
     .split(' ')
@@ -130,6 +148,7 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
           {[
             ['details', 'Company Details'],
             ['employees', 'Employees'],
+            ['locations', 'Locations'],
           ].map(([id, label]) => (
             <button
               key={id}
@@ -253,17 +272,21 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
                 <tr>
                   <th className="pb-2">Employee</th>
                   <th className="pb-2">Role</th>
+                  <th className="pb-2">Location</th>
                   <th className="pb-2">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {company.employees.map((emp) => (
+                {company.employees.map((emp) => {
+                  const locName = locations.find((l)=>l.id===(emp.locationId||emp.location))?.name || emp.location || '—'
+                  return (
                   <tr key={emp.email}>
                     <td className="py-3">
                       <p className="font-medium text-gray-900">{emp.name}</p>
                       <p className="text-xs text-gray-500">{emp.email}</p>
                     </td>
                     <td className="py-3 text-gray-600">{emp.role}</td>
+                    <td className="py-3 text-gray-600">{locName}</td>
                     <td className="py-3">
                       <button
                         type="button"
@@ -274,15 +297,74 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
                       </button>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
                 {company.employees.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="py-6 text-center text-xs text-gray-500">No employees yet.</td>
+                    <td colSpan={4} className="py-6 text-center text-xs text-gray-500">No employees yet.</td>
                   </tr>
                 )}
               </tbody>
             </table>
-            <p className="mt-4 text-[11px] text-gray-500">Click an employee's status pill to switch between Active and Inactive.</p>
+            <p className="mt-4 text-[11px] text-gray-500">Click an employee's status pill to switch between Active and Inactive. Locations are set in People.</p>
+          </div>
+        )}
+
+        {tab === 'locations' && (
+          <div className="p-6 space-y-4">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Work locations for {company.name}</h3>
+              <p className="mt-1 text-xs text-gray-500">Define where employees work — Office, Work From Home, Field Work, etc. Starts empty; add per company. These appear as a selection when adding employees in People.</p>
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={newLocationName}
+                onChange={(e)=>{setNewLocationName(e.target.value); setLocError('')}}
+                placeholder="New location (e.g., Office)"
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+              />
+              <button
+                type="button"
+                onClick={async()=>{
+                  if(!newLocationName.trim()){setLocError('Enter a location name.'); return}
+                  try{ const loc=await addCompanyLocation(company.id, newLocationName); setLocations((prev)=>[...prev, loc]); setNewLocationName(''); setLocError('')} catch(err){setLocError(err.message)}
+                }}
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+              >
+                Add
+              </button>
+            </div>
+            {locError && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700 ring-1 ring-red-200">{locError}</p>}
+            <div className="divide-y divide-gray-100 rounded-xl border border-gray-200">
+              {locations.length===0 && (
+                <p className="p-4 text-center text-xs text-gray-400">No locations yet — add Office, WFH, Field Work, etc.</p>
+              )}
+              {locations.map((loc)=>{
+                const inUse = company.employees.some((e)=>(e.locationId||e.location)===loc.id || (e.location||'').trim().toLowerCase()===loc.name.trim().toLowerCase())
+                const isEditing = editingLocId===loc.id
+                return (
+                  <div key={loc.id} className="flex items-center gap-2 p-3">
+                    {isEditing ? (
+                      <>
+                        <input value={editingLocName} onChange={(e)=>setEditingLocName(e.target.value)} className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm" />
+                        <button type="button" onClick={async()=>{try{ await renameCompanyLocation(company.id, loc.id, editingLocName); setLocations((prev)=>prev.map((l)=>l.id===loc.id?{...l,name:editingLocName.trim()}:l)); setEditingLocId(null);}catch(err){setLocError(err.message)}} } className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white">Save</button>
+                        <button type="button" onClick={()=>setEditingLocId(null)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs">Cancel</button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex-1 text-sm font-medium text-gray-900">{loc.name}</span>
+                        {inUse && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">In use</span>}
+                        <button type="button" onClick={()=>{setEditingLocId(loc.id); setEditingLocName(loc.name); setLocError('')}} className="rounded-lg border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">Rename</button>
+                        <button type="button" onClick={async()=>{
+                          if(inUse){ setLocError(`Cannot delete "${loc.name}" — ${company.employees.filter((e)=>(e.locationId||e.location)===loc.id || (e.location||'').toLowerCase()===loc.name.toLowerCase()).length} employee(s) use it. Reassign them first.`); return}
+                          try{ await removeCompanyLocation(company.id, loc.id, company.employees); setLocations((prev)=>prev.filter((l)=>l.id!==loc.id)); setLocError('')} catch(err){setLocError(err.message)}
+                        }} className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">Delete</button>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -385,6 +467,7 @@ export default function Companies() {
   const [rejecting, setRejecting] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
   const [approving, setApproving] = useState(null)
+  const [deactivateConfirm, setDeactivateConfirm] = useState(null)
 
   // Cloud mode: companies come from the database.
   useEffect(() => {
@@ -460,11 +543,29 @@ export default function Companies() {
     setRejectReason('')
   }
 
-  const handleToggleActive = (id) =>
+  const handleToggleActive = (id) => {
+    const company = companies.find((c) => c.id === id)
+    const isActive = company?.active !== false
+    const activeEmpCount = company?.employees.filter((e)=>e.active!==false).length || 0
+    if (isActive && activeEmpCount > 0) {
+      setDeactivateConfirm(company)
+      return
+    }
     mutateCompanies(
       (prev) => prev.map((c) => (c.id === id ? { ...c, active: c.active === false } : c)),
-      () => api(`/api/companies/${id}`, { method: 'PUT', body: { active: companies.find((c) => c.id === id)?.active === false } })
+      () => api(`/api/companies/${id}`, { method: 'PUT', body: { active: company?.active === false } })
     )
+  }
+
+  const confirmDeactivate = () => {
+    if (!deactivateConfirm) return
+    const id = deactivateConfirm.id
+    mutateCompanies(
+      (prev) => prev.map((c) => (c.id === id ? { ...c, active: false } : c)),
+      () => api(`/api/companies/${id}`, { method: 'PUT', body: { active: false } })
+    )
+    setDeactivateConfirm(null)
+  }
 
   const handleToggleEmployee = (id, empEmail) =>
     mutateCompanies(
@@ -654,6 +755,32 @@ export default function Companies() {
               <button onClick={handleRejectConfirm} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
                 Reject registration
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deactivateConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setDeactivateConfirm(null)}>
+          <div className="absolute inset-0 bg-gray-900/50" />
+          <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                  <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Deactivate company?</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                    <span className="font-semibold">{deactivateConfirm.name}</span> is active and has {deactivateConfirm.employees.filter((e)=>e.active!==false).length} active employee(s). Deactivating will hide it from dropdowns, block logins and kiosk punches. You can reactivate later.
+                  </p>
+                  <p className="mt-2 text-xs text-gray-500">Inactive companies remain visible in Companies search (as you requested) but are hidden from assignment dropdowns.</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
+              <button onClick={() => setDeactivateConfirm(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={confirmDeactivate} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Continue &amp; Deactivate</button>
             </div>
           </div>
         </div>

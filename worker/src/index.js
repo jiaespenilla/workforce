@@ -140,7 +140,7 @@ function mapCompany(row, employees) {
     owner: row.owner_name ? { name: row.owner_name, title: row.owner_title, email: row.owner_email } : undefined,
     employees: employees
       .filter((e) => e.company_id === row.id)
-      .map((e) => ({ id: e.id, name: e.name, email: e.email, role: e.role, active: e.active !== 0 })),
+      .map((e) => ({ id: e.id, name: e.name, email: e.email, role: e.role, active: e.active !== 0, locationId: e.location_id || null, location: e.location || null })),
   }
 }
 
@@ -198,6 +198,14 @@ async function route(request, env) {
     if (!user) return json({ error: 'Invalid credentials.' }, 401)
     const hash = await hashPassword(password || '', user.password_salt)
     if (hash !== user.password_hash) return json({ error: 'Invalid credentials.' }, 401)
+    // Block inactive company/employee logins (admin/ceo have no company row)
+    if (user.role !== 'administrator' && user.role !== 'ceo') {
+      const empCompany = await env.DB.prepare('SELECT c.active as company_active, e.active as emp_active FROM employees e JOIN companies c ON c.id = e.company_id WHERE lower(e.email) = ? LIMIT 1').bind(id).first()
+      if (empCompany) {
+        if (empCompany.company_active === 0) return json({ error: 'Company is deactivated. Contact administrator.' }, 403)
+        if (empCompany.emp_active === 0) return json({ error: 'Your account is deactivated. Contact administrator.' }, 403)
+      }
+    }
     const token = await createToken({ email: user.email, role: user.role, name: user.name }, env.AUTH_SECRET)
     return json({
       token,
@@ -409,8 +417,14 @@ async function apiRoutes(path, method, request, env, url, claims) {
     if (m) {
       if (method === 'PUT') {
         const body = await readJson(request)
-        await env.DB.prepare('UPDATE employees SET name = COALESCE(?, name), role = COALESCE(?, role), active = COALESCE(?, active) WHERE id = ?')
-          .bind(body.name ?? null, body.role ?? null, body.active === undefined ? null : body.active ? 1 : 0, Number(m[1])).run()
+        const locVal = body.locationId ?? body.location ?? null
+        try {
+          await env.DB.prepare('UPDATE employees SET name = COALESCE(?, name), role = COALESCE(?, role), active = COALESCE(?, active), location_id = COALESCE(?, location_id) WHERE id = ?')
+            .bind(body.name ?? null, body.role ?? null, body.active === undefined ? null : body.active ? 1 : 0, locVal, Number(m[1])).run()
+        } catch {
+          await env.DB.prepare('UPDATE employees SET name = COALESCE(?, name), role = COALESCE(?, role), active = COALESCE(?, active) WHERE id = ?')
+            .bind(body.name ?? null, body.role ?? null, body.active === undefined ? null : body.active ? 1 : 0, Number(m[1])).run()
+        }
         return json({ ok: true })
       }
       if (method === 'DELETE') {
@@ -448,8 +462,8 @@ async function apiRoutes(path, method, request, env, url, claims) {
     const v = (value || '').trim()
     if (!v) return json({ error: 'Credential is required.' }, 400)
     const rows = await env.DB.prepare(
-      `SELECT ec.*, e.name AS emp_name, e.company_id
-       FROM employee_credentials ec JOIN employees e ON e.email = ec.email`
+      `SELECT ec.*, e.name AS emp_name, e.company_id, e.active as emp_active, c.active as company_active
+       FROM employee_credentials ec JOIN employees e ON e.email = ec.email JOIN companies c ON c.id = e.company_id WHERE e.active = 1 AND c.active = 1`
     ).all().then((r) => r.results)
     let match = null
     for (const row of rows) {
@@ -473,7 +487,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
   /* kiosk employee directory fallback */
   if (path === '/api/kiosk/directory' && method === 'GET') {
     const rows = await env.DB.prepare(
-      `SELECT e.id, e.name, e.email, c.name AS company FROM employees e JOIN companies c ON c.id = e.company_id WHERE e.active = 1`
+      `SELECT e.id, e.name, e.email, c.name AS company FROM employees e JOIN companies c ON c.id = e.company_id WHERE e.active = 1 AND c.active = 1`
     ).all().then((r) => r.results)
     return json(rows)
   }
@@ -606,8 +620,15 @@ async function apiRoutes(path, method, request, env, url, claims) {
 /* ---------------- shared db helpers ---------------- */
 
 async function insertEmployee(env, companyId, emp) {
-  await env.DB.prepare('INSERT OR IGNORE INTO employees (company_id, name, email, role, active) VALUES (?, ?, ?, ?, ?)')
-    .bind(companyId, emp.name || 'Unnamed', (emp.email || '').toLowerCase(), emp.role || 'Unassigned', emp.active === false ? 0 : 1).run()
+  const locId = emp.locationId || emp.location || null
+  // Try with location_id column (may be INTEGER affinity but SQLite accepts TEXT); fallback to without if schema old
+  try {
+    await env.DB.prepare('INSERT OR IGNORE INTO employees (company_id, name, email, role, active, location_id) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(companyId, emp.name || 'Unnamed', (emp.email || '').toLowerCase(), emp.role || 'Unassigned', emp.active === false ? 0 : 1, locId).run()
+  } catch {
+    await env.DB.prepare('INSERT OR IGNORE INTO employees (company_id, name, email, role, active) VALUES (?, ?, ?, ?, ?)')
+      .bind(companyId, emp.name || 'Unnamed', (emp.email || '').toLowerCase(), emp.role || 'Unassigned', emp.active === false ? 0 : 1).run()
+  }
 }
 
 async function ensureUser(env, email, name, role, password) {

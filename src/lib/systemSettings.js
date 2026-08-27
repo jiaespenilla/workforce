@@ -21,6 +21,14 @@ export async function prefetchServerSettings() {
       ...(s.timezone ? { timezone: s.timezone } : {}),
     }
     localStorage.setItem('uw_system_settings', JSON.stringify(_serverSettings))
+    // Hydrate favicon from D1 (global) — overwrites local if server has value
+    if (s.system_icon) {
+      localStorage.setItem('uw_system_icon', s.system_icon)
+      // applyFavicon will be called on next import; also dispatch for live update
+      try { document.querySelector("link[rel~='icon']")?.setAttribute('href', s.system_icon) } catch {}
+    } else if (s.system_icon === '') {
+      localStorage.removeItem('uw_system_icon')
+    }
   } catch {
     // offline — keep localStorage or defaults
   }
@@ -87,22 +95,44 @@ export async function syncSystemSettingsFromServer() {
       ...(s.version ? { version: s.version } : {}),
       ...(s.timezone ? { timezone: s.timezone } : {}),
     }
-    if (!Object.keys(mapped).length) return
+    if (!Object.keys(mapped).length && !s.system_icon) return
     _serverSettings = mapped
     localStorage.setItem('uw_system_settings', JSON.stringify(mapped))
+    if (s.system_icon) {
+      localStorage.setItem('uw_system_icon', s.system_icon)
+      try { document.querySelector("link[rel~='icon']")?.setAttribute('href', s.system_icon) } catch {}
+    } else if (s.system_icon === '') {
+      localStorage.removeItem('uw_system_icon')
+    }
   } catch {
     /* offline or unauthenticated — keep local settings */
   }
 }
 
 // Push system details to the server (cloud mode). Returns an error string or null.
-export async function pushSystemSettingsToServer({ name, version, timezone }) {
+export async function pushSystemSettingsToServer({ name, version, timezone, system_icon }) {
   if (!apiEnabled()) return null
   try {
-    await api('/api/settings', { method: 'PUT', body: { system_name: name, version, timezone } })
+    const body = {}
+    if (name !== undefined) body.system_name = name
+    if (version !== undefined) body.version = version
+    if (timezone !== undefined) body.timezone = timezone
+    if (system_icon !== undefined) body.system_icon = system_icon
+    if (!Object.keys(body).length) return null
+    await api('/api/settings', { method: 'PUT', body })
     return null
   } catch (err) {
     return err.message || 'Failed to sync system settings.'
+  }
+}
+
+export async function pushSystemIconToServer(icon) {
+  if (!apiEnabled()) return null
+  try {
+    await api('/api/settings', { method: 'PUT', body: { system_icon: icon || '' } })
+    return null
+  } catch (err) {
+    return err.message || 'Failed to sync icon.'
   }
 }
 

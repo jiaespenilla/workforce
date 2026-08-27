@@ -37,6 +37,10 @@ function findCompanyAccount(email) {
   return null
 }
 
+function isCompanyActiveForLogin(company) {
+  return company && company.active !== false
+}
+
 function readProfiles() {
   try {
     return JSON.parse(localStorage.getItem('uw_profiles')) || {}
@@ -79,6 +83,12 @@ export function AuthProvider({ children }) {
     }
 
     const { company, emp } = account
+    if (!isCompanyActiveForLogin(company)) {
+      throw new Error('COMPANY_INACTIVE')
+    }
+    if (emp.active === false) {
+      throw new Error('EMPLOYEE_INACTIVE')
+    }
     const identifierOwner =
       (company.owner?.email || '').trim().toLowerCase() === identifier ||
       company.employees[0]?.email?.trim().toLowerCase() === identifier
@@ -211,13 +221,17 @@ export function AuthProvider({ children }) {
     localStorage.setItem('uw_token', result.token)
     const ru = result.user || {}
     const name = ru.name || identifier
+    // Restore local profile (avatar/phone) — local-only for now
+    const profile = readProfiles()[ (ru.email || identifier).toLowerCase() ] || {}
     const u = {
       email: ru.email || identifier,
-      name,
+      name: profile.name || name,
       role: ru.role,
       roleLabel: { administrator: 'Administrator', ceo: 'CEO', employee: 'Employee' }[ru.role] || ru.role,
+      phone: profile.phone || '',
+      avatar: profile.avatar || null,
       usingDefaultPassword: !!ru.usingDefaultPassword,
-      initials: name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(),
+      initials: (profile.name || name).split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(),
     }
     setUser(u)
     localStorage.setItem('uw_user', JSON.stringify(u))

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { usePageTitle } from '../lib/documentMeta'
 import Avatar from '../components/Avatar'
+import { AVATAR_PRESETS } from '../lib/avatarPresets'
 
 export default function Profile() {
   usePageTitle('My Profile')
@@ -30,8 +31,11 @@ export default function Profile() {
 
   const pickAvatar = (file) => {
     if (!file) return
+    if (file.size > 500 * 1024) { alert('Please choose an image under 500KB.'); return }
+    if (!file.type.startsWith('image/')) { alert('Please choose an image file.'); return }
     const reader = new FileReader()
     reader.onload = () => setAvatar(reader.result)
+    reader.onerror = () => alert('Failed to read image.')
     reader.readAsDataURL(file)
   }
 
@@ -78,7 +82,7 @@ export default function Profile() {
 
         <div className="mt-4 flex items-center gap-4">
           {avatar ? (
-            <img src={avatar} alt="Profile" className="h-20 w-20 rounded-full object-cover ring-2 ring-brand-200" />
+            <img src={avatar} alt="Profile" className="h-20 w-20 rounded-full object-cover ring-2 ring-brand-200" onError={(e)=>{e.currentTarget.style.display='none'}} />
           ) : (
             <Avatar user={user} size="h-20 w-20 text-xl" />
           )}
@@ -107,13 +111,39 @@ export default function Profile() {
               onChange={(e) => {
                 const file = e.target.files?.[0]
                 if (!file) return
+                if (file.size > 500 * 1024) { alert('Please choose an image under 500KB.'); e.target.value=''; return }
+                if (!file.type.startsWith('image/')) { alert('Please choose an image file.'); e.target.value=''; return }
                 const reader = new FileReader()
                 reader.onload = () => setAvatar(reader.result)
+                reader.onerror = () => alert('Failed to read image.')
                 reader.readAsDataURL(file)
+                e.target.value = ''
               }}
             />
-            <p className="mt-1.5 text-[11px] text-gray-400">Shown next to your name across the system.</p>
+            <p className="mt-1.5 text-[11px] text-gray-400">Shown next to your name across the system. Upload coexists with presets.</p>
           </div>
+        </div>
+
+        {/* Preset icon selection — 3 SVG choices, kept alongside upload */}
+        <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <p className="text-sm font-medium text-gray-900">Or choose a preset icon</p>
+          <p className="mt-0.5 text-xs text-gray-500">Pick one of 3 SVG presets — applies after Save.</p>
+          <div className="mt-3 grid grid-cols-3 gap-3">
+            {AVATAR_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => setAvatar(preset.src)}
+                className={`rounded-xl border-2 bg-white p-3 transition ${avatar === preset.src ? 'border-brand-600 ring-2 ring-brand-200' : 'border-gray-200 hover:border-brand-200'}`}
+                title={preset.label}
+                aria-label={`Select ${preset.label} preset`}
+              >
+                <img src={preset.src} alt={preset.label} className="h-12 w-12 mx-auto rounded-full object-cover" />
+                <span className="mt-1 block text-[10px] font-medium text-gray-600">{preset.label}</span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-gray-400">Presets are lightweight SVGs — upload is preserved. Select a preset then Save changes.</p>
         </div>
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">

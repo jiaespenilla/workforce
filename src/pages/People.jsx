@@ -5,6 +5,7 @@ import { getScopedCompanies, loadRegisteredCompanies } from '../lib/companies'
 import { getConfiguredRoles, canAction } from '../lib/roles'
 import { api, apiEnabled } from '../lib/api'
 import { getCompanyShifts, saveCompanyShiftData } from '../lib/shifts'
+import { getCompanyLocations } from '../lib/locations'
 import Avatar from '../components/Avatar'
 
 export default function People() {
@@ -20,8 +21,9 @@ export default function People() {
   const [error, setError] = useState(null)
   const [savedName, setSavedName] = useState(null)
   const [shiftsData, setShiftsData] = useState({ shifts: [], assignments: {} })
+  const [companyLocations, setCompanyLocations] = useState([])
 
-  const formRef = useRef({ name: '', email: '', role: roleOptions[roleOptions.length - 1] || '' })
+  const formRef = useRef({ name: '', email: '', role: roleOptions[roleOptions.length - 1] || '', locationId: '' })
   const [, forceRender] = useState(0)
   const form = formRef.current
 
@@ -47,10 +49,11 @@ export default function People() {
 
   useEffect(() => { load() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [])
 
-  // Reload shifts when the selected company changes.
+  // Reload shifts and locations when the selected company changes.
   useEffect(() => {
     if (!companyId) return
     getCompanyShifts(companyId).then(setShiftsData).catch(() => {})
+    getCompanyLocations(companyId).then(setCompanyLocations).catch(() => {})
   }, [companyId])
 
   const company = companies.find((c) => c.id === companyId)
@@ -92,17 +95,28 @@ export default function People() {
     }
 
     try {
+      const locVal = form.locationId || ''
+      const locPayload = locVal ? { locationId: locVal, location: companyLocations.find((l)=>l.id===locVal)?.name || locVal } : {}
       if (apiEnabled()) {
         await api(`/api/companies/${company.id}/employees`, {
           method: 'POST',
-          body: { name: cleanName, email: cleanEmail, role: form.role || 'Unassigned', active: true },
+          body: { name: cleanName, email: cleanEmail, role: form.role || 'Unassigned', active: true, ...locPayload },
         })
+      }
+      if (!apiEnabled()) {
+        try {
+          const updated = loadRegisteredCompanies().map((c) =>
+            c.id === company.id ? { ...c, employees: [...c.employees, { name: cleanName, email: cleanEmail, role: form.role || 'Unassigned', active: true, ...locPayload }] } : c
+          )
+          localStorage.setItem('uw_companies', JSON.stringify(updated))
+        } catch {}
       }
       await load()
       setSavedName(`${cleanName} (${cleanEmail})`)
       form.name = ''
       form.email = ''
       form.role = roleOptions[roleOptions.length - 1] || ''
+      form.locationId = ''
       forceRender((n) => n + 1)
       setTimeout(() => setSavedName(null), 4000)
     } catch (err) {
@@ -202,11 +216,19 @@ export default function People() {
                 <span className="font-medium text-gray-700">Email address: *</span>
                 <input value={form.email} onChange={(e) => { form.email = e.target.value; forceRender((n) => n + 1) }} required type="email" placeholder="juan@company.com" className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10" />
               </label>
-              <label className="block text-sm sm:col-span-2">
+              <label className="block text-sm">
                 <span className="font-medium text-gray-700">Role:</span>
                 <select value={form.role} onChange={(e) => { form.role = e.target.value; forceRender((n) => n + 1) }} disabled={roleOptions.length === 0} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10">
                   {roleOptions.length === 0 ? <option value="">No roles available</option> : roleOptions.map((r) => <option key={r}>{r}</option>)}
                 </select>
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium text-gray-700">Location:</span>
+                <select value={form.locationId} onChange={(e) => { form.locationId = e.target.value; forceRender((n) => n + 1) }} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10">
+                  <option value="">No location</option>
+                  {companyLocations.map((l)=><option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+                {companyLocations.length===0 && <span className="mt-1 block text-[11px] text-amber-600">No locations — add in Companies → Locations</span>}
               </label>
             </div>
             <div className="flex justify-end">
@@ -231,7 +253,7 @@ export default function People() {
           {people.map((emp) => (
             <li key={emp.email} className="px-6 py-4">
               {editingId === emp.email ? (
-                <EditRow emp={emp} roleOptions={roleOptions} onSave={(updates) => saveEdit(emp, updates)} onCancel={() => setEditingId(null)} />
+                <EditRow emp={emp} roleOptions={roleOptions} locations={companyLocations} onSave={(updates) => saveEdit(emp, updates)} onCancel={() => setEditingId(null)} />
               ) : (
                 <div className="flex items-center gap-3">
                   <Avatar user={{ name: emp.name, initials: emp.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(), avatar: emp.avatar }} size="h-10 w-10 text-xs" />
@@ -245,6 +267,7 @@ export default function People() {
                     {emp.active !== false ? 'Active' : 'Inactive'}
                   </span>
                   <span className="hidden rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-600 md:inline">{emp.role}</span>
+                  {(() => { const loc = companyLocations.find((l)=>l.id===(emp.locationId||emp.location))?.name || emp.location || ''; return loc ? <span className="hidden rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-semibold text-blue-700 ring-1 ring-blue-200 lg:inline">{loc}</span> : null })()}
                   {shiftName(emp) && (
                     <span className="hidden rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200 lg:inline">
                       {shiftName(emp)}
@@ -296,23 +319,38 @@ export default function People() {
   )
 }
 
-function EditRow({ emp, roleOptions, onSave, onCancel }) {
+function EditRow({ emp, roleOptions, locations = [], onSave, onCancel }) {
   const [name, setName] = useState(emp.name)
   const [role, setRole] = useState(emp.role)
+  const [locationId, setLocationId] = useState(emp.locationId || emp.location || '')
+
+  // Resolve current location id to actual id if stored as name
+  const resolvedLocationId = (() => {
+    if (locations.some((l)=>l.id===locationId)) return locationId
+    const byName = locations.find((l)=>l.name===locationId)
+    return byName ? byName.id : locationId
+  })()
 
   return (
     <form
-      onSubmit={(e) => { e.preventDefault(); onSave({ name: name.trim() || emp.name, role }) }}
+      onSubmit={(e) => { e.preventDefault(); const loc = locations.find((l)=>l.id===locationId); onSave({ name: name.trim() || emp.name, role, locationId: locationId || null, location: loc?.name || locationId || null }) }}
       className="flex flex-wrap items-end gap-3"
     >
       <label className="block min-w-[160px] flex-1 text-xs">
         <span className="font-medium text-gray-500">Full name:</span>
         <input value={name} onChange={(e) => setName(e.target.value)} autoFocus className="mt-1 w-full rounded-md border border-brand-400 px-2 py-1.5 text-sm focus:outline-none" />
       </label>
-      <label className="block w-40 text-xs">
+      <label className="block w-32 text-xs">
         <span className="font-medium text-gray-500">Role:</span>
         <select value={role} onChange={(e) => setRole(e.target.value)} className="mt-1 w-full rounded-md border border-brand-400 px-2 py-1.5 text-sm focus:outline-none">
           {(roleOptions.includes(role) || !role ? [...new Set([role, ...roleOptions].filter(Boolean))] : roleOptions).map((r) => <option key={r}>{r}</option>)}
+        </select>
+      </label>
+      <label className="block w-36 text-xs">
+        <span className="font-medium text-gray-500">Location:</span>
+        <select value={resolvedLocationId} onChange={(e) => setLocationId(e.target.value)} className="mt-1 w-full rounded-md border border-brand-400 px-2 py-1.5 text-sm focus:outline-none">
+          <option value="">No location</option>
+          {locations.map((l)=><option key={l.id} value={l.id}>{l.name}</option>)}
         </select>
       </label>
       <div className="flex gap-2 pb-0.5">

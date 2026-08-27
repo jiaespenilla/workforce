@@ -3,32 +3,18 @@ import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 import { getActiveSettings } from '../lib/systemSettings'
 import { api, apiEnabled } from '../lib/api'
-import { getAllCompanies } from '../lib/companies'
+import { getActiveCompanies } from '../lib/companies'
 import { getCredential, setFingerprint, setPin, ensureQrCode } from '../lib/credentials'
+import { getDefaultKioskConfig, getCompanyKioskConfig, saveCompanyKioskConfig, loadKioskConfig as loadKioskConfigPerCompany } from '../lib/kioskConfig'
 
-const CONFIG_KEY = 'uw_kiosk_config'
-
-export function loadKioskConfig() {
+// Keep legacy export for Kiosk.jsx fallback (no companyId)
+export function loadKioskConfig(companyId) {
+  if (companyId) return loadKioskConfigPerCompany(companyId)
   try {
-    return {
-      method: 'fingerprint',
-      pinFallback: true,
-      requireReAuth: false,
-      pinLength: 4,
-      lockoutAttempts: 5,
-      qrRotation: 'daily',
-      camera: 'rear',
-      idleTimeout: 60,
-      site: 'hq',
-      ...JSON.parse(localStorage.getItem(CONFIG_KEY)),
-    }
-  } catch {
-    return { method: 'fingerprint', pinFallback: true, requireReAuth: false, pinLength: 4, lockoutAttempts: 5, qrRotation: 'daily', camera: 'rear', idleTimeout: 60, site: 'hq' }
-  }
-}
-
-function saveKioskConfig(config) {
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(config))
+    const legacy = localStorage.getItem('uw_kiosk_config')
+    if (legacy) return { ...getDefaultKioskConfig(), ...JSON.parse(legacy) }
+  } catch {}
+  return getDefaultKioskConfig()
 }
 
 const methods = [
@@ -67,11 +53,13 @@ function QrGlyph({ className }) {
 
 export default function KioskSetup() {
   usePageTitle('Kiosk Setup')
-  const [config, setConfig] = useState(loadKioskConfig)
+  const companies = getActiveCompanies()
+  const [configCompanyId, setConfigCompanyId] = useState(companies[0]?.id || '')
+  const [config, setConfig] = useState(() => loadKioskConfig(companies[0]?.id))
   const [saved, setSaved] = useState(false)
 
   // Credential registration state
-  const companies = getAllCompanies()
+  // (uses same active companies list)
   const [credCompanyId, setCredCompanyId] = useState(companies[0]?.id || '')
   const credCompany = companies.find((c) => c.id === credCompanyId)
   const credEmployees = credCompany?.employees || []
@@ -137,14 +125,23 @@ export default function KioskSetup() {
 
   const update = (key, value) => setConfig((c) => ({ ...c, [key]: value }))
 
-  // Live preview stays in sync while editing.
+  // Load per-company config when company selector changes
   useEffect(() => {
-    setConfig((c) => c)
-  }, [])
+    if (!configCompanyId) return
+    let cancelled = false
+    getCompanyKioskConfig(configCompanyId).then((c) => { if (!cancelled) setConfig(c) })
+    return () => { cancelled = true }
+  }, [configCompanyId])
 
-  const save = (e) => {
+  // Keep config sync when companies list updates (e.g., after load)
+  useEffect(() => {
+    if (companies.length && !configCompanyId) setConfigCompanyId(companies[0].id)
+  }, [companies, configCompanyId])
+
+  const save = async (e) => {
     e.preventDefault()
-    saveKioskConfig(config)
+    if (!configCompanyId) return
+    await saveCompanyKioskConfig(configCompanyId, config)
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
   }
@@ -158,7 +155,7 @@ export default function KioskSetup() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Administration</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900">Kiosk Setup</h1>
-          <p className="mt-1 text-sm text-gray-500">Configure how employees authenticate at time-keeping kiosks. Saved settings are applied to every kiosk view.</p>
+          <p className="mt-1 text-sm text-gray-500">Configure how employees authenticate at time-keeping kiosks. Each company has its own unique setup — detected automatically via employee tagging.</p>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto">
           {saved && (
@@ -169,6 +166,17 @@ export default function KioskSetup() {
           )}
           <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700">Save configuration</button>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-brand-200 bg-brand-50/60 p-4">
+        <label className="block text-sm">
+          <span className="font-medium text-gray-700">Configuring for company:</span>
+          <select value={configCompanyId} onChange={(e)=>setConfigCompanyId(e.target.value)} className={inputCls + ' mt-1 max-w-sm'}>
+            {companies.length===0 && <option value="">No active companies</option>}
+            {companies.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+        <p className="mt-1 text-xs text-gray-500">Each company has a unique kiosk setup. The kiosk detects the employee’s company automatically.</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_auto]">

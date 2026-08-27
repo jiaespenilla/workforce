@@ -22,11 +22,22 @@ export function getAllCompanies() {
   return loadRegisteredCompanies()
 }
 
+export function getActiveCompanies() {
+  return getAllCompanies().filter((c) => c.active !== false)
+}
+
 // Flat list of every employee across all companies, tagged with their company.
 export function getAllEmployees() {
   return getAllCompanies().flatMap((c) =>
     c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id }))
   )
+}
+
+export function getActiveEmployees() {
+  return getAllEmployees().filter((e) => {
+    const comp = getAllCompanies().find((c) => c.id === e.companyId)
+    return comp?.active !== false && e.active !== false
+  })
 }
 
 // Company-scoped views: users belonging to a company only ever see their own
@@ -40,5 +51,15 @@ export function getScopedCompanies(user) {
 export function getScopedEmployees(user) {
   return getScopedCompanies(user).flatMap((c) =>
     c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id }))
+  )
+}
+
+export function getActiveScopedCompanies(user) {
+  return getScopedCompanies(user).filter((c) => c.active !== false)
+}
+
+export function getActiveScopedEmployees(user) {
+  return getActiveScopedCompanies(user).flatMap((c) =>
+    c.employees.filter((e) => e.active !== false).map((e) => ({ ...e, companyName: c.name, companyId: c.id }))
   )
 }

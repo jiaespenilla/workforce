@@ -58,6 +58,10 @@ export default function Login() {
     } catch (err) {
       if (err.message === 'ACCOUNT_NOT_FOUND') {
         setError('No account found for this email. Register your company first.')
+      } else if (err.message === 'COMPANY_INACTIVE') {
+        setError('Your company is deactivated. Contact administrator.')
+      } else if (err.message === 'EMPLOYEE_INACTIVE') {
+        setError('Your account is deactivated. Contact administrator.')
       } else {
         setError('Invalid credentials. Please try again.')
       }

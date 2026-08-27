@@ -5,6 +5,7 @@ import { getSystemIcon } from '../lib/documentMeta'
 import { loadKioskConfig } from './KioskSetup'
 import { getCompanyShifts, decideAction } from '../lib/shifts'
 import { getAllCompanies } from '../lib/companies'
+import { getCompanyKioskConfig } from '../lib/kioskConfig'
 import { api, apiEnabled } from '../lib/api'
 
 // Makes the kiosk installable as a stand-alone app on phones/tablets.
@@ -87,10 +88,17 @@ function FingerprintGlyph({ className }) {
 
 export default function Kiosk() {
   const settings = getActiveSettings()
-  const config = loadKioskConfig()
   const systemName = settings.name
   const brandLetter = (systemName || 'U').charAt(0).toUpperCase()
   const brandIcon = getSystemIcon()
+  const [kioskCompanyId, setKioskCompanyId] = useState(null)
+  const [config, setConfig] = useState(() => loadKioskConfig())
+
+  // When company is detected (via employee tag), load that company's unique setup automatically
+  useEffect(() => {
+    if (!kioskCompanyId) return
+    getCompanyKioskConfig(kioskCompanyId).then(setConfig).catch(()=>{})
+  }, [kioskCompanyId])
 
   const [now, setNow] = useState(new Date())
   // identified = the employee matched via credential
@@ -108,7 +116,7 @@ export default function Kiosk() {
     return () => clearInterval(t)
   }, [])
 
-  // Reset to the authentication screen after the configured idle timeout.
+  // Reset to the authentication screen after the configured idle timeout — per-company.
   useEffect(() => {
     const resetIdle = () => {
       if (idleTimer.current) clearTimeout(idleTimer.current)
@@ -127,8 +135,7 @@ export default function Kiosk() {
       clearTimeout(idleTimer.current)
       events.forEach((e) => window.removeEventListener(e, resetIdle))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [config.idleTimeout])
 
   useKioskPwa(systemName, brandLetter)
 
@@ -179,6 +186,10 @@ export default function Kiosk() {
       if (!match) {
         setAuthError('Credential not recognized. Register it in Kiosk Setup first.')
         return false
+      }
+      if (match.companyId) setKioskCompanyId(match.companyId)
+      else if (match.company) {
+        try { const cid = getAllCompanies().find((c)=>c.name===match.company)?.id; if(cid) setKioskCompanyId(cid) } catch {}
       }
       await recordPunch(match)
       return true
