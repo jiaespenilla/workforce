@@ -328,27 +328,29 @@ function StatusPanel({ settings }) {
         </div>
       </div>
 
-      {/* Maintenance mode */}
-      <div className={`rounded-xl border p-4 ${maintenance ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-gray-900">Maintenance mode</p>
-            <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
+      {/* Maintenance mode — stacks on mobile for thumb reach */}
+      <div className={`rounded-xl border p-4 sm:p-5 ${maintenance ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-900 sm:text-base">Maintenance mode</p>
+            <p className="mt-1 text-xs leading-relaxed text-gray-500 sm:text-sm">
               When enabled, only administrators can sign in — all other users see a maintenance page.
               Takes effect immediately.
             </p>
           </div>
-          <Toggle
-            checked={maintenance}
-            onChange={(value) => {
-              setMaintenanceMode(value)
-              setMaintenance(value)
-            }}
-          />
+          <div className="self-start sm:self-auto">
+            <Toggle
+              checked={maintenance}
+              onChange={(value) => {
+                setMaintenanceMode(value)
+                setMaintenance(value)
+              }}
+            />
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-tick={tick}>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4" data-tick={tick}>
         <div className="rounded-xl border border-brand-200 bg-brand-50/60 p-5">
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-brand-500" />
@@ -677,45 +679,45 @@ export default function SystemConfig() {
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+      {/* Page header — stacks on mobile, extra breathing room */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Administration Console</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900">System Configuration</h1>
-          <p className="mt-1 text-sm text-gray-500">Manage platform-wide settings, roles and policies.</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">System Configuration</h1>
+          <p className="mt-1 text-sm leading-relaxed text-gray-500">Manage platform-wide settings, roles and policies. Works great on phone, tablet and desktop.</p>
         </div>
         {saved && (
-          <span className="inline-flex items-center gap-2 self-start rounded-full bg-brand-50 px-4 py-2 text-xs font-medium text-brand-700 ring-1 ring-brand-200 sm:self-auto">
+          <span className="inline-flex items-center gap-2 self-start rounded-full bg-brand-50 px-4 py-2.5 text-xs font-medium text-brand-700 ring-1 ring-brand-200 sm:self-auto animate-pulse">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
             Saved successfully
           </span>
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
-        {/* Sidebar tabs — vertical on desktop, horizontal scroll on mobile */}
-        <div className="flex gap-2 overflow-x-auto rounded-xl border border-gray-200 bg-white p-2 shadow-sm lg:flex-col lg:overflow-visible lg:self-start">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-[260px_1fr] xl:grid-cols-[280px_1fr]">
+        {/* Sidebar tabs — horizontal snap on mobile, sticky vertical on desktop */}
+        <div className="flex gap-2 overflow-x-auto rounded-xl border border-gray-200 bg-white p-2 shadow-sm snap-x snap-mandatory scroll-pl-2 lg:flex-col lg:overflow-visible lg:self-start lg:sticky lg:top-20">
           {TABS.map(([id, label, icon]) => (
             <button
               key={id}
               onClick={() => setTab(id)}
               aria-current={tab === id}
-              className={`flex shrink-0 items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition ${
+              className={`flex shrink-0 snap-start items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-medium transition min-h-[44px] ${
                 tab === id
-                  ? 'bg-brand-600 text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-brand-50 hover:text-brand-700'
+                  ? 'bg-brand-600 text-white shadow-sm ring-1 ring-brand-600'
+                  : 'text-gray-600 hover:bg-brand-50 hover:text-brand-700 active:bg-brand-100'
               }`}
             >
               <svg className={`h-5 w-5 shrink-0 ${tab === id ? 'text-white' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
                 <path strokeLinecap="round" strokeLinejoin="round" d={icon} />
               </svg>
-              {label}
+              <span className="whitespace-nowrap lg:whitespace-normal">{label}</span>
             </button>
           ))}
         </div>
 
-        {/* Panels */}
-        <div className="min-w-0 space-y-5 rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+        {/* Panels — responsive padding, max-width for readability */}
+        <div className="min-w-0 space-y-5 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6 lg:p-8">
           {tab === 'company' && (
             <form onSubmit={saveSystemSettings} className="space-y-5">
               {panelHeader('System Details', `These values identify "${settings.name}" across all client devices.`)}
