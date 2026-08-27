@@ -614,6 +614,23 @@ async function apiRoutes(path, method, request, env, url, claims) {
     return json({ ok: true })
   }
 
+  /* admin — reset all tenant data (requires confirmation) */
+  if (path === '/api/admin/reset' && method === 'POST') {
+    if (!isAdmin) return json({ error: 'Forbidden — administrator only.' }, 403)
+    const body = await readJson(request)
+    if ((body.confirm || '').trim() !== 'RESET') return json({ error: 'Confirmation must be exactly RESET.' }, 400)
+    // Keep users (admin/ceo logins) and settings (system name/icon) and roles (or reset to defaults? keep roles)
+    await env.DB.prepare('DELETE FROM attendance').run()
+    await env.DB.prepare('DELETE FROM employee_credentials').run()
+    await env.DB.prepare('DELETE FROM employees').run()
+    await env.DB.prepare('DELETE FROM companies').run()
+    await env.DB.prepare('DELETE FROM tasks').run()
+    await env.DB.prepare('DELETE FROM notifications').run()
+    // Clear per-company blobs stored in settings (shifts, locations, kiosk configs)
+    await env.DB.prepare("DELETE FROM settings WHERE key IN ('shift_schedules','company_locations','kiosk_configs')").run()
+    return json({ ok: true, message: 'All tenant data reset.' })
+  }
+
   return json({ error: 'Not found' }, 404)
 }
 

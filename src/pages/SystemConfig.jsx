@@ -6,6 +6,7 @@ import { getConfiguredRoles, saveRolesList, canAction } from '../lib/roles'
 import { getAllCompanies } from '../lib/companies'
 import { getSystemIcon, setSystemIcon, applyFavicon } from '../lib/documentMeta'
 import { SYSTEM_ICON_PRESETS } from '../lib/iconPresets'
+import { api, apiEnabled } from '../lib/api'
 import OrgPanel from './OrgPanel'
 
 const TABS = [
@@ -282,6 +283,34 @@ function StatusPanel({ settings }) {
     ['Time zone', tz],
   ]
 
+  const [showReset, setShowReset] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
+  const [confirmChecked, setConfirmChecked] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const [resetError, setResetError] = useState('')
+  const [resetSuccess, setResetSuccess] = useState(false)
+
+  const canReset = confirmChecked && confirmText.trim() === 'RESET' && !resetting
+  const handleReset = async () => {
+    if (!canReset) return
+    setResetting(true)
+    setResetError('')
+    try {
+      if (apiEnabled()) {
+        await api('/api/admin/reset', { method: 'POST', body: { confirm: 'RESET' } })
+      }
+      // Clear local caches (both modes) — keep user session so admin stays logged in
+      const keysToClear = ['uw_companies','uw_ceo_tasks','uw_punches','uw_notifications','uw_shift_schedules','uw_company_locations','uw_kiosk_configs','uw_kiosk_config','uw_org_units']
+      keysToClear.forEach((k)=>{ try{ localStorage.removeItem(k)}catch{} })
+      setResetSuccess(true)
+      setTimeout(()=>{ window.location.reload() }, 1200)
+    } catch (err) {
+      setResetError(err.message || 'Reset failed.')
+    } finally {
+      setResetting(false)
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
@@ -332,6 +361,53 @@ function StatusPanel({ settings }) {
           </div>
         ))}
       </div>
+
+      {/* Danger Zone — Reset Data */}
+      <div className="rounded-xl border border-red-200 bg-red-50/50 p-5">
+        <h3 className="text-sm font-bold text-red-800">Danger Zone</h3>
+        <p className="mt-1 text-xs leading-relaxed text-red-700">
+          Reset will permanently delete all companies, employees, tasks, attendance, notifications, shift schedules, locations and kiosk configs. System settings, roles and user logins are kept. This cannot be undone.
+        </p>
+        {resetSuccess ? (
+          <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">All data reset — reloading…</p>
+        ) : (
+          <button type="button" onClick={()=>{setShowReset(true); setConfirmText(''); setConfirmChecked(false); setResetError('')}} className="mt-3 rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700">Reset Data</button>
+        )}
+      </div>
+
+      {showReset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={()=>!resetting && setShowReset(false)}>
+          <div className="absolute inset-0 bg-gray-900/60" />
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onClick={(e)=>e.stopPropagation()}>
+            <h3 className="text-base font-bold text-gray-900">Confirm Reset — This cannot be undone</h3>
+            <p className="mt-2 text-xs leading-relaxed text-gray-600">
+              You are about to <span className="font-semibold text-red-700">permanently delete</span> all tenant data:
+            </p>
+            <ul className="mt-2 list-disc pl-5 text-xs text-gray-600">
+              <li>{companies.length} companies &amp; {employees.length} employees</li>
+              <li>{tasks.length} tasks, {notifications.length} notifications, attendance &amp; credentials</li>
+              <li>Shift schedules, locations, kiosk configs (per-company)</li>
+            </ul>
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 ring-1 ring-amber-200">System name, version, roles and admin logins will be kept.</p>
+
+            <label className="mt-4 flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <input type="checkbox" checked={confirmChecked} onChange={(e)=>setConfirmChecked(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500" />
+              <span className="text-xs leading-relaxed text-gray-700">I understand this will <span className="font-semibold">permanently delete</span> all companies, employees, tasks and related data. I have made a backup if needed.</span>
+            </label>
+
+            <label className="mt-3 block text-xs font-medium text-gray-700">Type <span className="font-mono font-bold">RESET</span> to confirm:</label>
+            <input value={confirmText} onChange={(e)=>setConfirmText(e.target.value)} placeholder="RESET" autoComplete="off" className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm focus:border-red-500 focus:outline-none focus:ring-4 focus:ring-red-500/10" />
+
+            {resetError && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700 ring-1 ring-red-200">{resetError}</p>}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={()=>setShowReset(false)} disabled={resetting} className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40">Cancel</button>
+              <button type="button" onClick={handleReset} disabled={!canReset} className={`rounded-lg px-4 py-2 text-xs font-semibold text-white ${canReset ? 'bg-red-600 hover:bg-red-700' : 'cursor-not-allowed bg-gray-300'}`}>{resetting ? 'Resetting…' : 'Reset Data'}</button>
+            </div>
+            <p className="mt-3 text-center text-[10px] text-gray-400">Requires typing RESET + checkbox — two-step confirmation.</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
