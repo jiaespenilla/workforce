@@ -67,9 +67,10 @@ function LocalToggle({ defaultOn = false }) {
 }
 
 // Roles & Permissions panel — user counts are computed from real company registrations,
-// so the numbers always reflect actual registered team members.
+// so the numbers always reflect actual registered team members. Responsive: cards stack on mobile, grid on desktop.
 function RolesPanel({ roles, onAdd, onRename, onRemove, onTogglePerm }) {
   const [expanded, setExpanded] = useState(null)
+  const [roleQuery, setRoleQuery] = useState('')
 
   // Group every registered employee under their role name.
   const membersByRole = {}
@@ -96,76 +97,94 @@ function RolesPanel({ roles, onAdd, onRename, onRemove, onTogglePerm }) {
         </p>
       </div>
 
-      <div className="mb-4 flex items-center justify-between">
-        <p className="text-xs text-gray-500">
-          {roles.length} configured role{roles.length !== 1 ? 's' : ''}
-        </p>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <p className="text-xs font-medium text-gray-600">
+            {roles.length} role{roles.length !== 1 ? 's' : ''} · {Object.keys(membersByRole).length} in use
+          </p>
+          {roles.length > 3 && (
+            <div className="relative">
+              <svg className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              <input value={roleQuery} onChange={(e)=>setRoleQuery(e.target.value)} placeholder="Search roles…" className="w-36 rounded-full border border-gray-200 bg-white py-1.5 pl-8 pr-3 text-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/10 sm:w-44" />
+            </div>
+          )}
+        </div>
         <button
           type="button"
           onClick={onAdd}
-          className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-brand-700"
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700 active:scale-[0.98] min-h-[40px] sm:min-h-0"
         >
-          + Add role
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+          Add role
         </button>
       </div>
 
       {roles.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-gray-200 p-10 text-center">
-          <svg className="mx-auto mb-3 h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6 1.37a6 6 0 10-6-6 6 6 0 006 6zM16 7a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-          <p className="text-sm font-medium text-gray-900">No roles configured yet</p>
-          <p className="mt-1 text-xs text-gray-500">Add your first role — it will immediately become available when companies register their team members.</p>
+        <div className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50 p-8 text-center sm:p-10">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-gray-200">
+            <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6 1.37a6 6 0 10-6-6 6 6 0 006 6zM16 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          </div>
+          <p className="mt-3 text-sm font-semibold text-gray-900">No roles configured yet</p>
+          <p className="mt-1 text-xs leading-relaxed text-gray-500 max-w-sm mx-auto">Add your first role — it will immediately become available when companies register their team members.</p>
+          <button type="button" onClick={onAdd} className="mt-4 rounded-full bg-brand-600 px-5 py-2 text-xs font-semibold text-white shadow hover:bg-brand-700">Create first role</button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {roles.map((r, i) => {
+        <div className="space-y-4">
+          {roles
+            .map((r, originalIndex) => ({ r, originalIndex }))
+            .filter(({ r }) => !roleQuery || r.name.toLowerCase().includes(roleQuery.toLowerCase()))
+            .map(({ r, originalIndex: i }) => {
             const members = membersByRole[r.name.trim()] || []
             const isOpen = expanded === i
             return (
-              <div key={i} className="rounded-xl border border-gray-200 p-4 transition hover:border-brand-200">
-                <div className="flex flex-wrap items-center gap-3">
+              <div key={i} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition hover:border-brand-200 hover:shadow-md sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
                   <input
                     value={r.name}
                     onChange={(e) => onRename(i, e.target.value)}
                     placeholder="Role name"
                     aria-label={`Role ${i + 1} name`}
-                    className="min-w-[140px] flex-1 rounded-lg border border-transparent bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-900 transition placeholder-gray-400 hover:border-gray-300 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                    className="w-full flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-semibold text-gray-900 transition placeholder-gray-400 hover:border-gray-300 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 min-h-[44px] sm:min-w-[160px]"
                   />
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-xs tabular-nums ring-1 ${
-                      members.length > 0 ? 'bg-brand-50 text-brand-700 ring-brand-200' : 'bg-gray-100 text-gray-500 ring-gray-200'
-                    }`}
-                  >
-                    {members.length} user{members.length !== 1 ? 's' : ''} registered
-                  </span>
-                  {members.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium tabular-nums ring-1 ${
+                        members.length > 0 ? 'bg-brand-50 text-brand-700 ring-brand-200' : 'bg-gray-100 text-gray-500 ring-gray-200'
+                      }`}
+                    >
+                      <span className={`h-2 w-2 rounded-full ${members.length>0?'bg-brand-500':'bg-gray-300'}`} />
+                      {members.length} user{members.length !== 1 ? 's' : ''}
+                    </span>
+                    {members.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setExpanded(isOpen ? null : i)}
+                        aria-expanded={isOpen}
+                        className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm hover:bg-gray-50 min-h-[32px]"
+                      >
+                        View
+                        <svg className={`h-3 w-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => setExpanded(isOpen ? null : i)}
-                      aria-expanded={isOpen}
-                      className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                      onClick={() => onRemove(i)}
+                      title={members.length > 0 ? `${members.length} registered user(s) still use this role` : 'Delete role'}
+                      className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-red-500 shadow-sm transition hover:bg-red-50 hover:text-red-600 sm:ml-0"
+                      aria-label={`Delete ${r.name || 'role'}`}
                     >
-                      View members
-                      <svg className={`h-3 w-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => onRemove(i)}
-                    title={members.length > 0 ? `${members.length} registered user(s) still use this role` : 'Delete role'}
-                    className="rounded-lg p-2 text-red-500 transition hover:bg-red-50 hover:text-red-600"
-                    aria-label={`Delete ${r.name || 'role'}`}
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  </div>
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 pl-1 text-xs text-gray-600">
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {[
                     ['dashboard', 'Dashboard'],
                     ['timekeeping', 'Time Keeping'],
@@ -175,35 +194,37 @@ function RolesPanel({ roles, onAdd, onRename, onRemove, onTogglePerm }) {
                     ['kiosk', 'Kiosk'],
                     ['settings', 'This Console'],
                   ].map(([key, label]) => (
-                    <label key={key} className="flex cursor-pointer items-center gap-2">
+                    <label key={key} className="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 transition hover:bg-white hover:shadow-sm">
                       <Toggle
                         checked={r.perms?.[key] !== false}
                         onChange={(value) => onTogglePerm(i, key, value)}
                       />
-                      <span>{label}</span>
+                      <span className="text-xs font-medium text-gray-700">{label}</span>
                     </label>
                   ))}
                 </div>
 
                 {/* Action-level permissions */}
-                <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50 p-3">
-                  <p className="mb-2.5 text-[11px] font-bold uppercase tracking-wide text-gray-400">Action buttons shown to this role:</p>
-                  <div className="space-y-2">
+                <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-gray-500">Action buttons shown to this role:</p>
+                  <div className="space-y-3">
                     {[
                       ['people', 'People', [['add', 'Add'], ['edit', 'Edit'], ['delete', 'Delete / Status']]],
                       ['tasks', 'Tasks (CEO)', [['add', 'Add'], ['delete', 'Delete']]],
                     ].map(([module, moduleLabel, actions]) => (
-                      <div key={module} className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-                        <span className="w-20 shrink-0 font-semibold text-gray-700">{moduleLabel}</span>
-                        {actions.map(([action, label]) => (
-                          <label key={action} className="flex cursor-pointer items-center gap-2">
-                            <Toggle
-                              checked={canAction(r.perms, module, action)}
-                              onChange={(value) => onTogglePerm(i, `actions.${module}.${action}`, value)}
-                            />
-                            <span>{label}</span>
-                          </label>
-                        ))}
+                      <div key={module} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                        <span className="w-full shrink-0 text-xs font-bold uppercase tracking-wide text-gray-500 sm:w-20 sm:normal-case sm:font-semibold sm:text-gray-700 sm:text-xs">{moduleLabel}</span>
+                        <div className="flex flex-wrap gap-2">
+                          {actions.map(([action, label]) => (
+                            <label key={action} className="flex cursor-pointer items-center gap-2 rounded-full border border-white bg-white px-3 py-1.5 shadow-sm hover:shadow">
+                              <Toggle
+                                checked={canAction(r.perms, module, action)}
+                                onChange={(value) => onTogglePerm(i, `actions.${module}.${action}`, value)}
+                              />
+                              <span className="text-xs font-medium text-gray-700">{label}</span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -223,6 +244,9 @@ function RolesPanel({ roles, onAdd, onRename, onRemove, onTogglePerm }) {
               </div>
             )
           })}
+          {roles.filter((r)=> !roleQuery || r.name.toLowerCase().includes(roleQuery.toLowerCase())).length===0 && roleQuery && (
+            <p className="rounded-xl border-2 border-dashed border-gray-200 bg-white p-6 text-center text-sm text-gray-500">No roles match “{roleQuery}”.</p>
+          )}
         </div>
       )}
 

@@ -167,36 +167,42 @@ export default function KioskSetup() {
   const systemName = getActiveSettings().name
 
   return (
-    <form onSubmit={save} className="space-y-6">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+    <form onSubmit={save} className="space-y-6 px-1 sm:px-0">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Administration</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900">Kiosk Setup</h1>
-          <p className="mt-1 text-sm text-gray-500">Configure how employees authenticate at time-keeping kiosks. Each company has its own unique setup — detected automatically via employee tagging.</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Kiosk Setup</h1>
+          <p className="mt-1 text-sm leading-relaxed text-gray-500">Configure how employees authenticate at time-keeping kiosks. Each company has its own unique setup — detected automatically via employee tagging.</p>
         </div>
-        <div className="flex items-center gap-3 self-start sm:self-auto">
+        <div className="flex items-center gap-3 self-start sm:self-auto shrink-0">
           {saved && (
-            <span className="inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-xs font-medium text-brand-700 ring-1 ring-brand-200">
+            <span className="inline-flex items-center gap-2 rounded-full bg-brand-50 px-4 py-2 text-xs font-medium text-brand-700 ring-1 ring-brand-200 animate-pulse">
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-              Configuration saved
+              Saved
             </span>
           )}
           <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700">Save configuration</button>
         </div>
       </div>
 
-      <div className="rounded-xl border border-brand-200 bg-brand-50/60 p-4">
+      <div className="rounded-xl border border-brand-200 bg-gradient-to-br from-brand-50 to-white p-4 shadow-sm sm:p-5">
         <label className="block text-sm">
-          <span className="font-medium text-gray-700">Configuring for company:</span>
-          <select value={configCompanyId} onChange={(e)=>setConfigCompanyId(e.target.value)} className={inputCls + ' mt-1 max-w-sm'}>
-            {companies.length===0 && <option value="">No active companies</option>}
-            {companies.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}
+          <span className="flex items-center gap-2 font-semibold text-gray-900">
+            <svg className="h-4 w-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1" /></svg>
+            Configuring for company:
+          </span>
+          <select value={configCompanyId} onChange={(e)=>setConfigCompanyId(e.target.value)} className={inputCls + ' mt-2 max-w-sm min-h-[44px] bg-white'}>
+            {companies.length===0 && <option value="">No active companies — add one first</option>}
+            {companies.map((c)=><option key={c.id} value={c.id}>{c.name} {c.active===false?' (inactive)':''}</option>)}
           </select>
         </label>
-        <p className="mt-1 text-xs text-gray-500">Each company has a unique kiosk setup. The kiosk detects the employee’s company automatically.</p>
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-gray-500">
+          <svg className="h-3.5 w-3.5 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h5l-1.407-1.407A2 2 0 0118 13.585V11a6.003 6.003 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.585a2 2 0 01-.586 1.414L4 17.5" /></svg>
+          Unique per company — kiosk detects automatically via employee badge.
+        </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_auto]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_360px]">
         <div className="space-y-6">
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-semibold text-gray-900">Authentication Method</h2>
