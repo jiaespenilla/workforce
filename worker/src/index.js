@@ -117,8 +117,8 @@ async function ensureSeed(env) {
     await env.DB.prepare('INSERT INTO roles (name, perms_json) VALUES (?, ?)').bind(name, JSON.stringify(perms)).run()
   }
 
-  await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').bind('system_name', 'Unified Workforce').run()
-  await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').bind('version', 'v2.4.1').run()
+  await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').bind('system_name', 'CadensIQ').run()
+  await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').bind('version', 'v0.1.0').run()
   await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').bind('timezone', '(GMT+08:00) Asia/Manila').run()
 }
 
@@ -205,6 +205,48 @@ async function route(request, env) {
     })
   }
 
+  // Public branding — login page fetches this before any token exists.
+  // Must be public so incognito/mobile (no localStorage) shows "CadensIQ".
+  if ((path === '/api/settings' || path === '/api/public/settings') && method === 'GET') {
+    const rows = await env.DB.prepare('SELECT key, value FROM settings').all().then((r) => r.results)
+    return json(Object.fromEntries(rows.map((r) => [r.key, r.value])))
+  }
+
+  // Public company registration — no auth required so new customers can sign up.
+  // Must run before requireAuth, otherwise unauthenticated POST returns 401 "Unauthorized".
+  if (path === '/api/companies' && method === 'POST') {
+    const body = await readJson(request)
+    const id = body.id || `reg-${Date.now()}`
+    await env.DB.prepare(
+      `INSERT INTO companies (id, name, industry, address, city, contact_phone, contact_email, logo_name, status, active, owner_name, owner_title, owner_email, registered)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      id, body.name || 'Unnamed Company', body.industry || null, body.address || null, body.city || null,
+      body.contactPhone || null, body.contactEmail || null, body.logoName || null,
+      body.status || 'pending', body.active === false ? 0 : 1,
+      body.owner?.name || null, body.owner?.title || null, body.owner?.email || null,
+      body.registered || new Date().toISOString().slice(0, 10)
+    ).run()
+    for (const emp of body.employees || []) {
+      await insertEmployee(env, id, emp)
+      await ensureUser(env, emp.email, emp.name, 'employee', DEFAULT_EMPLOYEE_PASSWORD)
+    }
+    await queueNotification(env, {
+      to: NOTIFICATION_RECIPIENT,
+      subject: `New company registration: ${body.name || 'Unnamed Company'}`,
+      body: `Company: ${body.name}\nIndustry: ${body.industry}\nRegistered: ${body.registered}\nTeam size: ${(body.employees || []).length}`,
+    })
+    const employeeRows = await env.DB.prepare('SELECT * FROM employees WHERE company_id = ?').bind(id).all().then((r) => r.results)
+    const row = await env.DB.prepare('SELECT * FROM companies WHERE id = ?').bind(id).first()
+    return json(mapCompany(row, employeeRows), 201)
+  }
+
+  // Public roles for the registration form (unauthenticated users need to pick a role).
+  if (path === '/api/roles' && method === 'GET') {
+    const rows = await env.DB.prepare('SELECT * FROM roles ORDER BY id').all().then((r) => r.results)
+    return json(rows.map((r) => ({ id: r.id, name: r.name, perms: safeParse(r.perms_json) })))
+  }
+
   /* ---- authenticated ---- */
   if (path.startsWith('/api/')) {
     const claims = await requireAuth(request, env)
@@ -276,7 +318,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
       return json({ ok: true })
     }
     if (m && method === 'DELETE') {
-      await env.DB.prepare('DELETE FROM roles WHERE id = ?').run(Number(m[1]))
+      await env.DB.prepare('DELETE FROM roles WHERE id = ?').bind(Number(m[1])).run()
       return json({ ok: true })
     }
   }
@@ -354,7 +396,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
         return json({ ok: true })
       }
       if (method === 'DELETE') {
-        await env.DB.prepare('DELETE FROM employees WHERE id = ?').run(Number(m[1]))
+        await env.DB.prepare('DELETE FROM employees WHERE id = ?').bind(Number(m[1])).run()
         return json({ ok: true })
       }
     }
@@ -377,7 +419,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
       return json({ ok: true })
     }
     if (m && method === 'DELETE') {
-      await env.DB.prepare('DELETE FROM tasks WHERE id = ?').run(Number(m[1]))
+      await env.DB.prepare('DELETE FROM tasks WHERE id = ?').bind(Number(m[1])).run()
       return json({ ok: true })
     }
   }
@@ -517,7 +559,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
       return json({ ok: true })
     }
     if (m && method === 'DELETE') {
-      await env.DB.prepare('DELETE FROM org_units WHERE id = ?').run(Number(m[1]))
+      await env.DB.prepare('DELETE FROM org_units WHERE id = ?').bind(Number(m[1])).run()
       return json({ ok: true })
     }
   }

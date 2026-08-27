@@ -1,5 +1,5 @@
 import { usePageTitle } from '../lib/documentMeta'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Logo } from '../components/Layout'
 import { getLegalDocs } from '../lib/legal'
 import { getConfiguredRoles } from '../lib/roles'
@@ -55,8 +55,27 @@ export default function CompanyRegistration() {
   const [legalError, setLegalError] = useState(false)
   const agreementRef = useRef(null)
   // Only roles actually configured by the administrator — no sample/fallback roles.
-  const roleOptions = getConfiguredRoles().filter((r) => !r.perms?.settings).map((r) => r.name)
+  // In cloud mode localStorage is cleared for unauthenticated users, so fetch
+  // roles from the public endpoint when the local cache is empty.
+  const [fetchedRoleNames, setFetchedRoleNames] = useState(null)
+  const localRoleNames = getConfiguredRoles().filter((r) => !r.perms?.settings).map((r) => r.name)
+  const roleOptions = fetchedRoleNames ?? localRoleNames
   const legal = getLegalDocs()
+
+  useEffect(() => {
+    if (fetchedRoleNames !== null) return
+    if (localRoleNames.length > 0) return
+    if (!apiEnabled()) return
+    api('/api/roles').then((roles) => {
+      const names = (Array.isArray(roles) ? roles : []).filter((r) => !r.perms?.settings).map((r) => r.name).filter(Boolean)
+      if (names.length) {
+        setFetchedRoleNames(names)
+        setPeople((prev) => prev.map((p) => ({ ...p, role: p.role || names[0] })))
+      } else {
+        setFetchedRoleNames([])
+      }
+    }).catch(() => setFetchedRoleNames([]))
+  }, [fetchedRoleNames, localRoleNames.length])
 
   const confirmRead = (doc) => {
     setReadDocs((prev) => ({ ...prev, [doc]: true }))
@@ -70,8 +89,8 @@ export default function CompanyRegistration() {
 
   const addPerson = () =>
     setPeople((prev) => {
-      const roles = getConfiguredRoles().filter((r) => !r.perms?.settings).map((r) => r.name)
-      return [...prev, { name: '', email: '', role: roles[roles.length - 1] || '' }]
+      const roles = roleOptions.length ? roleOptions : getConfiguredRoles().filter((r) => !r.perms?.settings).map((r) => r.name)
+      return [...prev, { name: '', email: '', role: roles[roles.length - 1] || roles[0] || '' }]
     })
 
   const removePerson = (i) => setPeople((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev))

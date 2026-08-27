@@ -369,12 +369,12 @@ export default function SystemConfig() {
     flashSaved()
   }
 
-  const mutateRoles = (updater) =>
-    setRoles((prev) => {
-      const next = updater(prev)
-      saveRolesList(next)
-      return next
-    })
+  // Roles are edited locally and only persisted when Save is pressed.
+  const [initialRolesJson, setInitialRolesJson] = useState(() => JSON.stringify(getConfiguredRoles()))
+  const [savingRoles, setSavingRoles] = useState(false)
+  const rolesDirty = JSON.stringify(roles) !== initialRolesJson
+
+  const mutateRoles = (updater) => setRoles((prev) => updater(prev))
 
   const updateRoleName = (index, name) =>
     mutateRoles((prev) => prev.map((r, i) => (i === index ? { ...r, name } : r)))
@@ -382,10 +382,35 @@ export default function SystemConfig() {
   const addRole = () =>
     mutateRoles((prev) => [
       ...prev,
-      { name: '', users: 0, access: 'Custom scope', perms: { mainMenu: true, kiosk: true, settings: false } },
+      { name: '', users: 0, access: 'Custom scope', perms: { dashboard: true, timekeeping: true, tasks: true, payroll: true, employees: true, kiosk: true, settings: false } },
     ])
 
   const removeRole = (index) => mutateRoles((prev) => prev.filter((_, i) => i !== index))
+
+  const saveRoles = async () => {
+    if (!rolesDirty || savingRoles) return
+    // Do not save roles with blank names — require at least one visible character.
+    if (roles.some((r) => !r.name?.trim())) return
+    setSavingRoles(true)
+    try {
+      await saveRolesList(roles.map((r) => ({ ...r, name: r.name.trim() })))
+      const snap = JSON.stringify(roles.map((r) => ({ ...r, name: r.name.trim() })))
+      setInitialRolesJson(snap)
+      // Normalize draft to trimmed names so dirty check stays accurate.
+      setRoles((prev) => prev.map((r) => ({ ...r, name: r.name.trim() })))
+      flashSaved()
+    } finally {
+      setSavingRoles(false)
+    }
+  }
+
+  const discardRoles = () => {
+    try {
+      setRoles(JSON.parse(initialRolesJson))
+    } catch {
+      setRoles(getConfiguredRoles())
+    }
+  }
 
   const inputCls = 'mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10'
 
@@ -535,33 +560,62 @@ export default function SystemConfig() {
           )}
 
           {tab === 'roles' && (
-            <RolesPanel
-              roles={roles}
-              onAdd={addRole}
-              onRename={updateRoleName}
-              onRemove={removeRole}
-              onTogglePerm={(index, key, value) =>
-                mutateRoles((prev) =>
-                  prev.map((r, i) => {
-                    if (i !== index) return r
-                    const base = { ...(r.perms || {}) }
-                    if (key.includes('.')) {
-                      // nested path e.g. "actions.people.add"
-                      const parts = key.split('.')
-                      let node = base
-                      for (let p = 0; p < parts.length - 1; p++) {
-                        node[parts[p]] = { ...(node[parts[p]] || {}) }
-                        node = node[parts[p]]
+            <div className="space-y-5">
+              <RolesPanel
+                roles={roles}
+                onAdd={addRole}
+                onRename={updateRoleName}
+                onRemove={removeRole}
+                onTogglePerm={(index, key, value) =>
+                  mutateRoles((prev) =>
+                    prev.map((r, i) => {
+                      if (i !== index) return r
+                      const base = { ...(r.perms || {}) }
+                      if (key.includes('.')) {
+                        // nested path e.g. "actions.people.add"
+                        const parts = key.split('.')
+                        let node = base
+                        for (let p = 0; p < parts.length - 1; p++) {
+                          node[parts[p]] = { ...(node[parts[p]] || {}) }
+                          node = node[parts[p]]
+                        }
+                        node[parts[parts.length - 1]] = value
+                      } else {
+                        base[key] = value
                       }
-                      node[parts[parts.length - 1]] = value
-                    } else {
-                      base[key] = value
-                    }
-                    return { ...r, perms: base }
-                  })
-                )
-              }
-            />
+                      return { ...r, perms: base }
+                    })
+                  )
+                }
+              />
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-5">
+                <p className={`text-xs ${rolesDirty ? 'font-medium text-amber-600' : 'text-gray-400'}`}>
+                  {roles.some((r) => !r.name?.trim())
+                    ? 'Role names cannot be empty — fill in all names before saving.'
+                    : rolesDirty
+                      ? 'You have unsaved changes — edits, new roles or permission toggles will be lost until saved.'
+                      : 'All changes saved.'}
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={discardRoles}
+                    disabled={!rolesDirty || savingRoles}
+                    className={`rounded-lg border px-4 py-2 text-sm font-medium ${!rolesDirty || savingRoles ? 'cursor-not-allowed border-gray-200 text-gray-400' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    Discard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveRoles}
+                    disabled={!rolesDirty || savingRoles || roles.some((r) => !r.name?.trim())}
+                    className={`rounded-lg px-5 py-2 text-sm font-semibold shadow-sm ${!rolesDirty || savingRoles || roles.some((r) => !r.name?.trim()) ? 'cursor-not-allowed bg-gray-200 text-gray-400' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
+                  >
+                    {savingRoles ? 'Saving…' : 'Save changes'}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           {tab === 'email' && (

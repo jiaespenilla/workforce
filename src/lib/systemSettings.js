@@ -1,8 +1,8 @@
 import { api, apiEnabled } from './api'
 
 const DEFAULT_SETTINGS = {
-  name: 'Unified Workforce',
-  version: 'v2.4.1',
+  name: 'CadensIQ',
+  version: 'v0.1.0',
   timezone: '(GMT+08:00) Asia/Manila',
 }
 

@@ -75,12 +75,21 @@ export function getTeamRoleOptions() {
 export async function saveRolesList(roles) {
   if (apiEnabled()) {
     try {
-      // Sync each role to the server
+      // Delete roles that were removed locally (present on server but absent in the new list)
+      const prevIds = new Set((_serverRoles || loadLocalRoles()).filter((r) => r.id).map((r) => r.id))
+      const nextIds = new Set(roles.filter((r) => r.id).map((r) => r.id))
+      for (const id of prevIds) {
+        if (!nextIds.has(id)) {
+          try { await api(`/api/roles/${id}`, { method: 'DELETE' }) } catch { /* ignore */ }
+        }
+      }
+      // Upsert remaining roles
       for (const role of roles) {
+        if (!role.name?.trim()) continue
         if (role.id) {
-          await api(`/api/roles/${role.id}`, { method: 'PUT', body: { name: role.name, perms: role.perms } })
+          await api(`/api/roles/${role.id}`, { method: 'PUT', body: { name: role.name.trim(), perms: role.perms } })
         } else {
-          const created = await api('/api/roles', { method: 'POST', body: { name: role.name, perms: role.perms } })
+          const created = await api('/api/roles', { method: 'POST', body: { name: role.name.trim(), perms: role.perms } })
           role.id = created.id
         }
       }
@@ -88,8 +97,8 @@ export async function saveRolesList(roles) {
       // Fall back to local storage on error
     }
   }
-  _serverRoles = roles
-  localStorage.setItem('uw_roles', JSON.stringify(roles))
+  _serverRoles = roles.map((r) => ({ ...r, name: r.name?.trim() ?? r.name }))
+  localStorage.setItem('uw_roles', JSON.stringify(_serverRoles))
 }
 
 // Action-level permissions (Add / Edit / Delete per module). Absent = allowed.
