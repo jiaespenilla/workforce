@@ -157,8 +157,26 @@ export default {
         return await route(request, env)
       }
 
-      // Everything else → the React app (static assets, SPA fallback)
-      return env.ASSETS.fetch(request)
+      // Static assets (JS/CSS/images) → let Cloudflare cache them (fingerprinted filenames)
+      if (url.pathname.match(/\.\w{2,5}$/)) {
+        return env.ASSETS.fetch(request)
+      }
+
+      // HTML pages (/, /login, /register, etc.) → always fetch fresh, no CDN cache.
+      // This prevents stale "Unified Workforce" after deploys.
+      const assetRequest = new Request(request.url, request)
+      assetRequest.headers.set('Cache-Control', 'no-store')
+      const assetResponse = await env.ASSETS.fetch(assetRequest)
+      const body = await assetResponse.arrayBuffer()
+      return new Response(body, {
+        status: assetResponse.status,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Pragma': 'no-cache',
+          'CDN-Cache-Control': 'no-store',
+        },
+      })
     } catch (err) {
       return json({ error: err.message || 'Server error' }, err.status || 500)
     }
