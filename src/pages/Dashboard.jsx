@@ -305,11 +305,11 @@ function CeoDashboard({ user }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">CEO Overview</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900">Active Employees</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Active Employees</h1>
+          <p className="mt-1 text-sm leading-relaxed text-gray-500">
             {clockedInEmployees.length} currently clocked-in via kiosk · click an employee to view their tasks.
           </p>
         </div>
@@ -503,14 +503,15 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Main Menu</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
             Good {now.getHours() < 12 ? 'morning' : now.getHours() < 18 ? 'afternoon' : 'evening'}, {firstName}
           </h1>
-          <p className="mt-1 text-sm text-gray-500">Here's what's happening across your organization.</p>
+          <p className="mt-1 text-sm leading-relaxed text-gray-500">Here's what's happening across your organization.</p>
         </div>
-        <p className="text-sm font-medium text-gray-600 tabular-nums">
+        <p className="shrink-0 text-sm font-medium text-gray-600 tabular-nums">
           {now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })} ·{' '}
           <span className="text-brand-600">{now.toLocaleTimeString()}</span>
         </p>

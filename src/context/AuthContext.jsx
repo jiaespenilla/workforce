@@ -93,7 +93,7 @@ export function AuthProvider({ children }) {
       (company.owner?.email || '').trim().toLowerCase() === identifier ||
       company.employees[0]?.email?.trim().toLowerCase() === identifier
     // CEO access: registered as the account owner, has the CEO role, or is the first listed member.
-    const isOwner = identifierOwner || emp.role?.toLowerCase() === 'ceo'
+    const isOwner = identifierOwner || (emp.role || '').trim().toLowerCase() === 'ceo'
     const role = isOwner ? 'ceo' : 'employee'
 
     // Saved profile details override registration defaults.

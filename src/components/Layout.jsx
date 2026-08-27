@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getActiveSettings } from '../lib/systemSettings'
+import { getActiveSettings, isMaintenanceMode } from '../lib/systemSettings'
 import { getSystemIcon } from '../lib/documentMeta'
 import NotificationBell from './NotificationBell'
 import DefaultPasswordBanner from './DefaultPasswordBanner'
@@ -43,9 +43,16 @@ export { Logo }
 export default function Layout({ children }) {
   const [open, setOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [maintenance, setMaintenance] = useState(isMaintenanceMode())
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const settings = getActiveSettings()
+  const brandLetter = (settings.name || 'U').charAt(0).toUpperCase()
+
+  useEffect(() => {
+    const t = setInterval(() => setMaintenance(isMaintenanceMode()), 5000)
+    return () => clearInterval(t)
+  }, [])
 
   const links = (
     <>
@@ -173,21 +180,26 @@ export default function Layout({ children }) {
   return (
     <div className="min-h-screen bg-gray-100/60">
       <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 lg:px-8">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 lg:hidden" onClick={() => setOpen(!open)} aria-label="Toggle menu">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d={open ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'} />
             </svg>
           </button>
+          {getSystemIcon() ? <img src={getSystemIcon()} alt="" className="h-8 w-8 rounded-lg bg-white object-contain p-0.5 ring-1 ring-gray-200" /> : <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 font-bold text-sm text-white">{brandLetter}</div>}
           <div className="leading-tight">
             <p className="text-sm font-semibold text-gray-900">{settings.name}</p>
             <p className="text-[11px] text-gray-500">{user?.companyName || 'Workforce Management Suite'}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          {maintenance && (
+            <span className="hidden rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 ring-1 ring-red-200 md:inline">
+              Maintenance mode active
+            </span>
+          )}
           <NotificationBell />
-          <div className="mx-1 hidden h-8 w-px bg-gray-200 sm:block" />
-          <button onClick={() => navigate('/profile')} className="flex items-center gap-2.5 rounded-full p-0.5 pr-1 transition hover:bg-gray-100">
+          <button onClick={() => navigate('/profile')} className="flex items-center gap-2.5 rounded-full p-0.5 pr-2 transition hover:bg-gray-100">
             <div className="hidden text-right leading-tight sm:block">
               <p className="text-xs font-semibold text-gray-800">{user?.name}</p>
               <p className="text-[11px] text-gray-500">{user?.roleLabel}</p>

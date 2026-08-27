@@ -67,9 +67,12 @@ function EmployeeTasks({ name }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">My Tasks</h1>
-        <p className="mt-1 text-sm text-gray-500">Tasks assigned to you. Drag cards between columns to update progress.</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Main Menu</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">My Tasks</h1>
+          <p className="mt-1 text-sm leading-relaxed text-gray-500">Tasks assigned to you. Drag cards between columns to update progress.</p>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">

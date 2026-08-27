@@ -242,7 +242,8 @@ async function route(request, env) {
     ).run()
     for (const emp of body.employees || []) {
       await insertEmployee(env, id, emp)
-      await ensureUser(env, emp.email, emp.name, 'employee', DEFAULT_EMPLOYEE_PASSWORD)
+      const roleForUser = (emp.role || '').trim().toLowerCase() === 'ceo' ? 'ceo' : 'employee'
+      await ensureUser(env, emp.email, emp.name, roleForUser, DEFAULT_EMPLOYEE_PASSWORD)
     }
     await queueNotification(env, {
       to: NOTIFICATION_RECIPIENT,
@@ -370,8 +371,9 @@ async function apiRoutes(path, method, request, env, url, claims) {
     ).run()
     for (const emp of body.employees || []) {
       await insertEmployee(env, id, emp)
-      // Every registered team member gets a login account with the default password.
-      await ensureUser(env, emp.email, emp.name, 'employee', DEFAULT_EMPLOYEE_PASSWORD)
+      // Every registered team member gets a login account — respect CEO role
+      const roleForUser = (emp.role || '').trim().toLowerCase() === 'ceo' ? 'ceo' : 'employee'
+      await ensureUser(env, emp.email, emp.name, roleForUser, DEFAULT_EMPLOYEE_PASSWORD)
     }
     // Notify the administrator recipient about the new registration.
     await queueNotification(env, {
@@ -408,7 +410,8 @@ async function apiRoutes(path, method, request, env, url, claims) {
     if (m && method === 'POST') {
       const emp = await readJson(request)
       await insertEmployee(env, m[1], emp)
-      await ensureUser(env, emp.email, emp.name, 'employee', DEFAULT_EMPLOYEE_PASSWORD)
+      const roleForUser = (emp.role || '').trim().toLowerCase() === 'ceo' ? 'ceo' : 'employee'
+      await ensureUser(env, emp.email, emp.name, roleForUser, DEFAULT_EMPLOYEE_PASSWORD)
       return json({ ok: true }, 201)
     }
   }
@@ -424,6 +427,14 @@ async function apiRoutes(path, method, request, env, url, claims) {
         } catch {
           await env.DB.prepare('UPDATE employees SET name = COALESCE(?, name), role = COALESCE(?, role), active = COALESCE(?, active) WHERE id = ?')
             .bind(body.name ?? null, body.role ?? null, body.active === undefined ? null : body.active ? 1 : 0, Number(m[1])).run()
+        }
+        // Sync users.role when role changes (CEO vs Employee) — keep login correct
+        if (body.role !== undefined) {
+          const roleForUser = (body.role || '').trim().toLowerCase() === 'ceo' ? 'ceo' : 'employee'
+          const empRow = await env.DB.prepare('SELECT email FROM employees WHERE id = ?').bind(Number(m[1])).first()
+          if (empRow?.email) {
+            await env.DB.prepare('UPDATE users SET role = ? WHERE lower(email) = lower(?)').bind(roleForUser, empRow.email).run()
+          }
         }
         return json({ ok: true })
       }

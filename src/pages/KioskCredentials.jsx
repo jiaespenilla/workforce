@@ -80,13 +80,15 @@ export default function KioskCredentials() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Time Kiosk</p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900">Kiosk Credentials</h1>
-        <p className="mt-1 text-sm text-gray-500">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Main Menu</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Kiosk Credentials</h1>
+          <p className="mt-1 text-sm leading-relaxed text-gray-500">
           Register how <span className="font-semibold">{user.name}</span> is identified at the time kiosk —
           fingerprint, PIN or QR badge. Once registered, you no longer select your name on the kiosk.
         </p>
+        </div>
       </div>
 
       {error && (
