@@ -69,8 +69,9 @@ export default function ShiftSchedules() {
   const inputCls = 'mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10'
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 sm:px-0">
-      <div className="space-y-3">
+    <div className="space-y-6">
+      {/* Header — aligned with Companies / System Config / My Profile (space-y-6, no extra max-w, inherits AdminLayout max-w-6xl) */}
+      <div className="flex flex-col gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Main Menu</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Shift Schedules</h1>
@@ -79,7 +80,7 @@ export default function ShiftSchedules() {
             based on the employee's assigned shift.
           </p>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
           <label className="block text-sm">
             <span className="font-medium text-gray-700">Company:</span>
             <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className={`${inputCls} mt-2 min-h-[44px]`}>
