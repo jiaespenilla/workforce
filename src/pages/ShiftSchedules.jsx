@@ -20,11 +20,12 @@ export default function ShiftSchedules() {
   useEffect(() => {
     if (apiEnabled()) {
       api('/api/companies').then((all) => {
-        setCompanies(all)
-        if (all.length > 0) setCompanyId(all[0].id)
-      }).catch(() => setCompanies(loadRegisteredCompanies()))
+        const active = all.filter((c) => c.active !== false)
+        setCompanies(active)
+        if (active.length > 0) setCompanyId(active[0].id)
+      }).catch(() => setCompanies(loadRegisteredCompanies().filter((c)=>c.active!==false)))
     } else {
-      setCompanies(loadRegisteredCompanies())
+      setCompanies(loadRegisteredCompanies().filter((c)=>c.active!==false))
     }
   }, [])
 

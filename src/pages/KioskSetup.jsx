@@ -53,9 +53,18 @@ function QrGlyph({ className }) {
 
 export default function KioskSetup() {
   usePageTitle('Kiosk Setup')
-  const companies = getActiveCompanies()
-  const [configCompanyId, setConfigCompanyId] = useState(companies[0]?.id || '')
-  const [config, setConfig] = useState(() => loadKioskConfig(companies[0]?.id))
+  const [companies, setCompanies] = useState(() => getActiveCompanies())
+  const [configCompanyId, setConfigCompanyId] = useState(() => getActiveCompanies()[0]?.id || '')
+  const [config, setConfig] = useState(() => loadKioskConfig(getActiveCompanies()[0]?.id))
+
+  useEffect(() => {
+    if (!apiEnabled()) return
+    api('/api/companies').then((all)=>{
+      const active = all.filter((c)=>c.active!==false)
+      setCompanies(active)
+      if (active.length && !active.find((c)=>c.id===configCompanyId)) setConfigCompanyId(active[0].id)
+    }).catch(()=>{})
+  }, [])
   const [saved, setSaved] = useState(false)
 
   // Credential registration state
@@ -71,6 +80,14 @@ export default function KioskSetup() {
   const [qrImg, setQrImg] = useState(null)
   const [qrCodeStr, setQrCodeStr] = useState(null)
   const [credError, setCredError] = useState(null)
+
+  // Keep credential company in sync when active list refreshes (cloud mode)
+  useEffect(() => {
+    if (companies.length && !companies.find((c)=>c.id===credCompanyId)) {
+      setCredCompanyId(companies[0].id)
+      setCredEmail('')
+    }
+  }, [companies, credCompanyId])
 
   useEffect(() => {
     setFpStatus(null); setPinStatus(null); setQrImg(null); setQrCodeStr(null); setCredError(null)
