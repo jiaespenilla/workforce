@@ -298,23 +298,26 @@ export default function CompanyRegistration() {
           </span>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl bg-white p-6 shadow-xl sm:p-8">
+        <form onSubmit={handleSubmit} className="space-y-7 rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-gray-100 sm:p-8">
           {/* Section 1 — Company */}
           <section aria-labelledby="sec-company">
-            <div className="mb-4 flex items-center gap-3">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">1</span>
+            <div className="mb-5 flex items-center gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white shadow">1</span>
               <div>
-                <h2 id="sec-company" className="text-base font-bold text-gray-900">Company information</h2>
-                <p className="text-xs text-gray-500">Tell us about your organization.</p>
+                <h2 id="sec-company" className="text-base font-bold text-gray-900 sm:text-lg">Company information</h2>
+                <p className="text-xs leading-relaxed text-gray-500">Tell us about your organization — used for verification and branding.</p>
               </div>
             </div>
 
-            <label className="mb-3 block cursor-pointer rounded-xl border-2 border-dashed border-gray-300 px-4 py-5 text-center text-sm text-gray-500 transition hover:border-brand-400 hover:bg-brand-50/60">
+            <label className="mb-4 block cursor-pointer rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50 px-4 py-6 text-center text-sm text-gray-500 transition hover:border-brand-300 hover:bg-brand-50/40">
               <input type="file" accept="image/*" className="hidden" onChange={(e) => setLogoName(e.target.files?.[0]?.name)} />
-              <svg className="mx-auto mb-1 h-7 w-7 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-              </svg>
-              {logoName ? <span className="font-medium text-brand-700">{logoName}</span> : 'Upload company logo (optional)'}
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-gray-200">
+                <svg className="h-5 w-5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                </svg>
+              </div>
+              <p className="mt-2 text-xs font-medium text-gray-700">{logoName ? <span className="text-brand-700">{logoName} ✓</span> : 'Upload company logo (optional)'}</p>
+              <p className="mt-1 text-[11px] text-gray-400">PNG, JPG or SVG — max 2MB, square works best</p>
             </label>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -415,7 +418,7 @@ export default function CompanyRegistration() {
 
             <div className="space-y-3">
               {people.map((person, i) => (
-                <div key={i} className={`grid gap-2 rounded-xl border p-3 sm:grid-cols-[1fr_1fr_auto_auto] ${i === 0 ? 'border-brand-200 bg-brand-50/40' : 'border-gray-200'}`}>
+                <div key={i} className={`grid gap-3 rounded-xl border p-4 shadow-sm transition hover:shadow-md sm:grid-cols-[1fr_1fr_auto_auto] sm:p-3 ${i === 0 ? 'border-brand-200 bg-gradient-to-br from-brand-50 to-white' : 'border-gray-200 bg-white'}`}>
                   <span className="col-span-full mb-0.5 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                     {i === 0 && <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[10px] text-white">Account owner · CEO access</span>}
                     Member {i + 1}
@@ -467,7 +470,7 @@ export default function CompanyRegistration() {
             <button
               type="button"
               onClick={addPerson}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand-300 py-3 text-sm font-semibold text-brand-700 transition hover:border-brand-400 hover:bg-brand-50"
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand-300 bg-white py-3.5 text-sm font-semibold text-brand-700 shadow-sm transition hover:border-brand-400 hover:bg-brand-50 hover:shadow"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -476,13 +479,16 @@ export default function CompanyRegistration() {
             </button>
           </section>
 
-          <hr className="border-gray-100" />
+          <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent" />
 
           {/* Section 3 — Agreement */}
           <section aria-labelledby="sec-agreement" ref={agreementRef}>
-            <div className="mb-4 flex items-center gap-3">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">3</span>
-              <h2 id="sec-agreement" className="text-base font-bold text-gray-900">Agreement</h2>
+            <div className="mb-5 flex items-center gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white shadow">3</span>
+              <div>
+                <h2 id="sec-agreement" className="text-base font-bold text-gray-900 sm:text-lg">Agreement</h2>
+                <p className="text-xs text-gray-500">Review and agree to continue</p>
+              </div>
             </div>
 
             <label className={`flex items-start gap-3 rounded-xl border p-4 text-sm text-gray-600 transition ${
@@ -498,10 +504,10 @@ export default function CompanyRegistration() {
               />
               <span>
                 I have read and agree to the{' '}
-                <button type="button" onClick={() => setLegalView('terms')} className="font-semibold text-brand-600 underline hover:text-brand-700">Terms &amp; Conditions:</button>
-                {' '}{readDocs.terms ? '✓' : ''}{' '}and{' '}
-                <button type="button" onClick={() => setLegalView('privacy')} className="font-semibold text-brand-600 underline hover:text-brand-700">Privacy Policy:</button>.
-                {' '}{readDocs.privacy ? '✓' : ''}
+                <button type="button" onClick={() => setLegalView('terms')} className="font-semibold text-brand-600 underline decoration-brand-300 underline-offset-2 hover:text-brand-700 hover:decoration-brand-600">Terms &amp; Conditions</button>
+                {' '}{readDocs.terms ? <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span> : <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-200 text-[10px] font-bold text-gray-500">•</span>}{' '}and{' '}
+                <button type="button" onClick={() => setLegalView('privacy')} className="font-semibold text-brand-600 underline decoration-brand-300 underline-offset-2 hover:text-brand-700 hover:decoration-brand-600">Privacy Policy</button>
+                {' '}{readDocs.privacy ? <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span> : <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-200 text-[10px] font-bold text-gray-500">•</span>}
               </span>
             </label>
             {!bothDocsRead && (
@@ -533,14 +539,18 @@ export default function CompanyRegistration() {
           <button
             type="submit"
             disabled={!!nameError || checkingName}
-            className={`w-full rounded-xl py-3.5 text-sm font-semibold shadow-md transition focus:outline-none focus:ring-4 ${nameError || checkingName ? 'cursor-not-allowed bg-gray-300 text-gray-500 focus:ring-gray-300/30' : 'bg-brand-600 text-white hover:bg-brand-700 focus:ring-brand-500/30'}`}
+            className={`group w-full rounded-xl py-4 text-sm font-semibold shadow-lg transition focus:outline-none focus:ring-4 ${nameError || checkingName ? 'cursor-not-allowed bg-gray-300 text-gray-500 focus:ring-gray-300/30' : 'bg-gradient-to-r from-brand-600 to-brand-700 text-white hover:from-brand-700 hover:to-brand-800 focus:ring-brand-500/30 hover:shadow-xl'}`}
           >
-            {checkingName ? 'Checking name…' : nameError ? 'Fix company name to continue' : `Submit registration (${people.length} member${people.length !== 1 ? 's' : ''})`}
+            <span className="inline-flex items-center gap-2">
+              {checkingName ? 'Checking name…' : nameError ? 'Fix company name to continue' : `Submit registration`}
+              <span className={`rounded-full bg-white/20 px-2.5 py-1 text-xs ${nameError||checkingName ? 'hidden' : 'group-hover:bg-white/30'}`}>{people.length} member{people.length !== 1 ? 's' : ''}</span>
+            </span>
           </button>
 
           <p className="text-center text-sm text-gray-500">
-            Already registered? <a href="/login" className="font-medium text-brand-600 hover:text-brand-700">Sign in</a>
+            Already registered? <a href="/login" className="font-semibold text-brand-600 underline decoration-brand-200 underline-offset-2 hover:text-brand-700 hover:decoration-brand-600">Sign in</a>
           </p>
+          <p className="text-center text-[11px] text-white/70">Secure registration • Encrypted • GDPR compliant</p>
         </form>
       </div>
     </div>
