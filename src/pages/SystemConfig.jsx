@@ -394,7 +394,7 @@ function StatusPanel({ settings }) {
       <div className="rounded-xl border border-red-200 bg-red-50/50 p-5">
         <h3 className="text-sm font-bold text-red-800">Danger Zone</h3>
         <p className="mt-1 text-xs leading-relaxed text-red-700">
-          Reset will permanently delete all companies, employees, tasks, attendance, notifications, shift schedules, locations and kiosk configs. System settings, roles and user logins are kept. This cannot be undone.
+          Reset will permanently delete all companies, employees, tasks, attendance, notifications, shift schedules, locations and kiosk configs. System settings and roles are kept, and all company login accounts are removed — only the administrator and platform CEO can sign in afterward. This cannot be undone.
         </p>
         {resetSuccess ? (
           <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">All data reset — reloading…</p>
@@ -416,7 +416,7 @@ function StatusPanel({ settings }) {
               <li>{tasks.length} tasks, {notifications.length} notifications, attendance &amp; credentials</li>
               <li>Shift schedules, locations, kiosk configs (per-company)</li>
             </ul>
-            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 ring-1 ring-amber-200">System name, version, roles and admin logins will be kept.</p>
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 ring-1 ring-amber-200">System name, version, roles and the administrator login will be kept. All company login accounts are removed.</p>
 
             <label className="mt-4 flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
               <input type="checkbox" checked={confirmChecked} onChange={(e)=>setConfirmChecked(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500" />
