@@ -92,9 +92,16 @@ async function readJson(request) {
 
 /* ---------------- lazy seed ---------------- */
 
+let seedVerified = false
+
 async function ensureSeed(env) {
+  // Per-isolate memo: after the first successful check we skip the COUNT query.
+  if (seedVerified) return
   const { count } = await env.DB.prepare('SELECT COUNT(*) AS count FROM users').first()
-  if (count > 0) return
+  if (count > 0) {
+    seedVerified = true
+    return
+  }
 
   async function addUser(email, name, role, password) {
     const salt = crypto.randomUUID()
@@ -336,7 +343,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
     const m = path.match(/^\/api\/roles\/(\d+)$/)
     if (m && method === 'PUT') {
       const { name, perms } = await readJson(request)
-      await env.DB.prepare('UPDATE roles SET name = ?, perms_json = ? WHERE id = ?').bind(name ?? '', JSON.stringify(perms ?? {}), Number(m[1])).run()
+      await env.DB.prepare('UPDATE roles SET name = COALESCE(?, name), perms_json = COALESCE(?, perms_json) WHERE id = ?').bind(name ?? null, perms === undefined ? null : JSON.stringify(perms ?? {}), Number(m[1])).run()
       return json({ ok: true })
     }
     if (m && method === 'DELETE') {
@@ -351,40 +358,9 @@ async function apiRoutes(path, method, request, env, url, claims) {
     const employeeRows = await env.DB.prepare('SELECT * FROM employees').all().then((r) => r.results)
     return json(companyRows.map((row) => mapCompany(row, employeeRows)))
   }
-  if (path === '/api/companies' && method === 'POST') {
-    const body = await readJson(request)
-    const trimmedName = (body.name || '').trim()
-    if (trimmedName) {
-      const dup = await env.DB.prepare('SELECT id, name FROM companies WHERE lower(name) = lower(?) LIMIT 1').bind(trimmedName).first()
-      if (dup) return json({ error: `Company name "${dup.name}" is already registered. Please choose a different name.` }, 409)
-    }
-    const id = body.id || `reg-${Date.now()}`
-    await env.DB.prepare(
-      `INSERT INTO companies (id, name, industry, address, city, contact_phone, contact_email, logo_name, status, active, owner_name, owner_title, owner_email, registered)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      id, trimmedName || 'Unnamed Company', body.industry || null, body.address || null, body.city || null,
-      body.contactPhone || null, body.contactEmail || null, body.logoName || null,
-      body.status || 'pending', body.active === false ? 0 : 1,
-      body.owner?.name || null, body.owner?.title || null, body.owner?.email || null,
-      body.registered || new Date().toISOString().slice(0, 10)
-    ).run()
-    for (const emp of body.employees || []) {
-      await insertEmployee(env, id, emp)
-      // Every registered team member gets a login account — respect CEO role
-      const roleForUser = (emp.role || '').trim().toLowerCase() === 'ceo' ? 'ceo' : 'employee'
-      await ensureUser(env, emp.email, emp.name, roleForUser, DEFAULT_EMPLOYEE_PASSWORD)
-    }
-    // Notify the administrator recipient about the new registration.
-    await queueNotification(env, {
-      to: NOTIFICATION_RECIPIENT,
-      subject: `New company registration: ${body.name || 'Unnamed Company'}`,
-      body: `Company: ${body.name}\nIndustry: ${body.industry}\nRegistered: ${body.registered}\nTeam size: ${(body.employees || []).length}`,
-    })
-    const employeeRows = await env.DB.prepare('SELECT * FROM employees WHERE company_id = ?').bind(id).all().then((r) => r.results)
-    const row = await env.DB.prepare('SELECT * FROM companies WHERE id = ?').bind(id).first()
-    return json(mapCompany(row, employeeRows), 201)
-  }
+  // NOTE: POST /api/companies is handled by the public registration route above
+  // (it must run before requireAuth). No authenticated company-creation route.
+
   {
     const m = path.match(/^\/api\/companies\/([^/]+)$/)
     if (m && method === 'PUT') {
@@ -630,19 +606,22 @@ async function apiRoutes(path, method, request, env, url, claims) {
     if (!isAdmin) return json({ error: 'Forbidden — administrator only.' }, 403)
     const body = await readJson(request)
     if ((body.confirm || '').trim() !== 'RESET') return json({ error: 'Confirmation must be exactly RESET.' }, 400)
-    await env.DB.prepare('DELETE FROM attendance').run()
-    await env.DB.prepare('DELETE FROM employee_credentials').run()
-    await env.DB.prepare('DELETE FROM employees').run()
-    await env.DB.prepare('DELETE FROM companies').run()
-    await env.DB.prepare('DELETE FROM tasks').run()
-    await env.DB.prepare('DELETE FROM notifications').run()
-    // Remove all company login accounts so wiped companies can't still sign in.
-    // Keep only the platform accounts (administrator + platform CEO).
-    await env.DB.prepare(
-      "DELETE FROM users WHERE role <> 'administrator' AND lower(email) <> lower(?)"
-    ).bind(CEO_EMAIL).run()
-    // Clear per-company blobs stored in settings (shifts, locations, kiosk configs)
-    await env.DB.prepare("DELETE FROM settings WHERE key IN ('shift_schedules','company_locations','kiosk_configs')").run()
+    // One atomic D1 batch — every wipe succeeds or none does.
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM attendance'),
+      env.DB.prepare('DELETE FROM employee_credentials'),
+      env.DB.prepare('DELETE FROM employees'),
+      env.DB.prepare('DELETE FROM companies'),
+      env.DB.prepare('DELETE FROM tasks'),
+      env.DB.prepare('DELETE FROM notifications'),
+      // Remove all company login accounts so wiped companies can't still sign in.
+      // Keep only the platform accounts (administrator + platform CEO).
+      env.DB.prepare(
+        "DELETE FROM users WHERE role <> 'administrator' AND lower(email) <> lower(?)"
+      ).bind(CEO_EMAIL),
+      // Clear per-company blobs stored in settings (shifts, locations, kiosk configs)
+      env.DB.prepare("DELETE FROM settings WHERE key IN ('shift_schedules','company_locations','kiosk_configs')"),
+    ])
     return json({ ok: true, message: 'All tenant data reset.' })
   }
 
