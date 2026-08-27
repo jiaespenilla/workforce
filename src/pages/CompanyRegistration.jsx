@@ -43,6 +43,9 @@ export default function CompanyRegistration() {
   usePageTitle('Company Registration')
   const [logoName, setLogoName] = useState(null)
   const [submitted, setSubmitted] = useState(false)
+  const [companyName, setCompanyName] = useState('')
+  const [nameError, setNameError] = useState('')
+  const [checkingName, setCheckingName] = useState(false)
   const [people, setPeople] = useState(() => {
     const roles = getConfiguredRoles().filter((r) => !r.perms?.settings).map((r) => r.name)
     return [{ name: '', email: '', role: roles[0] || '' }]
@@ -76,6 +79,36 @@ export default function CompanyRegistration() {
       }
     }).catch(() => setFetchedRoleNames([]))
   }, [fetchedRoleNames, localRoleNames.length])
+
+  // Live duplicate company-name check — debounced, case-insensitive.
+  // Cloud mode hits public /api/companies/check; local mode checks localStorage.
+  useEffect(() => {
+    const trimmed = companyName.trim()
+    if (!trimmed || trimmed.length < 2) {
+      setNameError('')
+      setCheckingName(false)
+      return
+    }
+    setCheckingName(true)
+    const t = setTimeout(async () => {
+      try {
+        if (apiEnabled()) {
+          const res = await api(`/api/companies/check?name=${encodeURIComponent(trimmed)}`)
+          if (res.exists) setNameError(`"${trimmed}" is already registered. Please choose a different company name.`)
+          else setNameError('')
+        } else {
+          const { loadRegisteredCompanies } = await import('../lib/companies')
+          const exists = loadRegisteredCompanies().some((c) => (c.name || '').trim().toLowerCase() === trimmed.toLowerCase())
+          setNameError(exists ? `"${trimmed}" is already registered. Please choose a different company name.` : '')
+        }
+      } catch {
+        setNameError('')
+      } finally {
+        setCheckingName(false)
+      }
+    }, 400)
+    return () => clearTimeout(t)
+  }, [companyName])
 
   const confirmRead = (doc) => {
     setReadDocs((prev) => ({ ...prev, [doc]: true }))
@@ -175,10 +208,33 @@ export default function CompanyRegistration() {
       emails.add(m.email)
     }
 
+    // Final duplicate-name guard before submit (covers race + local mode)
+    const trimmedCompanyName = (companyName || data.companyName || '').trim()
+    if (!trimmedCompanyName) {
+      alert('Company name is required.')
+      return
+    }
+    if (nameError) {
+      alert(nameError)
+      return
+    }
+    // Local-mode synchronous duplicate check as last guard
+    if (!apiEnabled()) {
+      try {
+        const { loadRegisteredCompanies } = await import('../lib/companies')
+        if (loadRegisteredCompanies().some((c) => (c.name || '').trim().toLowerCase() === trimmedCompanyName.toLowerCase())) {
+          const msg = `"${trimmedCompanyName}" is already registered. Please choose a different company name.`
+          setNameError(msg)
+          alert(msg)
+          return
+        }
+      } catch { /* ignore */ }
+    }
+
     const ceo = members.find((m) => m.role === 'CEO') || members[0]
     const company = {
       id: `reg-${Date.now()}`,
-      name: data.companyName || 'Unnamed Company',
+      name: trimmedCompanyName || 'Unnamed Company',
       industry: data.industry,
       address: data.address,
       city: data.city,
@@ -196,6 +252,8 @@ export default function CompanyRegistration() {
       try {
         await api('/api/companies', { method: 'POST', body: company })
       } catch (err) {
+        // Server returns 409 for duplicate names — surface as inline error
+        if (err.status === 409) setNameError(err.message)
         alert(`Registration failed to save: ${err.message}`)
         return
       }
@@ -262,7 +320,27 @@ export default function CompanyRegistration() {
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-sm sm:col-span-2">
                 <span className="font-medium text-gray-700">Company name: *</span>
-                <input name="companyName" required placeholder="Acme Corporation" className={`mt-1 ${inputCls}`} />
+                <input
+                  name="companyName"
+                  required
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="Acme Corporation"
+                  aria-invalid={!!nameError}
+                  aria-describedby={nameError ? 'company-name-error' : undefined}
+                  className={`mt-1 ${inputCls} ${nameError ? 'border-red-300 focus:border-red-500 focus:ring-red-500/10' : ''} ${checkingName ? 'bg-gray-50' : ''}`}
+                />
+                {checkingName && !nameError && (
+                  <span className="mt-1 block text-xs text-gray-400">Checking availability…</span>
+                )}
+                {nameError && (
+                  <span id="company-name-error" className="mt-1 block rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700 ring-1 ring-red-200">
+                    {nameError}
+                  </span>
+                )}
+                {!nameError && !checkingName && companyName.trim().length >= 2 && (
+                  <span className="mt-1 block text-xs font-medium text-emerald-600">✓ Company name is available</span>
+                )}
               </label>
               <label className="block text-sm sm:col-span-2">
                 <span className="font-medium text-gray-700">Address: *</span>
@@ -454,9 +532,10 @@ export default function CompanyRegistration() {
 
           <button
             type="submit"
-            className="w-full rounded-xl bg-brand-600 py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-500/30"
+            disabled={!!nameError || checkingName}
+            className={`w-full rounded-xl py-3.5 text-sm font-semibold shadow-md transition focus:outline-none focus:ring-4 ${nameError || checkingName ? 'cursor-not-allowed bg-gray-300 text-gray-500 focus:ring-gray-300/30' : 'bg-brand-600 text-white hover:bg-brand-700 focus:ring-brand-500/30'}`}
           >
-            Submit registration ({people.length} member{people.length !== 1 ? 's' : ''})
+            {checkingName ? 'Checking name…' : nameError ? 'Fix company name to continue' : `Submit registration (${people.length} member${people.length !== 1 ? 's' : ''})`}
           </button>
 
           <p className="text-center text-sm text-gray-500">

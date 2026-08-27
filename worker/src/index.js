@@ -216,12 +216,17 @@ async function route(request, env) {
   // Must run before requireAuth, otherwise unauthenticated POST returns 401 "Unauthorized".
   if (path === '/api/companies' && method === 'POST') {
     const body = await readJson(request)
+    const trimmedName = (body.name || '').trim()
+    if (trimmedName) {
+      const dup = await env.DB.prepare('SELECT id, name FROM companies WHERE lower(name) = lower(?) LIMIT 1').bind(trimmedName).first()
+      if (dup) return json({ error: `Company name "${dup.name}" is already registered. Please choose a different name.` }, 409)
+    }
     const id = body.id || `reg-${Date.now()}`
     await env.DB.prepare(
       `INSERT INTO companies (id, name, industry, address, city, contact_phone, contact_email, logo_name, status, active, owner_name, owner_title, owner_email, registered)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
-      id, body.name || 'Unnamed Company', body.industry || null, body.address || null, body.city || null,
+      id, trimmedName || 'Unnamed Company', body.industry || null, body.address || null, body.city || null,
       body.contactPhone || null, body.contactEmail || null, body.logoName || null,
       body.status || 'pending', body.active === false ? 0 : 1,
       body.owner?.name || null, body.owner?.title || null, body.owner?.email || null,
@@ -239,6 +244,14 @@ async function route(request, env) {
     const employeeRows = await env.DB.prepare('SELECT * FROM employees WHERE company_id = ?').bind(id).all().then((r) => r.results)
     const row = await env.DB.prepare('SELECT * FROM companies WHERE id = ?').bind(id).first()
     return json(mapCompany(row, employeeRows), 201)
+  }
+
+  // Public duplicate-name check for registration — lightweight, no auth needed.
+  if (path === '/api/companies/check' && method === 'GET') {
+    const name = (url.searchParams.get('name') || '').trim()
+    if (!name) return json({ exists: false })
+    const row = await env.DB.prepare('SELECT id FROM companies WHERE lower(name) = lower(?) LIMIT 1').bind(name).first()
+    return json({ exists: !!row, name })
   }
 
   // Public roles for the registration form (unauthenticated users need to pick a role).
@@ -331,12 +344,17 @@ async function apiRoutes(path, method, request, env, url, claims) {
   }
   if (path === '/api/companies' && method === 'POST') {
     const body = await readJson(request)
+    const trimmedName = (body.name || '').trim()
+    if (trimmedName) {
+      const dup = await env.DB.prepare('SELECT id, name FROM companies WHERE lower(name) = lower(?) LIMIT 1').bind(trimmedName).first()
+      if (dup) return json({ error: `Company name "${dup.name}" is already registered. Please choose a different name.` }, 409)
+    }
     const id = body.id || `reg-${Date.now()}`
     await env.DB.prepare(
       `INSERT INTO companies (id, name, industry, address, city, contact_phone, contact_email, logo_name, status, active, owner_name, owner_title, owner_email, registered)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
-      id, body.name || 'Unnamed Company', body.industry || null, body.address || null, body.city || null,
+      id, trimmedName || 'Unnamed Company', body.industry || null, body.address || null, body.city || null,
       body.contactPhone || null, body.contactEmail || null, body.logoName || null,
       body.status || 'pending', body.active === false ? 0 : 1,
       body.owner?.name || null, body.owner?.title || null, body.owner?.email || null,
