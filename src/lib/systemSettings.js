@@ -6,7 +6,28 @@ const DEFAULT_SETTINGS = {
   timezone: '(GMT+08:00) Asia/Manila',
 }
 
+// In-memory cache populated at startup in cloud mode.
+let _serverSettings = null
+
+// Pre-fetch server settings once at startup so getActiveSettings() returns
+// correct data immediately (no flash of default values).
+export async function prefetchServerSettings() {
+  if (!apiEnabled()) return
+  try {
+    const s = await api('/api/settings')
+    _serverSettings = {
+      ...(s.system_name ? { name: s.system_name } : {}),
+      ...(s.version ? { version: s.version } : {}),
+      ...(s.timezone ? { timezone: s.timezone } : {}),
+    }
+    localStorage.setItem('uw_system_settings', JSON.stringify(_serverSettings))
+  } catch {
+    // offline — keep localStorage or defaults
+  }
+}
+
 export function getActiveSettings() {
+  if (_serverSettings) return { ...DEFAULT_SETTINGS, ..._serverSettings }
   try {
     return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('uw_system_settings')) }
   } catch {
@@ -67,7 +88,8 @@ export async function syncSystemSettingsFromServer() {
       ...(s.timezone ? { timezone: s.timezone } : {}),
     }
     if (!Object.keys(mapped).length) return
-    localStorage.setItem('uw_system_settings', JSON.stringify({ ...getActiveSettings(), ...mapped }))
+    _serverSettings = mapped
+    localStorage.setItem('uw_system_settings', JSON.stringify(mapped))
   } catch {
     /* offline or unauthenticated — keep local settings */
   }
