@@ -280,7 +280,6 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
 
         {tab === 'employees' && (
           <div className="p-6">
-            <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">Admin edit mode — change <span className="font-semibold">Role</span>, <span className="font-semibold">Location</span> or <span className="font-semibold">Active</span> then Save. Changes apply immediately.</div>
             <table className="w-full text-left text-sm">
               <thead className="text-xs uppercase tracking-wide text-gray-500">
                 <tr>
@@ -299,34 +298,51 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
                     return (
                       <tr key={emp.email}>
                         <td className="py-3" colSpan={5}>
-                          <div className="flex flex-wrap items-end gap-2 rounded-lg border border-brand-200 bg-brand-50/60 p-3">
-                            <div className="min-w-[120px] flex-1">
-                              <p className="text-xs font-medium text-gray-700">{emp.name}</p>
-                              <p className="text-[11px] text-gray-500">{emp.email}</p>
+                          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-gray-900">Edit {emp.name}</p>
+                                <p className="text-xs text-gray-500">{emp.email}</p>
+                              </div>
+                              <button type="button" onClick={()=>setEditingEmpEmail(null)} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
                             </div>
-                            <label className="text-xs">Role
-                              <select value={editRole} onChange={(e)=>setEditRole(e.target.value)} className="ml-1 rounded border border-gray-300 px-2 py-1 text-xs">
-                                {roleOptions.map((r)=><option key={r}>{r}</option>)}
-                                {!roleOptions.includes(editRole) && editRole && <option>{editRole}</option>}
-                              </select>
-                            </label>
-                            <label className="text-xs">Location
-                              <select value={editLocId} onChange={(e)=>setEditLocId(e.target.value)} className="ml-1 rounded border border-gray-300 px-2 py-1 text-xs">
-                                <option value="">—</option>
-                                {locations.map((l)=><option key={l.id} value={l.id}>{l.name}</option>)}
-                              </select>
-                            </label>
-                            <label className="flex items-center gap-1 text-xs">
-                              <input type="checkbox" checked={editActive} onChange={(e)=>setEditActive(e.target.checked)} className="rounded" /> Active
-                            </label>
-                            <button type="button" onClick={()=>{
-                              const loc = locations.find((l)=>l.id===editLocId)
-                              onEditEmployee(company.id, emp.email, { role: editRole, locationId: editLocId || null, location: loc?.name || editLocId || null, active: editActive })
-                              setEditingEmpEmail(null)
-                              setEmpSaveMsg(`${emp.name} updated`)
-                              setTimeout(()=>setEmpSaveMsg(''), 3000)
-                            }} className="rounded bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white">Save</button>
-                            <button type="button" onClick={()=>setEditingEmpEmail(null)} className="rounded border border-gray-300 px-3 py-1.5 text-xs">Cancel</button>
+                            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                              <label className="block text-xs">
+                                <span className="font-medium text-gray-700">Role</span>
+                                <select value={editRole} onChange={(e)=>setEditRole(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20">
+                                  {roleOptions.map((r)=><option key={r}>{r}</option>)}
+                                  {!roleOptions.includes(editRole) && editRole && <option>{editRole}</option>}
+                                </select>
+                              </label>
+                              <label className="block text-xs">
+                                <span className="font-medium text-gray-700">Work location</span>
+                                <select value={editLocId} onChange={(e)=>setEditLocId(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20">
+                                  <option value="">No location</option>
+                                  {locations.map((l)=><option key={l.id} value={l.id}>{l.name}</option>)}
+                                </select>
+                                {locations.length===0 && <span className="mt-1 block text-[11px] text-gray-400">Add locations in the Locations tab</span>}
+                              </label>
+                              <div className="block text-xs">
+                                <span className="font-medium text-gray-700">Status</span>
+                                <button type="button" onClick={()=>setEditActive(!editActive)} className={`mt-1 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm font-medium transition ${editActive ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-gray-200 bg-gray-50 text-gray-600'}`}>
+                                  <span className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${editActive ? 'bg-emerald-500' : 'bg-gray-400'}`} />{editActive ? 'Active' : 'Inactive'}</span>
+                                  <span className={`relative h-5 w-9 rounded-full transition ${editActive ? 'bg-emerald-500' : 'bg-gray-300'}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${editActive ? 'left-4' : 'left-0.5'}`} /></span>
+                                </button>
+                              </div>
+                            </div>
+                            <div className="mt-4 flex justify-end gap-2">
+                              <button type="button" onClick={()=>setEditingEmpEmail(null)} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+                              <button type="button" onClick={()=>{
+                                const loc = locations.find((l)=>l.id===editLocId)
+                                onEditEmployee(company.id, emp.email, { role: editRole, locationId: editLocId || null, location: loc?.name || editLocId || null, active: editActive })
+                                setEditingEmpEmail(null)
+                                setEmpSaveMsg(`${emp.name} updated`)
+                                setTimeout(()=>setEmpSaveMsg(''), 3000)
+                              }} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-brand-700">
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                Save changes
+                              </button>
+                            </div>
                           </div>
                         </td>
                       </tr>
