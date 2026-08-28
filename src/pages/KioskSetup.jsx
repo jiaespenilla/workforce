@@ -64,7 +64,7 @@ export default function KioskSetup() {
       setCompanies(active)
       if (active.length && !active.find((c)=>c.id===configCompanyId)) setConfigCompanyId(active[0].id)
     }).catch(()=>{})
-  }, [])
+  }, [configCompanyId])
   const [saved, setSaved] = useState(false)
 
   // Device pairing — a per-company token kiosks use to record punches.

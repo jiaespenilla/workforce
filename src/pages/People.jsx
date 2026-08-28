@@ -13,7 +13,7 @@ export default function People() {
   const roleOptions = getConfiguredRoles().filter((r) => !r.perms.settings).map((r) => r.name)
   const can = (action) => canAction(user?.perms, 'people', action)
 
-  const [companies, setCompanies] = useState(() => (apiEnabled() ? [] : getScopedCompanies(user)))
+  const [companies, setCompanies] = useState(() => [])
   const [companyId, setCompanyId] = useState(null)
   const [showAdd, setShowAdd] = useState(false)
   const [editingId, setEditingId] = useState(null)

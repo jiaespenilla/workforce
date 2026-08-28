@@ -465,17 +465,14 @@ function CeoDashboard({ user }) {
 export default function Dashboard() {
   const [now, setNow] = useState(new Date())
   const { user } = useAuth()
+  const [allTasks, setAllTasks] = useState([])
+  const [clockState, setClockState] = useState({})
+  const [allEmployees, setAllEmployees] = useState([])
+
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
-
-  if (user?.role === 'ceo') {
-    return <CeoDashboard user={user} />
-  }
-
-  const [allTasks, setAllTasks] = useState([])
-  const [clockState, setClockState] = useState({})
 
   useEffect(() => {
     if (apiEnabled()) {
@@ -496,12 +493,15 @@ export default function Dashboard() {
     }
   }, [user?.name])
 
-  const [allEmployees, setAllEmployees] = useState([])
   useEffect(() => {
     api('/api/companies')
       .then((cs) => setAllEmployees(cs.flatMap((c) => c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id })))))
       .catch(() => setAllEmployees([]))
   }, [])
+
+  if (user?.role === 'ceo') {
+    return <CeoDashboard user={user} />
+  }
   const employees = allEmployees
   const activeCount = employees.filter((e) => e.active !== false).length
   const myTasks = allTasks
