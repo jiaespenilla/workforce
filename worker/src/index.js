@@ -117,6 +117,24 @@ async function requireAdmin(request, env) {
   return claims
 }
 
+// Resolve the caller's company membership. Returns a company id for company
+// accounts, or null for platform accounts (administrator / platform CEO).
+async function callerCompanyId(env, claims) {
+  if (claims.role === 'administrator') return null
+  const row = await env.DB.prepare('SELECT company_id FROM employees WHERE lower(email) = ? LIMIT 1')
+    .bind(String(claims.sub || '').toLowerCase()).first()
+  return row?.company_id || null
+}
+
+// Verify a stored secret (kiosk PIN etc.) in either hash format.
+async function verifySecret(value, salt, stored) {
+  if (stored && stored.startsWith('pbkdf2:')) {
+    const [, iterations, hash] = stored.split(':')
+    return timingSafeEqual(await pbkdf2(value, salt, Number(iterations)), hash)
+  }
+  return timingSafeEqual(await sha256(`${salt}:${value}`), stored)
+}
+
 function HttpError(status, message) {
   const err = new Error(message)
   err.status = status
@@ -352,9 +370,21 @@ async function apiRoutes(path, method, request, env, url, claims) {
   if (path === '/api/bootstrap' && method === 'GET') {
     const settingsRows = await env.DB.prepare('SELECT key, value FROM settings').all().then((r) => r.results)
     const roleRows = await env.DB.prepare('SELECT * FROM roles ORDER BY id').all().then((r) => r.results)
-    const companyRows = await env.DB.prepare('SELECT * FROM companies ORDER BY created_at DESC').all().then((r) => r.results)
-    const employeeRows = await env.DB.prepare('SELECT * FROM employees').all().then((r) => r.results)
-    const taskRows = await env.DB.prepare('SELECT * FROM tasks ORDER BY id DESC').all().then((r) => r.results)
+    // Tenant scoping: company accounts only see their own company, employees
+    // and tasks; platform accounts (admin / platform CEO) see everything.
+    const companyId = await callerCompanyId(env, claims)
+    const companyRows = companyId
+      ? await env.DB.prepare('SELECT * FROM companies WHERE id = ?').bind(companyId).all().then((r) => r.results)
+      : await env.DB.prepare('SELECT * FROM companies ORDER BY created_at DESC').all().then((r) => r.results)
+    const employeeRows = companyId
+      ? await env.DB.prepare('SELECT * FROM employees WHERE company_id = ?').bind(companyId).all().then((r) => r.results)
+      : await env.DB.prepare('SELECT * FROM employees').all().then((r) => r.results)
+    let taskRows = await env.DB.prepare('SELECT * FROM tasks ORDER BY id DESC').all().then((r) => r.results)
+    if (companyId) {
+      const own = await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(companyId).first()
+      const suffix = `(${own?.name || ''})`
+      taskRows = taskRows.filter((t) => (t.assignee || '').endsWith(suffix))
+    }
     let notifications = []
     if (isAdmin) {
       notifications = (await env.DB.prepare('SELECT * FROM notifications ORDER BY id DESC').all().then((r) => r.results))
@@ -379,6 +409,8 @@ async function apiRoutes(path, method, request, env, url, claims) {
     return json(Object.fromEntries(rows.map((r) => [r.key, r.value])))
   }
   if (path === '/api/settings' && method === 'PUT') {
+    // Only administrators and company owners may change settings.
+    if (!isAdmin && claims.role !== 'ceo') return json({ error: 'Only administrators and company owners can change settings.' }, 403)
     const body = await readJson(request)
     for (const [key, value] of Object.entries(body)) {
       await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').bind(key, String(value)).run()
@@ -392,6 +424,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
     return json(rows.map((r) => ({ id: r.id, name: r.name, perms: safeParse(r.perms_json) })))
   }
   if (path === '/api/roles' && method === 'POST') {
+    if (!isAdmin) return json({ error: 'Administrator only.' }, 403)
     const { name, perms } = await readJson(request)
     if (!name?.trim()) return json({ error: 'Role name is required.' }, 400)
     const result = await env.DB.prepare('INSERT INTO roles (name, perms_json) VALUES (?, ?)').bind(name.trim(), JSON.stringify(perms || {})).run()
@@ -400,11 +433,13 @@ async function apiRoutes(path, method, request, env, url, claims) {
   {
     const m = path.match(/^\/api\/roles\/(\d+)$/)
     if (m && method === 'PUT') {
+      if (!isAdmin) return json({ error: 'Administrator only.' }, 403)
       const { name, perms } = await readJson(request)
       await env.DB.prepare('UPDATE roles SET name = COALESCE(?, name), perms_json = COALESCE(?, perms_json) WHERE id = ?').bind(name ?? null, perms === undefined ? null : JSON.stringify(perms ?? {}), Number(m[1])).run()
       return json({ ok: true })
     }
     if (m && method === 'DELETE') {
+      if (!isAdmin) return json({ error: 'Administrator only.' }, 403)
       await env.DB.prepare('DELETE FROM roles WHERE id = ?').bind(Number(m[1])).run()
       return json({ ok: true })
     }
@@ -412,8 +447,14 @@ async function apiRoutes(path, method, request, env, url, claims) {
 
   /* companies */
   if (path === '/api/companies' && method === 'GET') {
-    const companyRows = await env.DB.prepare('SELECT * FROM companies ORDER BY created_at DESC').all().then((r) => r.results)
-    const employeeRows = await env.DB.prepare('SELECT * FROM employees').all().then((r) => r.results)
+    // Tenant scoping: company accounts only see their own company.
+    const companyId = await callerCompanyId(env, claims)
+    const companyRows = companyId
+      ? await env.DB.prepare('SELECT * FROM companies WHERE id = ?').bind(companyId).all().then((r) => r.results)
+      : await env.DB.prepare('SELECT * FROM companies ORDER BY created_at DESC').all().then((r) => r.results)
+    const employeeRows = companyId
+      ? await env.DB.prepare('SELECT * FROM employees WHERE company_id = ?').bind(companyId).all().then((r) => r.results)
+      : await env.DB.prepare('SELECT * FROM employees').all().then((r) => r.results)
     return json(companyRows.map((row) => mapCompany(row, employeeRows)))
   }
   // NOTE: POST /api/companies is handled by the public registration route above
@@ -422,6 +463,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
   {
     const m = path.match(/^\/api\/companies\/([^/]+)$/)
     if (m && method === 'PUT') {
+      if (!isAdmin) return json({ error: 'Administrator only.' }, 403)
       const body = await readJson(request)
       await env.DB.prepare(
         `UPDATE companies SET name = COALESCE(?, name), industry = COALESCE(?, industry), address = COALESCE(?, address),
@@ -433,6 +475,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
       return json({ ok: true })
     }
     if (m && method === 'DELETE') {
+      if (!isAdmin) return json({ error: 'Administrator only.' }, 403)
       await env.DB.prepare('DELETE FROM companies WHERE id = ?').bind(m[1]).run()
       return json({ ok: true })
     }
@@ -442,6 +485,9 @@ async function apiRoutes(path, method, request, env, url, claims) {
   {
     const m = path.match(/^\/api\/companies\/([^/]+)\/employees$/)
     if (m && method === 'POST') {
+      // Company owners may only add people to their own company.
+      const callerCompany = await callerCompanyId(env, claims)
+      if (!isAdmin && callerCompany !== m[1]) return json({ error: 'You can only manage employees of your own company.' }, 403)
       const emp = await readJson(request)
       await insertEmployee(env, m[1], emp)
       const roleForUser = (emp.role || '').trim().toLowerCase() === 'ceo' ? 'ceo' : 'employee'
@@ -453,6 +499,12 @@ async function apiRoutes(path, method, request, env, url, claims) {
     const m = path.match(/^\/api\/employees\/(\d+)$/)
     if (m) {
       if (method === 'PUT') {
+        // Company owners may only edit people in their own company.
+        const callerCompany = await callerCompanyId(env, claims)
+        if (!isAdmin) {
+          const target = await env.DB.prepare('SELECT company_id FROM employees WHERE id = ?').bind(Number(m[1])).first()
+          if (!target || target.company_id !== callerCompany) return json({ error: 'You can only manage employees of your own company.' }, 403)
+        }
         const body = await readJson(request)
         const locVal = body.locationId ?? body.location ?? null
         try {
@@ -473,6 +525,12 @@ async function apiRoutes(path, method, request, env, url, claims) {
         return json({ ok: true })
       }
       if (method === 'DELETE') {
+        // Company owners may only remove people from their own company.
+        const callerCompany = await callerCompanyId(env, claims)
+        if (!isAdmin) {
+          const target = await env.DB.prepare('SELECT company_id FROM employees WHERE id = ?').bind(Number(m[1])).first()
+          if (!target || target.company_id !== callerCompany) return json({ error: 'You can only manage employees of your own company.' }, 403)
+        }
         await env.DB.prepare('DELETE FROM employees WHERE id = ?').bind(Number(m[1])).run()
         return json({ ok: true })
       }
@@ -480,8 +538,20 @@ async function apiRoutes(path, method, request, env, url, claims) {
   }
 
   /* tasks */
-  if (path === '/api/tasks' && method === 'GET') return json((await env.DB.prepare('SELECT * FROM tasks ORDER BY id DESC').all().then((r) => r.results)).map(mapTask))
+  if (path === '/api/tasks' && method === 'GET') {
+    let rows = await env.DB.prepare('SELECT * FROM tasks ORDER BY id DESC').all().then((r) => r.results)
+    // Company accounts only see their own company's tasks.
+    const companyId = await callerCompanyId(env, claims)
+    if (companyId) {
+      const own = await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(companyId).first()
+      const suffix = `(${own?.name || ''})`
+      rows = rows.filter((t) => (t.assignee || '').endsWith(suffix))
+    }
+    return json(rows.map(mapTask))
+  }
   if (path === '/api/tasks' && method === 'POST') {
+    // Task creation is a manager-level action (administrator / CEO).
+    if (!isAdmin && claims.role !== 'ceo') return json({ error: 'Only administrators and company owners can create tasks.' }, 403)
     const t = await readJson(request)
     const result = await env.DB.prepare('INSERT INTO tasks (title, assignee, priority, due, status) VALUES (?, ?, ?, ?, ?)')
       .bind(t.title, t.assignee, t.priority || 'Medium', t.due || null, t.status || 'pending').run()
@@ -496,6 +566,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
       return json({ ok: true })
     }
     if (m && method === 'DELETE') {
+      if (!isAdmin && claims.role !== 'ceo') return json({ error: 'Only administrators and company owners can delete tasks.' }, 403)
       await env.DB.prepare('DELETE FROM tasks WHERE id = ?').bind(Number(m[1])).run()
       return json({ ok: true })
     }
@@ -514,7 +585,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
     for (const row of rows) {
       if (credMethod === 'fingerprint' && row.fp_token && row.fp_token === v) match = row
       if (credMethod === 'qr' && row.qr_code && row.qr_code === v) match = row
-      if (credMethod === 'pin' && row.pin_hash && (await hashPassword(v, row.pin_salt)) === row.pin_hash) match = row
+      if (credMethod === 'pin' && row.pin_hash && (await verifySecret(v, row.pin_salt, row.pin_hash))) match = row
       if (match) break
     }
     // Simulated hardware: touching the sensor with no scanner present matches
@@ -546,6 +617,9 @@ async function apiRoutes(path, method, request, env, url, claims) {
     const conditions = []
     if (email) { conditions.push('email = ?'); params.push(email.toLowerCase()) }
     if (date) { conditions.push("time LIKE ?"); params.push(`${date}%`) }
+    // Company accounts only see their own company's attendance.
+    const callerCompany = await callerCompanyId(env, claims)
+    if (callerCompany && !email) { conditions.push('company_id = ?'); params.push(callerCompany) }
     if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ')
     sql += ' ORDER BY id DESC'
     const rows = await env.DB.prepare(sql).bind(...params).all().then((r) => r.results)
@@ -621,6 +695,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
     return json(rows)
   }
   if (path === '/api/org-units' && method === 'POST') {
+    if (!isAdmin && claims.role !== 'ceo') return json({ error: 'Only administrators and company owners can manage organization units.' }, 403)
     const { kind, name, code, parent_id } = await readJson(request)
     if (!kind || !name?.trim()) return json({ error: 'kind and name are required.' }, 400)
     const result = await env.DB.prepare('INSERT INTO org_units (kind, name, code, parent_id) VALUES (?, ?, ?, ?)')
@@ -630,12 +705,14 @@ async function apiRoutes(path, method, request, env, url, claims) {
   {
     const m = path.match(/^\/api\/org-units\/(\d+)$/)
     if (m && method === 'PUT') {
+      if (!isAdmin && claims.role !== 'ceo') return json({ error: 'Only administrators and company owners can manage organization units.' }, 403)
       const { name, code } = await readJson(request)
       await env.DB.prepare('UPDATE org_units SET name = COALESCE(?, name), code = COALESCE(?, code) WHERE id = ?')
         .bind(name ?? null, code ?? null, Number(m[1])).run()
       return json({ ok: true })
     }
     if (m && method === 'DELETE') {
+      if (!isAdmin && claims.role !== 'ceo') return json({ error: 'Only administrators and company owners can manage organization units.' }, 403)
       await env.DB.prepare('DELETE FROM org_units WHERE id = ?').bind(Number(m[1])).run()
       return json({ ok: true })
     }
@@ -649,6 +726,8 @@ async function apiRoutes(path, method, request, env, url, claims) {
     return json(rows.map(mapNotification))
   }
   if (path === '/api/notifications' && method === 'POST') {
+    // Sending platform notifications/email is an administrator action.
+    if (!isAdmin) return json({ error: 'Administrator only.' }, 403)
     const n = await readJson(request)
     await queueNotification(env, n)
     return json({ ok: true }, 201)
