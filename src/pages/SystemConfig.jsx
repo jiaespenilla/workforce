@@ -215,7 +215,7 @@ function RolesPanel({ roles, onAdd, onRename, onRemove, onTogglePerm }) {
                   <div className="space-y-3">
                     {[
                       ['people', 'People', [['add', 'Add'], ['edit', 'Edit'], ['delete', 'Delete / Status']]],
-                      ['tasks', 'Tasks (CEO)', [['add', 'Add'], ['delete', 'Delete']]],
+                      ['tasks', 'Tasks', [['add', 'Add'], ['delete', 'Delete']]],
                       ['locations', 'Work Locations', [['add', 'Add'], ['edit', 'Edit'], ['delete', 'Delete']]],
                     ].map(([module, moduleLabel, actions]) => (
                       <div key={module} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">

@@ -39,20 +39,21 @@ export function AuthProvider({ children }) {
     localStorage.setItem('uw_user', JSON.stringify(u))
   }
 
-  // Hydrate perms for non-admins from their employee record + role config
+  // Hydrate perms + actual role label for non-admins from their employee record
   useEffect(() => {
-    if (!user || user.role === 'administrator' || user.perms) return
+    if (!user || user.role === 'administrator') return
+    // if already has perms and roleLabel looks correct (not generic Employee for custom roles), skip
+    if (user.perms && user.roleLabel && !['Employee','CEO'].includes(user.roleLabel)) return
     let cancelled = false
     const hydrate = async () => {
       try {
-        // try employee role first
         if (apiEnabled()) {
           const companies = await api('/api/companies').catch(() => [])
           const emp = companies.flatMap((c) => c.employees).find((e) => e.email.toLowerCase() === user.email.toLowerCase())
-          const roleName = emp?.role || user.roleLabel || user.role
-          const perms = resolvePermsForRoleName(roleName)
-          if (perms && !cancelled) {
-            const enriched = { ...user, perms }
+          const actualRole = emp?.role || user.roleLabel || user.role
+          const perms = resolvePermsForRoleName(actualRole)
+          if (!cancelled && (perms || actualRole !== user.roleLabel)) {
+            const enriched = { ...user, roleLabel: actualRole || user.roleLabel, ...(perms ? { perms } : {}) }
             setUser(enriched)
             localStorage.setItem('uw_user', JSON.stringify(enriched))
           }
@@ -66,7 +67,6 @@ export function AuthProvider({ children }) {
         }
       } catch {}
     }
-    // delay until roles prefetched
     const t = setTimeout(hydrate, 600)
     return () => { cancelled = true; clearTimeout(t) }
   }, [user])
@@ -115,12 +115,14 @@ export function AuthProvider({ children }) {
     // Restore local profile (avatar/phone) — local-only for now
     const profile = readProfiles()[ (ru.email || identifier).toLowerCase() ] || {}
     let perms = null
-    // Try to resolve perms from employee role (for proper Shifts toggle etc.)
+    let actualRoleLabel = { administrator: 'Administrator', ceo: 'CEO', employee: 'Employee' }[ru.role] || ru.role
+    // Try to resolve perms + actual role name from employee record (e.g., HR Manager)
     try {
       if (ru.role !== 'administrator' && apiEnabled()) {
         const companies = await api('/api/companies').catch(() => [])
         const emp = companies.flatMap((c) => c.employees).find((e) => (e.email || '').toLowerCase() === (ru.email || identifier).toLowerCase())
         const roleName = emp?.role || ru.role
+        if (emp?.role) actualRoleLabel = emp.role
         perms = resolvePermsForRoleName(roleName) || resolvePermsForRoleName(ru.role) || resolvePermsForRoleName({ ceo: 'CEO', employee: 'Employee' }[ru.role])
       } else {
         perms = resolvePermsForRoleName(ru.role) || resolvePermsForRoleName({ ceo: 'CEO', employee: 'Employee' }[ru.role])
@@ -130,7 +132,7 @@ export function AuthProvider({ children }) {
       email: ru.email || identifier,
       name: profile.name || name,
       role: ru.role,
-      roleLabel: { administrator: 'Administrator', ceo: 'CEO', employee: 'Employee' }[ru.role] || ru.role,
+      roleLabel: actualRoleLabel,
       phone: profile.phone || '',
       avatar: profile.avatar || null,
       usingDefaultPassword: !!ru.usingDefaultPassword,

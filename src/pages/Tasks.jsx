@@ -38,6 +38,8 @@ function EmployeeTasks({ name }) {
   const [tasks, setTasks] = useState([])
   const [dragId, setDragId] = useState(null)
   const [overCol, setOverCol] = useState(null)
+  const [query, setQuery] = useState('')
+  const [priorityFilter, setPriorityFilter] = useState('all')
 
   useEffect(() => {
     if (apiEnabled()) {
@@ -59,11 +61,35 @@ function EmployeeTasks({ name }) {
     setOverCol(null)
   }
 
+  const filtered = tasks.filter((t) => {
+    const q = query.toLowerCase()
+    const matchesQuery = !q || t.title.toLowerCase().includes(q) || (t.due || '').toLowerCase().includes(q)
+    const matchesPriority = priorityFilter === 'all' || t.priority === priorityFilter
+    return matchesQuery && matchesPriority
+  })
   const counts = {
-    pending: tasks.filter((t) => t.status === 'pending').length,
-    inprogress: tasks.filter((t) => t.status === 'inprogress').length,
-    completed: tasks.filter((t) => t.status === 'completed').length,
+    pending: filtered.filter((t) => t.status === 'pending').length,
+    inprogress: filtered.filter((t) => t.status === 'inprogress').length,
+    completed: filtered.filter((t) => t.status === 'completed').length,
   }
+  const total = filtered.length
+  const progress = total ? Math.round((counts.completed / total) * 100) : 0
+  const overdue = filtered.filter((t) => t.due && t.status !== 'completed' && new Date(t.due) < new Date(new Date().setHours(0,0,0,0))).length
+
+  const dueBadge = (due, status) => {
+    if (!due) return <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">No due date</span>
+    const d = new Date(due)
+    const today = new Date(); today.setHours(0,0,0,0)
+    const isOverdue = d < today && status !== 'completed'
+    const isToday = d.getTime() === today.getTime()
+    const isSoon = !isOverdue && !isToday && (d - today) / 86400000 <= 2
+    if (isOverdue) return <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">Overdue · {due}</span>
+    if (isToday) return <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Due today · {due}</span>
+    if (isSoon) return <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">Due soon · {due}</span>
+    return <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">Due {due}</span>
+  }
+
+  const priorityAccent = { Urgent:'border-l-red-500', High:'border-l-orange-500', Medium:'border-l-brand-500', Low:'border-l-gray-300' }
 
   return (
     <div className="space-y-6">
@@ -71,7 +97,34 @@ function EmployeeTasks({ name }) {
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Main Menu</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">My Tasks</h1>
-          <p className="mt-1 text-sm leading-relaxed text-gray-500">Tasks assigned to you. Drag cards between columns to update progress.</p>
+          <p className="mt-1 text-sm leading-relaxed text-gray-500">Drag cards to update progress — your changes save automatically.</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="relative">
+            <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search tasks…" className="w-40 rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/10 sm:w-52" />
+          </div>
+          <select value={priorityFilter} onChange={(e)=>setPriorityFilter(e.target.value)} className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-300 focus:outline-none">
+            <option value="all">All priorities</option>
+            {Object.keys(priorityStyles).map((p)=><option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold text-gray-900">{total} tasks</span>
+            <span className="hidden h-4 w-px bg-gray-200 sm:block" />
+            <span className="text-xs text-gray-500">{counts.pending} pending · {counts.inprogress} in progress · {counts.completed} completed</span>
+            {overdue>0 && <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200">{overdue} overdue</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-100 sm:w-32">
+              <div className="h-full bg-gradient-to-r from-brand-600 to-emerald-400 transition-all" style={{ width: `${progress}%` }} />
+            </div>
+            <span className="text-xs font-bold tabular-nums text-gray-700">{progress}%</span>
+          </div>
         </div>
       </div>
 
@@ -82,38 +135,44 @@ function EmployeeTasks({ name }) {
             onDragOver={(e) => { e.preventDefault(); setOverCol(col.id) }}
             onDragLeave={() => setOverCol((c) => (c === col.id ? null : c))}
             onDrop={() => drop(col.id)}
-            className={`flex min-h-[300px] flex-col gap-3 rounded-xl border p-4 transition-colors ${
-              overCol === col.id ? 'border-brand-400 bg-brand-50/60' : 'border-gray-200 bg-gray-50'
+            className={`flex min-h-[360px] flex-col gap-3 rounded-xl border p-4 transition-colors ${
+              overCol === col.id ? 'border-brand-400 bg-brand-50/60 shadow-inner' : 'border-gray-200 bg-gray-50'
             }`}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-600">{col.label}</h2>
-              <span className="rounded-full border border-gray-200 bg-white px-2.5 py-0.5 text-xs font-bold text-gray-600">{counts[col.id]}</span>
+              <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-gray-700">
+                <span className={`h-2 w-2 rounded-full ${col.id==='pending'?'bg-gray-400':col.id==='inprogress'?'bg-amber-500':'bg-emerald-500'}`} />
+                {col.label}
+              </h2>
+              <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${counts[col.id] ? 'bg-white text-gray-700 ring-1 ring-gray-200' : 'bg-gray-100 text-gray-400'}`}>{counts[col.id]}</span>
             </div>
 
-            {tasks.filter((t) => t.status === col.id).map((task) => (
+            {filtered.filter((t) => t.status === col.id).map((task) => (
               <div
                 key={task.id}
                 draggable
                 onDragStart={() => setDragId(task.id)}
                 onDragEnd={() => { setDragId(null); setOverCol(null) }}
-                className={`cursor-grab rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition active:cursor-grabbing hover:shadow-md ${
-                  dragId === task.id ? 'opacity-40' : ''
-                }`}
+                className={`group cursor-grab rounded-xl border-l-4 bg-white p-4 shadow-sm transition hover:shadow-md active:cursor-grabbing ${priorityAccent[task.priority] || 'border-l-gray-300'} ${dragId === task.id ? 'opacity-40 scale-[0.98]' : ''}`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className={`text-sm font-medium ${task.status === 'completed' ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+                  <h3 className={`text-sm font-semibold leading-snug ${task.status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                     {task.title}
                   </h3>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${priorityStyles[task.priority]}`}>{task.priority}</span>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${priorityStyles[task.priority]}`}>{task.priority}</span>
                 </div>
-                <p className="mt-2 text-xs text-gray-500 tabular-nums">Due {task.due || '—'}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                  {dueBadge(task.due, task.status)}
+                </div>
+                <p className="mt-2 text-[11px] text-gray-400">Drag to move →</p>
               </div>
             ))}
 
-            {tasks.filter((t) => t.status === col.id).length === 0 && (
-              <div className="flex flex-1 items-center justify-center rounded-xl border-2 border-dashed border-gray-200 text-sm text-gray-500">
-                Drop tasks here
+            {filtered.filter((t) => t.status === col.id).length === 0 && (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-white/60 p-6 text-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100"><svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg></div>
+                <p className="text-sm font-medium text-gray-500">No tasks</p>
+                <p className="text-xs text-gray-400">Drop tasks here</p>
               </div>
             )}
           </div>

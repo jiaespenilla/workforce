@@ -98,7 +98,6 @@ export default function Profile() {
             ) : (
               <Avatar user={user} size="h-24 w-24 text-2xl sm:h-20 sm:w-20 sm:text-xl" />
             )}
-            <span className="absolute -bottom-1 -right-1 hidden h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-[10px] font-bold text-white shadow sm:flex">YOU</span>
           </div>
           <div className="flex flex-col items-center gap-2 sm:items-start">
             <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">

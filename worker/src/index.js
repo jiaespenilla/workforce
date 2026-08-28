@@ -572,8 +572,8 @@ async function apiRoutes(path, method, request, env, url, claims) {
     return json(result)
   }
   if (path === '/api/tasks' && method === 'POST') {
-    // Task creation is a manager-level action (administrator / CEO).
-    if (!isAdmin && claims.role !== 'ceo') return json({ error: 'Only administrators and company owners can create tasks.' }, 403)
+    // Any authenticated member can create tasks if their role permits it (frontend gates via perms).
+    if (!isAdmin && !['ceo','employee'].includes(claims.role)) return json({ error: 'Not authorized to create tasks.' }, 403)
     const t = await readJson(request)
     // Resolve assignee_email / company_id from "Name (Company)" string
     let assigneeEmail = null
@@ -634,7 +634,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
       return json({ ok: true })
     }
     if (m && method === 'DELETE') {
-      if (!isAdmin && claims.role !== 'ceo') return json({ error: 'Only administrators and company owners can delete tasks.' }, 403)
+      if (!isAdmin && !['ceo','employee'].includes(claims.role)) return json({ error: 'Not authorized to delete tasks.' }, 403)
       await env.DB.prepare('DELETE FROM tasks WHERE id = ?').bind(Number(m[1])).run()
       return json({ ok: true })
     }
