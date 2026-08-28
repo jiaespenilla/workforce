@@ -37,12 +37,13 @@ export function cleanStaleLocalStorage() {
   localStorage.setItem(CLEANED_KEY, '1')
 }
 
-export async function api(path, { method = 'GET', body } = {}) {
+export async function api(path, { method = 'GET', body, headers: extraHeaders } = {}) {
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
       ...(token() ? { Authorization: `Bearer ${token()}` } : {}),
+      ...(extraHeaders || {}),
     },
     body: body ? JSON.stringify(body) : undefined,
   })

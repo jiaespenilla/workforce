@@ -138,6 +138,26 @@ export default function Kiosk() {
 
   useKioskPwa(systemName, brandLetter)
 
+  // Kiosk device pairing — punches are recorded with a per-company device token.
+  const [deviceToken, setDeviceToken] = useState(() => localStorage.getItem('uw_kiosk_device_token') || '')
+  const pairDevice = async () => {
+    const t = window.prompt('Paste the kiosk device token from Kiosk Setup:')
+    if (!t) return
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/kiosk/verify-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: t.trim() }),
+      })
+      if (!res.ok) { setAuthError('Invalid kiosk device token.'); return }
+      localStorage.setItem('uw_kiosk_device_token', t.trim())
+      setDeviceToken(t.trim())
+      setAuthError(null)
+    } catch {
+      setAuthError('Could not verify the device token.')
+    }
+  }
+
   /* Identify the employee from a registered credential.
      Cloud mode asks the API; local mode matches against uw_credentials and
      the locally registered fingerprint tokens. */
@@ -203,7 +223,11 @@ export default function Kiosk() {
     }
 
     if (apiEnabled()) {
-      await api('/api/attendance', { method: 'POST', body: { email: match.email, company_id: match.companyId || company_id_by_name(match), type: action, time: nowDate.toISOString() } }).catch(() => {})
+      await api('/api/attendance', {
+        method: 'POST',
+        body: { email: match.email, company_id: match.companyId || company_id_by_name(match), type: action, time: nowDate.toISOString() },
+        headers: deviceToken ? { 'X-Kiosk-Token': deviceToken } : {},
+      }).catch(() => {})
     } else {
       punches.push(punchRecord)
       localStorage.setItem('uw_punches', JSON.stringify(punches))
@@ -236,7 +260,12 @@ export default function Kiosk() {
           <span className="block text-[11px] font-medium text-emerald-100">Time Kiosk{config.site ? ` · ${config.site}` : ''}</span>
         </div>
       </div>
-      <Link to="/" className="rounded-full bg-white/15 px-4 py-2 text-sm font-medium hover:bg-white/25">Exit kiosk</Link>
+      <div className="flex items-center gap-2">
+        {!deviceToken && (
+          <button type="button" onClick={pairDevice} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow hover:bg-emerald-50">Pair device</button>
+        )}
+        <Link to="/" className="rounded-full bg-white/15 px-4 py-2 text-sm font-medium hover:bg-white/25">Exit kiosk</Link>
+      </div>
     </header>
   )
 

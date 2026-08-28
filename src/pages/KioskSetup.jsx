@@ -66,6 +66,29 @@ export default function KioskSetup() {
   }, [])
   const [saved, setSaved] = useState(false)
 
+  // Device pairing — a per-company token kiosks use to record punches.
+  const [kioskToken, setKioskToken] = useState(null)
+  const [tokenCopied, setTokenCopied] = useState(false)
+  useEffect(() => {
+    if (!configCompanyId) { setKioskToken(null); return }
+    let cancelled = false
+    api(`/api/kiosk-token/${encodeURIComponent(configCompanyId)}`).then((r) => { if (!cancelled) setKioskToken(r.token) }).catch(() => { if (!cancelled) setKioskToken(null) })
+    return () => { cancelled = true }
+  }, [configCompanyId])
+  const regenerateToken = async () => {
+    if (!configCompanyId) return
+    try {
+      await api(`/api/kiosk-token/${encodeURIComponent(configCompanyId)}`, { method: 'DELETE' })
+      const r = await api(`/api/kiosk-token/${encodeURIComponent(configCompanyId)}`)
+      setKioskToken(r.token)
+      setTokenCopied(false)
+    } catch { /* ignore */ }
+  }
+  const copyToken = async () => {
+    if (!kioskToken) return
+    try { await navigator.clipboard.writeText(kioskToken); setTokenCopied(true); setTimeout(() => setTokenCopied(false), 3000) } catch {}
+  }
+
   // Credential registration state
   // (uses same active companies list)
   const [credCompanyId, setCredCompanyId] = useState(companies[0]?.id || '')
@@ -200,6 +223,21 @@ export default function KioskSetup() {
           Unique per company — kiosk detects automatically via employee badge.
         </p>
       </div>
+
+      <section className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm sm:p-5">
+        <h2 className="text-base font-semibold text-gray-900">Kiosk device pairing</h2>
+        <p className="mt-1 text-xs leading-relaxed text-gray-600">
+          Kiosks without a user login need this token to record punches. On the kiosk device, open the time kiosk page and tap <span className="font-semibold">Pair device</span>, then paste the token below.
+        </p>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <code className="min-w-0 flex-1 truncate rounded-lg border border-amber-200 bg-white px-3 py-2 font-mono text-xs text-gray-800">{kioskToken || '—'}</code>
+          <div className="flex gap-2">
+            <button type="button" onClick={copyToken} disabled={!kioskToken} className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-40">{tokenCopied ? 'Copied ✓' : 'Copy'}</button>
+            <button type="button" onClick={regenerateToken} disabled={!kioskToken} className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-40">Regenerate</button>
+          </div>
+        </div>
+        {kioskToken && <p className="mt-2 text-[11px] text-gray-500">Regenerating invalidates the old token immediately — re-pair any kiosk that used it.</p>}
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_360px]">
         <div className="space-y-6">

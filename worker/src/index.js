@@ -149,7 +149,7 @@ const LOGIN_IP_MAX_ATTEMPTS = 24   // failed attempts per IP across all accounts
 const REGISTER_WINDOW_MS = 60 * 60 * 1000
 const REGISTER_MAX_ATTEMPTS = 5    // registrations per IP
 const KIOSK_WINDOW_MS = 15 * 60 * 1000
-const KIOSK_MAX_ATTEMPTS = 60      // kiosk credential attempts per IP
+const KIOSK_MAX_ATTEMPTS = 200     // kiosk credential attempts per IP (identify + punches share the budget)
 
 function clientIp(request) {
   return request.headers.get('CF-Connecting-IP') || 'unknown'
@@ -174,6 +174,27 @@ async function recordAttempts(env, keys) {
 
 async function clearAttempts(env, key) {
   await env.DB.prepare('DELETE FROM login_attempts WHERE key = ?').bind(key).run()
+}
+
+/* ---------------- kiosk device tokens ---------------- */
+
+// Kiosks without a user login authenticate punches with a per-company device
+// token (X-Kiosk-Token header). Tokens are stored as settings keys
+// "kiosk_device_token:<token>" whose value is the company id — O(1) lookup.
+function kioskTokenFrom(request) {
+  return (request.headers.get('X-Kiosk-Token') || '').trim()
+}
+
+async function kioskTokenCompanyId(env, token) {
+  if (!token || !token.startsWith('uwk_')) return null
+  const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(`kiosk_device_token:${token}`).first()
+  return row?.value || null
+}
+
+function generateKioskToken() {
+  const bytes = new Uint8Array(24)
+  crypto.getRandomValues(bytes)
+  return 'uwk_' + [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 async function readJson(request) {
@@ -454,6 +475,15 @@ async function route(request, env) {
     return json(rows.map((r) => ({ id: r.id, name: r.name, perms: safeParse(r.perms_json) })))
   }
 
+  // Kiosk device pairing — verifies a token without a user login.
+  if (path === '/api/kiosk/verify-token' && method === 'POST') {
+    const { token } = await readJson(request)
+    const companyId = await kioskTokenCompanyId(env, (token || '').trim())
+    if (!companyId) return json({ error: 'Invalid kiosk device token.' }, 401)
+    const c = await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(companyId).first()
+    return json({ ok: true, companyId, companyName: c?.name || '' })
+  }
+
   /* kiosk credential identification — public, used by the stand-alone kiosk */
   if (path === '/api/kiosk/identify' && method === 'POST') {
     // Slow down credential (PIN) guessing from any single network.
@@ -495,6 +525,27 @@ async function route(request, env) {
     ).all().then((r) => r.results)
     return json(rows)
   }
+  // Kiosk devices record punches with a per-company device token (X-Kiosk-Token)
+  // instead of a user login. App users keep using Bearer auth (handled below).
+  if (path === '/api/attendance' && method === 'POST') {
+    const kioskToken = kioskTokenFrom(request)
+    if (kioskToken) {
+      const tokenCompany = await kioskTokenCompanyId(env, kioskToken)
+      if (!tokenCompany) return json({ error: 'Invalid kiosk device token.' }, 401)
+      const body = await readJson(request)
+      const email = String(body.email || '').trim().toLowerCase()
+      if (!email || !body.type) return json({ error: 'email and type are required.' }, 400)
+      // The punched employee must belong to the company this kiosk is paired with.
+      const emp = await env.DB.prepare('SELECT id FROM employees WHERE lower(email) = ? AND company_id = ?').bind(email, tokenCompany).first()
+      if (!emp) return json({ error: 'Employee does not belong to this kiosk company.' }, 403)
+      const result = await env.DB.prepare(
+        'INSERT INTO attendance (email, company_id, type, time, overtime) VALUES (?, ?, ?, ?, ?)'
+      ).bind(email, tokenCompany, body.type, body.time || new Date().toISOString(), body.overtime ? 1 : 0).run()
+      return json({ id: result.meta.last_row_id, email, type: body.type, time: body.time || new Date().toISOString() }, 201)
+    }
+    // No kiosk token present — authenticated users fall through to the routes below.
+  }
+
   /* ---- authenticated ---- */
   if (path.startsWith('/api/')) {
     const claims = await requireAuth(request, env)
@@ -863,6 +914,30 @@ async function apiRoutes(path, method, request, env, url, claims) {
     }
   }
 
+  /* kiosk device tokens (administrator) */
+  {
+    const m = path.match(/^\/api\/kiosk-token\/([^/]+)$/)
+    if (m) {
+      if (!isAdmin) return json({ error: 'Administrator only.' }, 403)
+      const companyId = decodeURIComponent(m[1])
+      if (method === 'GET') {
+        // Get-or-create: each company has exactly one active kiosk token.
+        const row = await env.DB.prepare("SELECT key FROM settings WHERE key LIKE 'kiosk_device_token:%' AND value = ?").bind(companyId).first()
+        let token = row ? row.key.slice('kiosk_device_token:'.length) : null
+        if (!token) {
+          token = generateKioskToken()
+          await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+            .bind(`kiosk_device_token:${token}`, companyId).run()
+        }
+        return json({ token, companyId })
+      }
+      if (method === 'DELETE') {
+        await env.DB.prepare("DELETE FROM settings WHERE key LIKE 'kiosk_device_token:%' AND value = ?").bind(companyId).run()
+        return json({ ok: true })
+      }
+    }
+  }
+
   /* notifications */
   if (path === '/api/notifications' && method === 'GET') {
     const rows = isAdmin
@@ -902,7 +977,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
         "DELETE FROM users WHERE role <> 'administrator' AND lower(email) <> lower(?)"
       ).bind(CEO_EMAIL),
       // Clear per-company settings (shifts, locations, kiosk configs)
-      env.DB.prepare("DELETE FROM settings WHERE key LIKE 'shift_schedules:%' OR key LIKE 'company_locations:%' OR key LIKE 'kiosk_configs:%'"),
+      env.DB.prepare("DELETE FROM settings WHERE key LIKE 'shift_schedules:%' OR key LIKE 'company_locations:%' OR key LIKE 'kiosk_configs:%' OR key LIKE 'kiosk_device_token:%'"),
     ])
     return json({ ok: true, message: 'All tenant data reset.' })
   }
