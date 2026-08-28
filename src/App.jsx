@@ -24,6 +24,7 @@ const Profile = lazy(() => import('./pages/Profile'))
 const KioskCredentials = lazy(() => import('./pages/KioskCredentials'))
 const ShiftSchedules = lazy(() => import('./pages/ShiftSchedules'))
 const People = lazy(() => import('./pages/People'))
+const StorageSetup = lazy(() => import('./pages/StorageSetup'))
 
 function RouteLoader() {
   return <div className="flex min-h-[50vh] items-center justify-center text-sm text-gray-400">Loading…</div>
@@ -145,8 +146,9 @@ export default function App() {
             <Route path="/timekeeping" element={<PageGate perm="timekeeping"><TimeKeeping /></PageGate>} />
             <Route path="/tasks" element={<PageGate perm="tasks"><Tasks /></PageGate>} />
             <Route path="/payroll" element={<PageGate perm="payroll"><Payroll /></PageGate>} />
-            <Route path="/kiosk-credentials" element={<PageGate perm="kiosk"><KioskCredentials /></PageGate>} />
+                                    <Route path="/kiosk-credentials" element={<PageGate perm="kiosk"><KioskCredentials /></PageGate>} />
             <Route path="/people" element={<PageGate perm="employees"><People /></PageGate>} />
+            <Route path="/storage-setup" element={<PageGate perm="tasks"><StorageSetup /></PageGate>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/login" replace />} />
