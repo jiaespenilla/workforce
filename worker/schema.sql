@@ -137,3 +137,27 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 );
 CREATE INDEX IF NOT EXISTS idx_login_attempts_key_time ON login_attempts (key, attempt_at);
 CREATE INDEX IF NOT EXISTS idx_login_attempts_time ON login_attempts (attempt_at);
+
+-- WebAuthn biometric (fingerprint/passkey) credentials for kiosk devices
+CREATE TABLE IF NOT EXISTS webauthn_credentials (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL,
+  company_id TEXT,
+  credential_id TEXT UNIQUE NOT NULL,
+  public_key TEXT NOT NULL,
+  counter INTEGER DEFAULT 0,
+  transports TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_wcred_email ON webauthn_credentials (email);
+
+-- One-time WebAuthn challenges (register + authenticate)
+CREATE TABLE IF NOT EXISTS webauthn_challenges (
+  challenge TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,                -- register | authentication
+  email TEXT,
+  rp_id TEXT,
+  origin TEXT,
+  expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_wchallenge_time ON webauthn_challenges (expires_at);

@@ -1,6 +1,7 @@
 import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
+import { startRegistration } from '@simplewebauthn/browser'
 import { getActiveSettings } from '../lib/systemSettings'
 import { api, apiEnabled } from '../lib/api'
 import { getCredential, setFingerprint, setPin, ensureQrCode } from '../lib/credentials'
@@ -118,11 +119,17 @@ export default function KioskSetup() {
       try {
         if (apiEnabled()) {
           const status = await api(`/api/credentials/${encodeURIComponent(credEmail.toLowerCase())}`)
-          setFpStatus(status.fpToken ? 'registered' : null)
           setPinStatus(status.pinSet ? { ok: true } : null)
           if (status.qrCode) {
             setQrCodeStr(status.qrCode)
             setQrImg(await QRCode.toDataURL(status.qrCode, { width: 240, margin: 1 }))
+          }
+          // Fingerprint is a platform-authenticator credential (WebAuthn).
+          try {
+            const w = await api(`/api/webauthn/credentials?email=${encodeURIComponent(credEmail.toLowerCase())}`)
+            setFpStatus(w.registered ? 'registered' : null)
+          } catch {
+            setFpStatus(null)
           }
         } else {
           const cred = await getCredential(credEmail)
@@ -139,50 +146,18 @@ export default function KioskSetup() {
 
   const registerFingerprint = async () => {
     if (!credEmail) return setCredError('Select an employee first.')
-    // Simulated fingerprint capture — a unique device token is generated.
-    const token = 'FP-' + crypto.randomUUID()
-    await setFingerprint(credEmail, token)
-    setFpStatus('registered')
-  }
-
-  const savePin = async () => {
-    if (!credEmail) return setCredError('Select an employee first.')
-    if (pinInput.length < 4 || pinInput.length > 8) return setCredError('PIN must be 4–8 digits.')
-    await setPin(credEmail, pinInput)
-    setPinInput('')
-    setPinStatus({ ok: true })
-    setCredError(null)
-  }
-
-  const generateQr = async () => {
-    if (!credEmail) return setCredError('Select an employee first.')
-    const code = await ensureQrCode(credEmail)
-    setQrCodeStr(code)
-    setQrImg(await QRCode.toDataURL(code, { width: 240, margin: 1 }))
-    setCredError(null)
-  }
-
-  const update = (key, value) => setConfig((c) => ({ ...c, [key]: value }))
-
-  // Load per-company config when company selector changes
-  useEffect(() => {
-    if (!configCompanyId) return
-    let cancelled = false
-    getCompanyKioskConfig(configCompanyId).then((c) => { if (!cancelled) setConfig(c) })
-    return () => { cancelled = true }
-  }, [configCompanyId])
-
-  // Keep config sync when companies list updates (e.g., after load)
-  useEffect(() => {
-    if (companies.length && !configCompanyId) setConfigCompanyId(companies[0].id)
-  }, [companies, configCompanyId])
-
-  const save = async (e) => {
-    e.preventDefault()
-    if (!configCompanyId) return
-    await saveCompanyKioskConfig(configCompanyId, config)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+    if (!credCompanyId) return setCredError('Select a company first.')
+    const email = credEmail.toLowerCase()
+    try {
+      setCredError(null)
+      const options = await api('/api/webauthn/register/options', { method: 'POST', body: { email, origin: window.location.origin } })
+      // Triggers the platform biometric prompt (fingerprint / Face ID) on this device.
+      const reg = await startRegistration({ optionsJSON: options })
+      await api('/api/webauthn/register', { method: 'POST', body: { email, companyId: credCompanyId, response: reg } })
+      setFpStatus('registered')
+    } catch (err) {
+      setCredError('Biometric capture failed: ' + (err?.message || 'Unknown error'))
+    }
   }
 
   const inputCls = 'mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10'

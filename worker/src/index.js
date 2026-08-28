@@ -1,5 +1,7 @@
 // Unified Workforce API — Cloudflare Worker (D1 + R2)
 
+import * as webAuthn from './webauthn.js'
+
 const ADMIN = { username: 'admin_celestine', password: 'Celest!ne2026!', name: 'Aizl Jo Bornillo' }
 const CEO_EMAIL = 'ceo@celestsolutions.com'
 const CEO_PASSWORD = 'P@ssw0rd2026!'
@@ -484,6 +486,29 @@ async function route(request, env) {
     return json({ ok: true, companyId, companyName: c?.name || '' })
   }
 
+  /* ---- kiosk biometric (WebAuthn) — public: the kiosk scans a fingerprint without logging in ---- */
+  if (path === '/api/webauthn/authentication/options' && method === 'POST') {
+    const { origin } = await readJson(request)
+    try {
+      return json(await webAuthn.buildAuthenticationOptions(env, { origin }))
+    } catch (err) {
+      return json({ error: err.message || 'Could not start fingerprint scan.' }, 400)
+    }
+  }
+  if (path === '/api/webauthn/authentication' && method === 'POST') {
+    const { response } = await readJson(request)
+    try {
+      const { email } = await webAuthn.verifyAuthentication(env, { response })
+      const emp = await env.DB.prepare(
+        'SELECT e.name, e.company_id, c.name AS company FROM employees e JOIN companies c ON c.id = e.company_id WHERE lower(e.email) = ? AND e.active = 1 AND c.active = 1'
+      ).bind(String(email).toLowerCase()).first()
+      if (!emp) return json({ error: 'Account not found or inactive.' }, 404)
+      return json({ email, name: emp.name, role: 'employee', company: emp.company, companyId: emp.company_id, method: 'fingerprint' })
+    } catch (err) {
+      return json({ error: err.message || 'Fingerprint verification failed.' }, err.status || 401)
+    }
+  }
+
   /* kiosk credential identification — public, used by the stand-alone kiosk */
   if (path === '/api/kiosk/identify' && method === 'POST') {
     // Slow down credential (PIN) guessing from any single network.
@@ -936,6 +961,40 @@ async function apiRoutes(path, method, request, env, url, claims) {
         return json({ ok: true })
       }
     }
+  }
+
+  /* kiosk biometric registration (administrator) */
+  if (path === '/api/webauthn/register/options' && method === 'POST') {
+    if (!isAdmin) return json({ error: 'Administrator only.' }, 403)
+    const { email, origin } = await readJson(request)
+    if (!email) return json({ error: 'email is required.' }, 400)
+    try {
+      return json(await webAuthn.buildRegistrationOptions(env, { username: email.trim().toLowerCase(), origin }))
+    } catch (err) {
+      return json({ error: err.message || 'Could not start biometric registration.' }, 400)
+    }
+  }
+  if (path === '/api/webauthn/register' && method === 'POST') {
+    if (!isAdmin) return json({ error: 'Administrator only.' }, 403)
+    const { email, companyId, response } = await readJson(request)
+    if (!email || !companyId || !response) return json({ error: 'email, companyId and response are required.' }, 400)
+    try {
+      const reg = await webAuthn.registerCredential(env, { response })
+      // Only one fingerprint credential per employee (simplest for a shared kiosk).
+      await env.DB.prepare('DELETE FROM webauthn_credentials WHERE email = ?').bind(reg.email.toLowerCase()).run()
+      await env.DB.prepare(
+        'INSERT INTO webauthn_credentials (email, company_id, credential_id, public_key, counter, transports) VALUES (?, ?, ?, ?, ?, ?)'
+      ).bind(reg.email.toLowerCase(), companyId, reg.credentialId, reg.publicKey, reg.counter, JSON.stringify(reg.transports || [])).run()
+      return json({ ok: true, email: reg.email })
+    } catch (err) {
+      return json({ error: err.message || 'Biometric registration failed.' }, err.status || 400)
+    }
+  }
+  if (path === '/api/webauthn/credentials' && method === 'GET') {
+    if (!isAdmin) return json({ error: 'Administrator only.' }, 403)
+    const email = (url.searchParams.get('email') || '').trim().toLowerCase()
+    const row = await env.DB.prepare('SELECT credential_id FROM webauthn_credentials WHERE email = ?').bind(email).first()
+    return json({ registered: !!row })
   }
 
   /* notifications */

@@ -5,6 +5,7 @@ import { getSystemIcon } from '../lib/documentMeta'
 import { loadKioskConfig } from './KioskSetup'
 import { getCompanyShifts, decideAction } from '../lib/shifts'
 import { getCompanyKioskConfig } from '../lib/kioskConfig'
+import { startAuthentication } from '@simplewebauthn/browser'
 import { api, apiEnabled } from '../lib/api'
 
 // Makes the kiosk installable as a stand-alone app on phones/tablets.
@@ -158,9 +159,30 @@ export default function Kiosk() {
     }
   }
 
-  /* Identify the employee from a registered credential.
-     Cloud mode asks the API; local mode matches against uw_credentials and
-     the locally registered fingerprint tokens. */
+  /* Real biometric (fingerprint / Face ID) scan via the device's platform
+     authenticator. The kiosk request pairs the scan to the employee server-side;
+     the returned match is then used to record the clock-in/out (with the kiosk
+     device token so no user login is needed). */
+  const fingerprintScan = async () => {
+    setAuthError(null)
+    setScanning(true)
+    try {
+      if (!apiEnabled()) { setAuthError('Fingerprint scanning requires the cloud API.'); return }
+      const options = await api('/api/webauthn/authentication/options', { method: 'POST', body: { origin: window.location.origin } })
+      // Triggers the OS biometric prompt (fingerprint / Face ID) on the device.
+      const auth = await startAuthentication({ optionsJSON: options })
+      const match = await api('/api/webauthn/authentication', { method: 'POST', body: { response: auth } })
+      if (match.companyId) setKioskCompanyId(match.companyId)
+      await recordPunch(match)
+    } catch (err) {
+      setAuthError(err?.message || 'Fingerprint scan failed. Touch the sensor and try again.')
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  /* Identify the employee from a registered credential (PIN / QR).
+     Fingerprint is handled separately via WebAuthn above. */
   const identify = async (method, value) => {
     setAuthError(null)
     setScanning(true)
@@ -282,10 +304,7 @@ export default function Kiosk() {
               <button
                 type="button"
                 disabled={scanning}
-                onClick={async () => {
-                  // Simulated sensor: matches when exactly one fingerprint is registered.
-                  await identify('fingerprint', 'SIM_FP')
-                }}
+                onClick={fingerprintScan}
                 className="animate-pulse-slow flex h-44 w-44 transform flex-col items-center justify-center gap-2 rounded-full bg-white/15 ring-4 ring-white/40 shadow-2xl transition hover:scale-105 hover:bg-white/25 active:scale-95"
               >
                 <FingerprintGlyph className="h-20 w-20" />
