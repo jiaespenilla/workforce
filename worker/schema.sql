@@ -52,12 +52,16 @@ CREATE TABLE IF NOT EXISTS employees (
 CREATE TABLE IF NOT EXISTS tasks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
-  assignee TEXT NOT NULL,            -- "Name (Company)"
+  assignee TEXT NOT NULL,            -- "Name (Company)" — legacy display string, kept for backward compat
+  assignee_email TEXT,                -- normalized FK to employees.email (lowercase)
+  assignee_company_id TEXT REFERENCES companies(id),
   priority TEXT DEFAULT 'Medium',
   due TEXT,
   status TEXT DEFAULT 'pending',
   created_at TEXT DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_tasks_assignee_email ON tasks (assignee_email);
+CREATE INDEX IF NOT EXISTS idx_tasks_company ON tasks (assignee_company_id);
 
 CREATE TABLE IF NOT EXISTS notifications (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -1,311 +1,51 @@
-// Unified Workforce API — Cloudflare Worker (D1 + R2)
+// Unified Workforce API � Cloudflare Worker (D1 + R2)
 
 import * as webAuthn from './webauthn.js'
+import {
+  CEO_EMAIL,
+  DEFAULT_EMPLOYEE_PASSWORD,
+  NOTIFICATION_RECIPIENT,
+  LOGIN_WINDOW_MS,
+  LOGIN_MAX_ATTEMPTS,
+  LOGIN_IP_MAX_ATTEMPTS,
+  REGISTER_WINDOW_MS,
+  REGISTER_MAX_ATTEMPTS,
+  KIOSK_WINDOW_MS,
+  KIOSK_MAX_ATTEMPTS,
+  COMPANY_SETTING_KEYS,
+  GLOBAL_SETTINGS_SQL,
+} from './lib/constants.js'
+import { sha256, hashPassword, verifyPassword, upgradeUserPassword, createToken, verifySecret } from './lib/crypto.js'
+import { json, cors, readJson, clientIp } from './lib/http.js'
+import { requireAuth, callerCompanyId } from './lib/auth.js'
+import { recentAttempts, recordAttempts, clearAttempts } from './lib/rateLimit.js'
+import { kioskTokenFrom, kioskTokenCompanyId, generateKioskToken } from './lib/kiosk.js'
+import { ensureSeed, migrateCompanySettings, migrateTaskColumns } from './lib/seed.js'
+import { mapCompany, mapTask, mapNotification, safeParse, insertEmployee, ensureUser, queueNotification } from './lib/db.js'
 
-const ADMIN = { username: 'admin_celestine', password: 'Celest!ne2026!', name: 'Aizl Jo Bornillo' }
-const CEO_EMAIL = 'ceo@celestsolutions.com'
-const CEO_PASSWORD = 'P@ssw0rd2026!'
-const CEO_NAME = 'Celestine Espenilla'
-const DEFAULT_EMPLOYEE_PASSWORD = 'P@ssw0rd2026!'
-const NOTIFICATION_RECIPIENT = 'jiaespenilla@gmail.com'
+function parsePagination(url, maxLimit = 50) {
+  const rawLimit = url.searchParams.get('limit')
+  const rawOffset = url.searchParams.get('offset')
+  const q = (url.searchParams.get('q') || '').trim().toLowerCase()
+  const hasPagination = rawLimit !== null || rawOffset !== null || q
+  let limit = rawLimit !== null ? Math.max(0, parseInt(rawLimit, 10) || 0) : 0
+  let offset = rawOffset !== null ? Math.max(0, parseInt(rawOffset, 10) || 0) : 0
+  if (limit > maxLimit) limit = maxLimit
+  return { limit, offset, q, hasPagination }
+}
 
-/* ---------------- helpers ---------------- */
-
-const json = (data, status = 200) =>
-  new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...cors() },
-  })
-
-function cors() {
-  return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+function paginate(data, { limit, offset, q, hasPagination }, searchFields = []) {
+  let filtered = data
+  if (q && searchFields.length) {
+    filtered = data.filter((row) =>
+      searchFields.some((f) => String(row[f] || '').toLowerCase().includes(q))
+    )
   }
-}
-
-const enc = new TextEncoder()
-
-async function sha256(text) {
-  const digest = await crypto.subtle.digest('SHA-256', enc.encode(text))
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-async function hmac(text, secret) {
-  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(text))
-  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-const PBKDF2_ITERATIONS = 25000
-
-async function pbkdf2(password, salt, iterations = PBKDF2_ITERATIONS) {
-  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits'])
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode(salt), iterations },
-    key,
-    256
-  )
-  return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-// New hashes use PBKDF2-SHA256, stored as "pbkdf2:<iterations>:<hex>".
-// Legacy single-pass SHA-256 hashes are upgraded transparently on the next
-// successful login (see verifyPassword). 25k iterations keeps login well
-// within Workers' free-plan CPU limit; raise on a paid plan if desired.
-async function hashPassword(password, salt, iterations = PBKDF2_ITERATIONS) {
-  return `pbkdf2:${iterations}:${await pbkdf2(password, salt, iterations)}`
-}
-
-function timingSafeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false
-  let result = 0
-  for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return result === 0
-}
-
-// Verifies a password in either hash format. Returns { ok, legacy } so the
-// caller can transparently upgrade legacy SHA-256 hashes to PBKDF2.
-async function verifyPassword(password, user) {
-  if (user.password_hash.startsWith('pbkdf2:')) {
-    const [, iterations, hash] = user.password_hash.split(':')
-    const candidate = await pbkdf2(password, user.password_salt, Number(iterations))
-    return { ok: timingSafeEqual(candidate, hash), legacy: false }
-  }
-  const candidate = await sha256(`${user.password_salt}:${password}`)
-  return { ok: timingSafeEqual(candidate, user.password_hash), legacy: true }
-}
-
-async function upgradeUserPassword(env, userId, password) {
-  const salt = crypto.randomUUID()
-  await env.DB.prepare('UPDATE users SET password_salt = ?, password_hash = ? WHERE id = ?')
-    .bind(salt, await hashPassword(password, salt), userId).run()
-}
-
-function b64url(text) {
-  return btoa(text).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-async function createToken(user, secret) {
-  const payload = b64url(JSON.stringify({ sub: user.email, role: user.role, name: user.name, exp: Date.now() + 1000 * 60 * 60 * 12 }))
-  const sig = await hmac(payload, secret)
-  return `${payload}.${sig}`
-}
-
-async function verifyToken(token, secret) {
-  if (!token || !token.includes('.')) return null
-  const [payload, sig] = token.split('.')
-  if (!timingSafeEqual(await hmac(payload, secret), sig)) return null
-  try {
-    const data = JSON.parse(atob(payload))
-    if (!data.exp || data.exp < Date.now()) return null
-    return data
-  } catch {
-    return null
-  }
-}
-
-async function requireAuth(request, env) {
-  const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '')
-  const claims = await verifyToken(token, env.AUTH_SECRET)
-  if (!claims) throw HttpError(401, 'Unauthorized')
-  return claims
-}
-
-async function requireAdmin(request, env) {
-  const claims = await requireAuth(request, env)
-  if (claims.role !== 'administrator') throw HttpError(403, 'Forbidden')
-  return claims
-}
-
-// Resolve the caller's company membership. Returns a company id for company
-// accounts, or null for platform accounts (administrator / platform CEO).
-async function callerCompanyId(env, claims) {
-  if (claims.role === 'administrator') return null
-  const row = await env.DB.prepare('SELECT company_id FROM employees WHERE lower(email) = ? LIMIT 1')
-    .bind(String(claims.sub || '').toLowerCase()).first()
-  return row?.company_id || null
-}
-
-// Verify a stored secret (kiosk PIN etc.) in either hash format.
-async function verifySecret(value, salt, stored) {
-  if (stored && stored.startsWith('pbkdf2:')) {
-    const [, iterations, hash] = stored.split(':')
-    return timingSafeEqual(await pbkdf2(value, salt, Number(iterations)), hash)
-  }
-  return timingSafeEqual(await sha256(`${salt}:${value}`), stored)
-}
-
-function HttpError(status, message) {
-  const err = new Error(message)
-  err.status = status
-  return err
-}
-
-/* ---------------- rate limiting (D1-backed) ---------------- */
-
-const LOGIN_WINDOW_MS = 15 * 60 * 1000
-const LOGIN_MAX_ATTEMPTS = 8       // failed attempts per account
-const LOGIN_IP_MAX_ATTEMPTS = 24   // failed attempts per IP across all accounts
-const REGISTER_WINDOW_MS = 60 * 60 * 1000
-const REGISTER_MAX_ATTEMPTS = 5    // registrations per IP
-const KIOSK_WINDOW_MS = 15 * 60 * 1000
-const KIOSK_MAX_ATTEMPTS = 200     // kiosk credential attempts per IP (identify + punches share the budget)
-
-function clientIp(request) {
-  return request.headers.get('CF-Connecting-IP') || 'unknown'
-}
-
-async function recentAttempts(env, key, windowMs) {
-  const cutoff = new Date(Date.now() - windowMs).toISOString()
-  const { n } = await env.DB.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE key = ? AND attempt_at >= ?')
-    .bind(key, cutoff).first()
-  return n || 0
-}
-
-// Records attempt timestamps and opportunistically prunes rows older than a day.
-async function recordAttempts(env, keys) {
-  const now = new Date().toISOString()
-  const dayCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  await env.DB.batch([
-    ...keys.map((key) => env.DB.prepare('INSERT INTO login_attempts (key, attempt_at) VALUES (?, ?)').bind(key, now)),
-    env.DB.prepare('DELETE FROM login_attempts WHERE attempt_at < ?').bind(dayCutoff),
-  ])
-}
-
-async function clearAttempts(env, key) {
-  await env.DB.prepare('DELETE FROM login_attempts WHERE key = ?').bind(key).run()
-}
-
-/* ---------------- kiosk device tokens ---------------- */
-
-// Kiosks without a user login authenticate punches with a per-company device
-// token (X-Kiosk-Token header). Tokens are stored as settings keys
-// "kiosk_device_token:<token>" whose value is the company id — O(1) lookup.
-function kioskTokenFrom(request) {
-  return (request.headers.get('X-Kiosk-Token') || '').trim()
-}
-
-async function kioskTokenCompanyId(env, token) {
-  if (!token || !token.startsWith('uwk_')) return null
-  const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(`kiosk_device_token:${token}`).first()
-  return row?.value || null
-}
-
-function generateKioskToken() {
-  const bytes = new Uint8Array(24)
-  crypto.getRandomValues(bytes)
-  return 'uwk_' + [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-async function readJson(request) {
-  try {
-    return await request.json()
-  } catch {
-    return {}
-  }
-}
-
-/* ---------------- lazy seed ---------------- */
-
-let seedVerified = false
-
-async function ensureSeed(env) {
-  // Per-isolate memo: after the first successful check we skip the COUNT query.
-  if (seedVerified) return
-  const { count } = await env.DB.prepare('SELECT COUNT(*) AS count FROM users').first()
-  if (count > 0) {
-    seedVerified = true
-    return
-  }
-
-  async function addUser(email, name, role, password) {
-    const salt = crypto.randomUUID()
-    await env.DB.prepare(
-      'INSERT INTO users (email, name, role, password_salt, password_hash) VALUES (?, ?, ?, ?, ?)'
-    ).bind(email, name, role, salt, await hashPassword(password, salt)).run()
-  }
-
-  await addUser(ADMIN.username, ADMIN.name, 'administrator', ADMIN.password)
-  await addUser(CEO_EMAIL, CEO_NAME, 'ceo', CEO_PASSWORD)
-
-  // Default role set so registration works out of the box.
-  const defaults = [
-    ['CEO', { dashboard: true, timekeeping: true, tasks: true, payroll: true, employees: true, kiosk: false, settings: false }],
-    ['HR Manager', { dashboard: true, timekeeping: true, tasks: true, payroll: false, employees: true, kiosk: true, settings: false }],
-    ['Team Lead', { dashboard: true, timekeeping: true, tasks: true, payroll: false, employees: false, kiosk: true, settings: false }],
-    ['Employee', { dashboard: true, timekeeping: true, tasks: true, payroll: false, employees: false, kiosk: true, settings: false }],
-  ]
-  for (const [name, perms] of defaults) {
-    await env.DB.prepare('INSERT INTO roles (name, perms_json) VALUES (?, ?)').bind(name, JSON.stringify(perms)).run()
-  }
-
-  await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').bind('system_name', 'CadensIQ').run()
-  await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').bind('version', 'v0.1.0').run()
-  await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').bind('timezone', '(GMT+08:00) Asia/Manila').run()
-}
-
-// One-time migration: shift schedules, locations and kiosk configs used to be
-// stored as ONE JSON blob per feature ({ [companyId]: data }) — companies
-// overwrote each other on every save. They now live in per-company settings
-// keys ("<feature>:<companyId>"). The legacy aggregate keys are split and
-// removed automatically on first use.
-const COMPANY_SETTING_KEYS = ['shift_schedules', 'company_locations', 'kiosk_configs']
-// Only non-company (global) settings are exposed via /api/settings.
-const GLOBAL_SETTINGS_SQL =
-  "SELECT key, value FROM settings WHERE key NOT LIKE 'shift_schedules:%' AND key NOT LIKE 'company_locations:%' AND key NOT LIKE 'kiosk_configs:%'"
-
-let companySettingsMigrated = false
-async function migrateCompanySettings(env) {
-  if (companySettingsMigrated) return
-  const marker = await env.DB.prepare("SELECT key FROM settings WHERE key = 'company_settings_v2'").first()
-  if (marker) {
-    companySettingsMigrated = true
-    return
-  }
-  const rows = await env.DB.prepare(
-    "SELECT key, value FROM settings WHERE key IN ('shift_schedules','company_locations','kiosk_configs')"
-  ).all().then((r) => r.results)
-  const statements = []
-  for (const row of rows) {
-    try {
-      const all = JSON.parse(row.value || '{}')
-      for (const [companyId, payload] of Object.entries(all)) {
-        if (companyId === '_legacy' || payload === undefined || payload === null) continue
-        statements.push(
-          env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-            .bind(`${row.key}:${companyId}`, JSON.stringify(payload))
-        )
-      }
-    } catch { /* corrupt legacy blob — skip */ }
-  }
-  statements.push(env.DB.prepare("DELETE FROM settings WHERE key IN ('shift_schedules','company_locations','kiosk_configs')"))
-  statements.push(env.DB.prepare("INSERT INTO settings (key, value) VALUES ('company_settings_v2', '1') ON CONFLICT(key) DO NOTHING"))
-  await env.DB.batch(statements)
-  companySettingsMigrated = true
-}
-
-/* ---------------- mapping ---------------- */
-
-function mapCompany(row, employees) {
-  return {
-    id: row.id,
-    name: row.name,
-    industry: row.industry,
-    address: row.address,
-    city: row.city,
-    contactPhone: row.contact_phone,
-    contactEmail: row.contact_email,
-    logoName: row.logo_name,
-    status: row.status,
-    active: row.active !== 0,
-    registered: row.registered,
-    owner: row.owner_name ? { name: row.owner_name, title: row.owner_title, email: row.owner_email } : undefined,
-    employees: employees
-      .filter((e) => e.company_id === row.id)
-      .map((e) => ({ id: e.id, name: e.name, email: e.email, role: e.role, active: e.active !== 0, locationId: e.location_id || null, location: e.location || null })),
-  }
+  const total = filtered.length
+  if (!hasPagination) return filtered
+  // hasPagination true: return paginated envelope even if limit==0 (means filtered set)
+  if (limit > 0) filtered = filtered.slice(offset, offset + limit)
+  return { data: filtered, total, limit, offset, q }
 }
 
 /* ---------------- router ---------------- */
@@ -319,6 +59,7 @@ export default {
       if (url.pathname.startsWith('/api/')) {
         await ensureSeed(env)
         await migrateCompanySettings(env)
+        await migrateTaskColumns(env)
         return await route(request, env)
       }
 
@@ -617,7 +358,10 @@ async function apiRoutes(path, method, request, env, url, claims) {
     if (companyId) {
       const own = await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(companyId).first()
       const suffix = `(${own?.name || ''})`
-      taskRows = taskRows.filter((t) => (t.assignee || '').endsWith(suffix))
+      taskRows = taskRows.filter((t) => {
+        if (t.assignee_company_id) return t.assignee_company_id === companyId
+        return (t.assignee || '').endsWith(suffix)
+      })
     }
     let notifications = []
     if (isAdmin) {
@@ -710,7 +454,11 @@ async function apiRoutes(path, method, request, env, url, claims) {
     const employeeRows = companyId
       ? await env.DB.prepare('SELECT * FROM employees WHERE company_id = ?').bind(companyId).all().then((r) => r.results)
       : await env.DB.prepare('SELECT * FROM employees').all().then((r) => r.results)
-    return json(companyRows.map((row) => mapCompany(row, employeeRows)))
+    const mapped = companyRows.map((row) => mapCompany(row, employeeRows))
+    const pag = parsePagination(url, 50)
+    const result = paginate(mapped, pag, ['name', 'industry', 'city'])
+    if (Array.isArray(result)) return json(result)
+    return json(result)
   }
   // NOTE: POST /api/companies is handled by the public registration route above
   // (it must run before requireAuth). No authenticated company-creation route.
@@ -800,22 +548,75 @@ async function apiRoutes(path, method, request, env, url, claims) {
     if (companyId) {
       const own = await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(companyId).first()
       const suffix = `(${own?.name || ''})`
-      rows = rows.filter((t) => (t.assignee || '').endsWith(suffix))
+      rows = rows.filter((t) => {
+        if (t.assignee_company_id) return t.assignee_company_id === companyId
+        return (t.assignee || '').endsWith(suffix)
+      })
     }
-    return json(rows.map(mapTask))
+    const mapped = rows.map(mapTask)
+    const pag = parsePagination(url, 50)
+    const result = paginate(mapped, pag, ['title', 'assignee', 'priority', 'status'])
+    if (Array.isArray(result)) return json(result)
+    return json(result)
   }
   if (path === '/api/tasks' && method === 'POST') {
     // Task creation is a manager-level action (administrator / CEO).
     if (!isAdmin && claims.role !== 'ceo') return json({ error: 'Only administrators and company owners can create tasks.' }, 403)
     const t = await readJson(request)
-    const result = await env.DB.prepare('INSERT INTO tasks (title, assignee, priority, due, status) VALUES (?, ?, ?, ?, ?)')
-      .bind(t.title, t.assignee, t.priority || 'Medium', t.due || null, t.status || 'pending').run()
-    return json(mapTask({ id: result.meta.last_row_id, ...t, status: t.status || 'pending' }), 201)
+    // Resolve assignee_email / company_id from "Name (Company)" string
+    let assigneeEmail = null
+    let assigneeCompanyId = null
+    if (t.assignee) {
+      const m = String(t.assignee).match(/^(.*)\s+\((.*)\)\s*$/)
+      if (m) {
+        const cname = m[2].trim()
+        const comp = await env.DB.prepare('SELECT id FROM companies WHERE lower(name) = lower(?) LIMIT 1').bind(cname).first()
+        if (comp) assigneeCompanyId = comp.id
+        const emp = await env.DB.prepare('SELECT email FROM employees WHERE lower(name) = lower(?) AND company_id = ? LIMIT 1').bind(m[1].trim(), assigneeCompanyId || '').first()
+        if (emp?.email) assigneeEmail = emp.email.toLowerCase()
+        else {
+          // fallback: try any employee with that name
+          const anyEmp = await env.DB.prepare('SELECT email FROM employees WHERE lower(name) = lower(?) LIMIT 1').bind(m[1].trim()).first()
+          if (anyEmp?.email) assigneeEmail = anyEmp.email.toLowerCase()
+        }
+      }
+    }
+    try {
+      const result = await env.DB.prepare('INSERT INTO tasks (title, assignee, assignee_email, assignee_company_id, priority, due, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .bind(t.title, t.assignee, assigneeEmail, assigneeCompanyId, t.priority || 'Medium', t.due || null, t.status || 'pending').run()
+      return json(mapTask({ id: result.meta.last_row_id, ...t, assignee_email: assigneeEmail, assignee_company_id: assigneeCompanyId, status: t.status || 'pending' }), 201)
+    } catch {
+      // Fallback for DBs without new columns (should not happen after migration, but keep compat)
+      const result = await env.DB.prepare('INSERT INTO tasks (title, assignee, priority, due, status) VALUES (?, ?, ?, ?, ?)')
+        .bind(t.title, t.assignee, t.priority || 'Medium', t.due || null, t.status || 'pending').run()
+      return json(mapTask({ id: result.meta.last_row_id, ...t, status: t.status || 'pending' }), 201)
+    }
   }
   {
     const m = path.match(/^\/api\/tasks\/(\d+)$/)
     if (m && method === 'PUT') {
       const body = await readJson(request)
+      // If assignee string is being updated, also refresh normalized columns
+      if (body.assignee !== undefined) {
+        let assigneeEmail = null
+        let assigneeCompanyId = null
+        const str = String(body.assignee || '')
+        const match = str.match(/^(.*)\s+\((.*)\)\s*$/)
+        if (match) {
+          const cname = match[2].trim()
+          const comp = await env.DB.prepare('SELECT id FROM companies WHERE lower(name) = lower(?) LIMIT 1').bind(cname).first()
+          if (comp) assigneeCompanyId = comp.id
+          const emp = await env.DB.prepare('SELECT email FROM employees WHERE lower(name) = lower(?) AND company_id = ? LIMIT 1').bind(match[1].trim(), assigneeCompanyId || '').first()
+          if (emp?.email) assigneeEmail = emp.email.toLowerCase()
+        }
+        try {
+          await env.DB.prepare('UPDATE tasks SET title = COALESCE(?, title), assignee = COALESCE(?, assignee), assignee_email = COALESCE(?, assignee_email), assignee_company_id = COALESCE(?, assignee_company_id), priority = COALESCE(?, priority), due = COALESCE(?, due), status = COALESCE(?, status) WHERE id = ?')
+            .bind(body.title ?? null, body.assignee ?? null, assigneeEmail, assigneeCompanyId, body.priority ?? null, body.due ?? null, body.status ?? null, Number(m[1])).run()
+          return json({ ok: true })
+        } catch {
+          // fallback without new columns
+        }
+      }
       await env.DB.prepare('UPDATE tasks SET title = COALESCE(?, title), assignee = COALESCE(?, assignee), priority = COALESCE(?, priority), due = COALESCE(?, due), status = COALESCE(?, status) WHERE id = ?')
         .bind(body.title ?? null, body.assignee ?? null, body.priority ?? null, body.due ?? null, body.status ?? null, Number(m[1])).run()
       return json({ ok: true })
@@ -844,7 +645,11 @@ async function apiRoutes(path, method, request, env, url, claims) {
     if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ')
     sql += ' ORDER BY id DESC'
     const rows = await env.DB.prepare(sql).bind(...params).all().then((r) => r.results)
-    return json(rows)
+    const pag = parsePagination(url, 100)
+    // Attendance search via q is handled by paginate; date/email filters are SQL-level so skip q for attendance
+    const result = paginate(rows, pag, [])
+    if (Array.isArray(result)) return json(result)
+    return json(result)
   }
   if (path === '/api/attendance' && method === 'POST') {
     const { email, company_id, type, time, overtime } = await readJson(request)
@@ -1002,7 +807,11 @@ async function apiRoutes(path, method, request, env, url, claims) {
     const rows = isAdmin
       ? await env.DB.prepare('SELECT * FROM notifications ORDER BY id DESC').all().then((r) => r.results)
       : await env.DB.prepare('SELECT * FROM notifications WHERE to_email = ? ORDER BY id DESC').bind(claims.sub).all().then((r) => r.results)
-    return json(rows.map(mapNotification))
+    const mapped = rows.map(mapNotification)
+    const pag = parsePagination(url, 50)
+    const result = paginate(mapped, pag, ['subject', 'body', 'to'])
+    if (Array.isArray(result)) return json(result)
+    return json(result)
   }
   if (path === '/api/notifications' && method === 'POST') {
     // Sending platform notifications/email is an administrator action.
@@ -1042,63 +851,4 @@ async function apiRoutes(path, method, request, env, url, claims) {
   }
 
   return json({ error: 'Not found' }, 404)
-}
-
-/* ---------------- shared db helpers ---------------- */
-
-async function insertEmployee(env, companyId, emp) {
-  const locId = emp.locationId || emp.location || null
-  // Try with location_id column (may be INTEGER affinity but SQLite accepts TEXT); fallback to without if schema old
-  try {
-    await env.DB.prepare('INSERT OR IGNORE INTO employees (company_id, name, email, role, active, location_id) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(companyId, emp.name || 'Unnamed', (emp.email || '').toLowerCase(), emp.role || 'Unassigned', emp.active === false ? 0 : 1, locId).run()
-  } catch {
-    await env.DB.prepare('INSERT OR IGNORE INTO employees (company_id, name, email, role, active) VALUES (?, ?, ?, ?, ?)')
-      .bind(companyId, emp.name || 'Unnamed', (emp.email || '').toLowerCase(), emp.role || 'Unassigned', emp.active === false ? 0 : 1).run()
-  }
-}
-
-async function ensureUser(env, email, name, role, password) {
-  if (!email) return
-  const existing = await env.DB.prepare('SELECT id FROM users WHERE lower(email) = ?').bind(email.toLowerCase()).first()
-  if (existing) return
-  const salt = crypto.randomUUID()
-  await env.DB.prepare('INSERT INTO users (email, name, role, password_salt, password_hash, must_change_password) VALUES (?, ?, ?, ?, ?, 1)')
-    .bind(email.toLowerCase(), name || email, role, salt, await hashPassword(password, salt)).run()
-}
-
-async function queueNotification(env, { to, subject, body }) {
-  if (!to) return
-  await env.DB.prepare('INSERT INTO notifications (to_email, subject, body) VALUES (?, ?, ?)').bind(to.toLowerCase(), subject, body || '').run()
-  // Best-effort transactional email via Cloudflare Email Service (requires send_email binding + verified domain).
-  // Falls back to in-app notification if Email Service not configured — notification is always stored in DB.
-  if (env.EMAIL) {
-    try {
-      await env.EMAIL.send({
-        from: { email: 'noreply@celestsolutions.workers.dev', name: 'CadensIQ' },
-        to,
-        subject,
-        text: body || '',
-        html: `<div style="font-family:sans-serif;white-space:pre-line">${(body || '').replace(/</g, '&lt;')}</div>`,
-      })
-    } catch (e) {
-      console.error('EMAIL send failed (check wrangler email sending enable + verified domain):', e.message)
-    }
-  }
-}
-
-function mapTask(row) {
-  return { id: row.id, title: row.title, assignee: row.assignee, priority: row.priority, due: row.due, status: row.status }
-}
-
-function mapNotification(row) {
-  return { id: row.id, to: row.to_email, subject: row.subject, body: row.body, status: row.status, createdAt: row.created_at }
-}
-
-function safeParse(text) {
-  try {
-    return JSON.parse(text) || {}
-  } catch {
-    return {}
-  }
 }

@@ -1,45 +1,20 @@
 // Employee work locations per company — dynamic setup.
-// Shape: { locations: [{id, name}] } per company.
-// Cloud mode persists via the per-company settings API (one key per company);
-// local mode via localStorage.
+// Cloud persists via per-company settings API (key per company).
 
-import { api, apiEnabled } from './api'
-
-const KEY = 'uw_company_locations'
-
-function readLocalAll() {
-  try {
-    return JSON.parse(localStorage.getItem(KEY)) || {}
-  } catch {
-    return {}
-  }
-}
-
-function writeLocalAll(all) {
-  localStorage.setItem(KEY, JSON.stringify(all))
-}
+import { api } from './api'
 
 export async function getCompanyLocations(companyId) {
   if (!companyId) return []
-  if (apiEnabled()) {
-    try {
-      const data = await api(`/api/company-settings/${encodeURIComponent(companyId)}`)
-      return data?.company_locations?.locations || []
-    } catch {
-      return []
-    }
+  try {
+    const data = await api(`/api/company-settings/${encodeURIComponent(companyId)}`)
+    return data?.company_locations?.locations || []
+  } catch {
+    return []
   }
-  return readLocalAll()[companyId]?.locations || []
 }
 
 export async function saveCompanyLocations(companyId, locations) {
-  if (apiEnabled()) {
-    await api(`/api/company-settings/${encodeURIComponent(companyId)}`, { method: 'PUT', body: { company_locations: { locations } } })
-    return locations
-  }
-  const all = readLocalAll()
-  all[companyId] = { locations }
-  writeLocalAll(all)
+  await api(`/api/company-settings/${encodeURIComponent(companyId)}`, { method: 'PUT', body: { company_locations: { locations } } })
   return locations
 }
 

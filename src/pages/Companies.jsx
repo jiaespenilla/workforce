@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { usePageTitle } from '../lib/documentMeta'
 import { api, apiEnabled } from '../lib/api'
 import { getCompanyLocations, addCompanyLocation, renameCompanyLocation, removeCompanyLocation } from '../lib/locations'
+import Pagination from '../components/Pagination'
 
 const STATUS_STYLES = {
   pending: 'bg-amber-50 text-amber-700 ring-amber-200',
@@ -471,6 +472,8 @@ export default function Companies() {
   const [rejectReason, setRejectReason] = useState('')
   const [approving, setApproving] = useState(null)
   const [deactivateConfirm, setDeactivateConfirm] = useState(null)
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 6
 
   // Cloud mode: companies come from the database.
   useEffect(() => {
@@ -610,6 +613,9 @@ export default function Companies() {
     const matchesActive = activeFilter === 'all' || (activeFilter === 'active' ? c.active !== false : c.active === false)
     return matchesQuery && matchesStatus && matchesActive
   })
+  // Reset page when filters change
+  useEffect(() => { setPage(0) }, [query, statusFilter, activeFilter])
+  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
   const totalEmployees = companies.reduce((sum, c) => sum + c.employees.length, 0)
   const activeEmployees = companies.reduce((sum, c) => sum + c.employees.filter((e) => e.active !== false).length, 0)
   const inactiveCompanies = companies.filter((c) => c.active === false).length
@@ -695,7 +701,7 @@ export default function Companies() {
       )}
 
       <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
-        {filtered.map((c) => (
+        {paginated.map((c) => (
           <CompanyCard
             key={c.id}
             company={c}
@@ -714,6 +720,9 @@ export default function Companies() {
           </div>
         )}
       </div>
+      {filtered.length > PAGE_SIZE && (
+        <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
+      )}
 
       {viewing && (
         <CompanyDetailsModal

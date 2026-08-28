@@ -6,6 +6,7 @@ import { api, apiEnabled } from '../lib/api'
 import { getCompanyShifts, saveCompanyShiftData } from '../lib/shifts'
 import { getCompanyLocations } from '../lib/locations'
 import Avatar from '../components/Avatar'
+import Pagination from '../components/Pagination'
 
 export default function People() {
   usePageTitle('People')
@@ -53,6 +54,11 @@ export default function People() {
 
   const company = companies.find((c) => c.id === companyId)
   const people = company?.employees || []
+  const [peoplePage, setPeoplePage] = useState(0)
+  const PEOPLE_PAGE_SIZE = 8
+  // Reset pagination when company or team size changes
+  useEffect(() => { setPeoplePage(0) }, [companyId, people.length])
+  const paginatedPeople = people.slice(peoplePage * PEOPLE_PAGE_SIZE, (peoplePage + 1) * PEOPLE_PAGE_SIZE)
 
   const assignShift = async (email, shiftId) => {
     setShiftsData((prev) => ({
@@ -222,7 +228,7 @@ export default function People() {
           <p className="text-xs text-gray-400">{company?.name || ''}</p>
         </div>
         <ul className="divide-y divide-gray-100">
-          {people.map((emp) => (
+          {paginatedPeople.map((emp) => (
             <li key={emp.email} className="px-6 py-4">
               {editingId === emp.email ? (
                 <EditRow emp={emp} roleOptions={roleOptions} locations={companyLocations} onSave={(updates) => saveEdit(emp, updates)} onCancel={() => setEditingId(null)} />
@@ -286,6 +292,9 @@ export default function People() {
             <li className="px-6 py-10 text-center text-sm text-gray-400">No team members yet — add your first one above.</li>
           )}
         </ul>
+        {people.length > PEOPLE_PAGE_SIZE && (
+          <Pagination page={peoplePage} pageSize={PEOPLE_PAGE_SIZE} total={people.length} onPageChange={setPeoplePage} />
+        )}
       </section>
     </div>
   )
