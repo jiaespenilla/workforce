@@ -26,6 +26,10 @@ export default function People() {
   const [locError, setLocError] = useState('')
   const [editingLocId, setEditingLocId] = useState(null)
   const [editingLocName, setEditingLocName] = useState('')
+  const [peopleQuery, setPeopleQuery] = useState('')
+  const [peopleStatusFilter, setPeopleStatusFilter] = useState('all')
+  const [peopleRoleFilter, setPeopleRoleFilter] = useState('all')
+  const [peopleLocationFilter, setPeopleLocationFilter] = useState('all')
   const canLocation = (a) => canAction(user?.perms, 'locations', a)
 
   const formRef = useRef({ name: '', email: '', role: roleOptions[roleOptions.length - 1] || '', locationId: '' })
@@ -59,11 +63,20 @@ export default function People() {
 
   const company = companies.find((c) => c.id === companyId)
   const people = company?.employees || []
+  const filteredPeople = people.filter((p)=>{
+    const q = peopleQuery.toLowerCase()
+    const matchesQuery = !q || p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q)
+    const matchesStatus = peopleStatusFilter==='all' || (peopleStatusFilter==='active' ? p.active!==false : p.active===false)
+    const matchesRole = peopleRoleFilter==='all' || (p.role||'').toLowerCase()===peopleRoleFilter.toLowerCase()
+    const locName = companyLocations.find((l)=>l.id===(p.locationId||p.location))?.name || p.location || ''
+    const matchesLoc = peopleLocationFilter==='all' || locName===peopleLocationFilter || (p.locationId||p.location)===peopleLocationFilter
+    return matchesQuery && matchesStatus && matchesRole && matchesLoc
+  })
   const [peoplePage, setPeoplePage] = useState(0)
   const PEOPLE_PAGE_SIZE = 8
   // Reset pagination when company or team size changes
-  useEffect(() => { setPeoplePage(0) }, [companyId, people.length])
-  const paginatedPeople = people.slice(peoplePage * PEOPLE_PAGE_SIZE, (peoplePage + 1) * PEOPLE_PAGE_SIZE)
+  useEffect(() => { setPeoplePage(0) }, [companyId, filteredPeople.length])
+  const paginatedPeople = filteredPeople.slice(peoplePage * PEOPLE_PAGE_SIZE, (peoplePage + 1) * PEOPLE_PAGE_SIZE)
 
   const assignShift = async (email, shiftId) => {
     setShiftsData((prev) => ({
@@ -284,8 +297,37 @@ export default function People() {
       {/* People table */}
       <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 px-6 py-4">
-          <h2 className="text-base font-bold text-gray-900">Team ({people.length})</h2>
-          <p className="text-xs text-gray-400">{company?.name || ''}</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Team ({filteredPeople.length}{filteredPeople.length!==people.length ? ` / ${people.length}` : ''})</h2>
+              <p className="text-xs text-gray-400">{company?.name || ''} · {companyLocations.length} locations</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">{people.filter((p)=>p.active!==false).length} active</span>
+              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">{people.filter((p)=>p.active===false).length} inactive</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex-1 sm:max-w-xs">
+            <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <input value={peopleQuery} onChange={(e)=>setPeopleQuery(e.target.value)} placeholder="Search name or email…" className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/10" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <select value={peopleStatusFilter} onChange={(e)=>setPeopleStatusFilter(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium focus:border-brand-300 focus:outline-none">
+              <option value="all">All status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <select value={peopleRoleFilter} onChange={(e)=>setPeopleRoleFilter(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium focus:border-brand-300 focus:outline-none">
+              <option value="all">All roles</option>
+              {[...new Set(people.map((p)=>p.role).filter(Boolean))].map((r)=><option key={r} value={r}>{r}</option>)}
+            </select>
+            <select value={peopleLocationFilter} onChange={(e)=>setPeopleLocationFilter(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium focus:border-brand-300 focus:outline-none">
+              <option value="all">All locations</option>
+              {companyLocations.map((l)=><option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </div>
         </div>
         <ul className="divide-y divide-gray-100">
           {paginatedPeople.map((emp) => (
@@ -348,12 +390,12 @@ export default function People() {
               )}
             </li>
           ))}
-          {people.length === 0 && (
-            <li className="px-6 py-10 text-center text-sm text-gray-400">No team members yet — add your first one above.</li>
+          {filteredPeople.length === 0 && (
+            <li className="px-6 py-10 text-center text-sm text-gray-400">{people.length===0 ? 'No team members yet — add your first one above.' : 'No members match your search or filters.'}</li>
           )}
         </ul>
-        {people.length > PEOPLE_PAGE_SIZE && (
-          <Pagination page={peoplePage} pageSize={PEOPLE_PAGE_SIZE} total={people.length} onPageChange={setPeoplePage} />
+        {filteredPeople.length > PEOPLE_PAGE_SIZE && (
+          <Pagination page={peoplePage} pageSize={PEOPLE_PAGE_SIZE} total={filteredPeople.length} onPageChange={setPeoplePage} />
         )}
       </section>
     </div>

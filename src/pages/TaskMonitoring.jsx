@@ -40,7 +40,7 @@ export default function TaskMonitoring() {
       .then((cs) => setEmployees(cs.flatMap((c) => c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id })))))
       .catch(() => setEmployees([]))
   }, [])
-  const activeEmployees = employees.filter((e) => e.active !== false)
+  const activeEmployees = employees.filter((e) => e.active !== false && (e.role || '').trim().toLowerCase() !== 'ceo')
 
   useEffect(() => {
     if (apiEnabled()) {

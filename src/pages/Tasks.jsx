@@ -2,6 +2,7 @@ import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api, apiEnabled } from '../lib/api'
+import { canAction } from '../lib/roles'
 import TaskMonitoring from './TaskMonitoring'
 
 const columns = [
@@ -35,21 +36,30 @@ export default function Tasks() {
 }
 
 function EmployeeTasks({ name }) {
+  const { user } = useAuth()
   const [tasks, setTasks] = useState([])
   const [dragId, setDragId] = useState(null)
   const [overCol, setOverCol] = useState(null)
   const [query, setQuery] = useState('')
   const [priorityFilter, setPriorityFilter] = useState('all')
+  const [showAdd, setShowAdd] = useState(false)
+  const [form, setForm] = useState({ title:'', priority:'Medium', due:'' })
+  const [companyName, setCompanyName] = useState('')
 
   useEffect(() => {
     if (apiEnabled()) {
       api('/api/tasks')
         .then((all) => setTasks(all.filter((t) => t.assignee && t.assignee.startsWith(`${name} (`))))
         .catch(() => setTasks(loadLocalMyTasks(name)))
+      // resolve company for assignee string
+      api('/api/companies').then((cs)=>{
+        const c = cs.find((co)=> (co.employees||[]).some((e)=> e.email.toLowerCase()=== (user?.email||'').toLowerCase()))
+        if (c) setCompanyName(c.name)
+      }).catch(()=>{})
     } else {
       setTasks(loadLocalMyTasks(name))
     }
-  }, [name])
+  }, [name, user?.email])
 
   const drop = async (status) => {
     if (dragId == null) return
@@ -59,6 +69,23 @@ function EmployeeTasks({ name }) {
     }
     setDragId(null)
     setOverCol(null)
+  }
+
+  const canAdd = canAction(user?.perms, 'tasks', 'add')
+  const addTask = async (e) => {
+    e.preventDefault()
+    if (!form.title.trim()) return
+    const payload = { title: form.title.trim(), assignee: `${name} (${companyName || user?.companyName || 'Company'})`, priority: form.priority, due: form.due || '', status: 'pending' }
+    if (apiEnabled()) {
+      try {
+        const c = await api('/api/tasks', { method: 'POST', body: payload })
+        setTasks((p)=> [...p, c])
+      } catch { setTasks((p)=> [...p, { ...payload, id: Date.now() }]) }
+    } else {
+      setTasks((p)=> [...p, { ...payload, id: Date.now() }])
+    }
+    setForm({ title:'', priority:'Medium', due:'' })
+    setShowAdd(false)
   }
 
   const filtered = tasks.filter((t) => {
@@ -108,8 +135,30 @@ function EmployeeTasks({ name }) {
             <option value="all">All priorities</option>
             {Object.keys(priorityStyles).map((p)=><option key={p} value={p}>{p}</option>)}
           </select>
+          {canAdd && (
+            <button onClick={()=>setShowAdd(!showAdd)} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-700">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+              New Task
+            </button>
+          )}
         </div>
       </div>
+
+      {showAdd && canAdd && (
+        <form onSubmit={addTask} className="rounded-xl border border-brand-200 bg-white p-4 shadow-sm">
+          <div className="grid gap-3 sm:grid-cols-4">
+            <input autoFocus placeholder="Task title *" value={form.title} onChange={(e)=>setForm({...form, title:e.target.value})} required className="sm:col-span-2 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/10" />
+            <select value={form.priority} onChange={(e)=>setForm({...form, priority:e.target.value})} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+              {Object.keys(priorityStyles).map((p)=><option key={p}>{p}</option>)}
+            </select>
+            <div className="flex gap-2">
+              <input type="date" value={form.due} onChange={(e)=>setForm({...form, due:e.target.value})} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <button type="submit" className="rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white">Add</button>
+              <button type="button" onClick={()=>setShowAdd(false)} className="rounded-lg border border-gray-300 px-3 text-sm">Cancel</button>
+            </div>
+          </div>
+        </form>
+      )}
 
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">

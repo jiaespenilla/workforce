@@ -269,6 +269,7 @@ function CeoDashboard({ user }) {
   const [allTasks, setAllTasks] = useState([])
   const [clockState, setClockState] = useState({})
   const [allEmployees, setAllEmployees] = useState([])
+  const [allAttendance, setAllAttendance] = useState([])
   const [genDate, setGenDate] = useState('')
   const [genTargetDate, setGenTargetDate] = useState(() => new Date().toISOString().slice(0,10))
   const [genConfirmOpen, setGenConfirmOpen] = useState(false)
@@ -289,6 +290,7 @@ function CeoDashboard({ user }) {
     if (apiEnabled()) {
       api('/api/tasks').then(setAllTasks).catch(() => setAllTasks(loadLocalAllTasks()))
       api('/api/attendance').then((records) => {
+        setAllAttendance(records)
         const latest = {}
         for (const p of records) {
           const prev = latest[p.email]
@@ -299,6 +301,7 @@ function CeoDashboard({ user }) {
     } else {
       setAllTasks(loadLocalAllTasks())
       setClockState(getLocalClockInState())
+      try { setAllAttendance(JSON.parse(localStorage.getItem('uw_punches'))||[]) } catch { setAllAttendance([]) }
     }
   }, [])
 
@@ -367,21 +370,17 @@ function CeoDashboard({ user }) {
             {clockedInEmployees.length} currently clocked-in via kiosk · click an employee to view their tasks.
           </p>
         </div>
-        <div className="shrink-0 text-right">
-          <p className="text-sm font-semibold tabular-nums text-gray-900">{now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}</p>
-          <p className="text-xs text-gray-500">{now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'})}</p>
-          <div className="mt-2">
-            <p className="mb-1 text-right text-[11px] font-medium uppercase tracking-wide text-gray-400">Export all tasks ({allTasks.length})</p>
-            <TaskExportToolbar tasks={allTasks} />
-          </div>
+        <div className="shrink-0">
+          <p className="mb-1 text-right text-[11px] font-medium uppercase tracking-wide text-gray-400">Export all tasks ({allTasks.length})</p>
+          <TaskExportToolbar tasks={allTasks} />
         </div>
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h3 className="text-sm font-bold text-gray-900">Generate tasks from date</h3>
-            <p className="mt-1 text-xs text-gray-500">Duplicate tasks from a previous (or current) date to a new due date.</p>
+            <h3 className="text-sm font-bold text-gray-900">Generate & Attendance for date</h3>
+            <p className="mt-1 text-xs text-gray-500">Pick a date to view who clocked in/out or was absent, then duplicate its tasks.</p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <label className="text-xs font-medium text-gray-700">From
@@ -393,9 +392,55 @@ function CeoDashboard({ user }) {
             <button onClick={handleGenerateFromDate} className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-brand-700">Generate</button>
           </div>
         </div>
-        {genDate && <p className="mt-2 text-xs text-gray-400">{allTasks.filter((t)=>t.due===genDate).length} task(s) on {genDate} will be duplicated to {genTargetDate}.</p>}
+        {genDate && (
+          <div className="mt-3 space-y-2">
+            <p className="text-xs text-gray-500">{allTasks.filter((t)=>t.due===genDate).length} task(s) on {genDate} will be duplicated to {genTargetDate}.</p>
+            {(() => {
+              const punches = allAttendance.filter((p)=> (p.time||'').slice(0,10) === genDate)
+              const byEmail = new Map()
+              punches.forEach((p)=> byEmail.set(p.email.toLowerCase(), p))
+              const presentSet = new Set(punches.map((p)=>p.email.toLowerCase()))
+              const present = employees.filter((e)=> presentSet.has(e.email.toLowerCase()))
+              const absent = employees.filter((e)=> !presentSet.has(e.email.toLowerCase()))
+              const clockedIn = []
+              const clockedOut = []
+              present.forEach((e)=>{
+                const last = [...punches].reverse().find((p)=>p.email.toLowerCase()===e.email.toLowerCase())
+                if (last?.type==='in') clockedIn.push(e); else clockedOut.push(e)
+              })
+              return (
+                <div className="grid gap-2 rounded-lg border border-gray-100 bg-gray-50 p-3 sm:grid-cols-3">
+                  <div className="rounded-lg bg-white p-3 shadow-sm">
+                    <p className="text-xs font-bold text-emerald-700">Clocked In · {clockedIn.length}</p>
+                    <div className="mt-2 space-y-1 max-h-24 overflow-y-auto">
+                      {clockedIn.slice(0,5).map((e)=> <p key={e.email} className="truncate text-xs text-gray-700">{e.name}</p>)}
+                      {clockedIn.length===0 && <p className="text-xs text-gray-400">None</p>}
+                      {clockedIn.length>5 && <p className="text-xs text-gray-400">+{clockedIn.length-5} more</p>}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-white p-3 shadow-sm">
+                    <p className="text-xs font-bold text-gray-700">Clocked Out · {clockedOut.length}</p>
+                    <div className="mt-2 space-y-1 max-h-24 overflow-y-auto">
+                      {clockedOut.slice(0,5).map((e)=> <p key={e.email} className="truncate text-xs text-gray-700">{e.name}</p>)}
+                      {clockedOut.length===0 && <p className="text-xs text-gray-400">None</p>}
+                      {clockedOut.length>5 && <p className="text-xs text-gray-400">+{clockedOut.length-5} more</p>}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-white p-3 shadow-sm">
+                    <p className="text-xs font-bold text-red-600">Absent · {absent.length}</p>
+                    <div className="mt-2 space-y-1 max-h-24 overflow-y-auto">
+                      {absent.slice(0,5).map((e)=> <p key={e.email} className="truncate text-xs text-gray-700">{e.name}</p>)}
+                      {absent.length===0 && <p className="text-xs text-gray-400">None</p>}
+                      {absent.length>5 && <p className="text-xs text-gray-400">+{absent.length-5} more</p>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        )}
         {genResult && (
-          <div className={`rounded-lg px-4 py-3 text-xs font-medium ring-1 ${genResult.type==='success'?'bg-emerald-50 text-emerald-700 ring-emerald-200':'bg-amber-50 text-amber-700 ring-amber-200'}`}>{genResult.msg}</div>
+          <div className={`mt-2 rounded-lg px-4 py-3 text-xs font-medium ring-1 ${genResult.type==='success'?'bg-emerald-50 text-emerald-700 ring-emerald-200':'bg-amber-50 text-amber-700 ring-amber-200'}`}>{genResult.msg}</div>
         )}
       </div>
 
