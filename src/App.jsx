@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { isMaintenanceMode, syncSystemSettingsFromServer } from './lib/systemSettings'
@@ -6,21 +6,27 @@ import RequireRole from './components/RequireRole'
 import Layout from './components/Layout'
 import AdminLayout from './components/AdminLayout'
 import SessionManager from './components/SessionManager'
-import Login from './pages/Login'
-import SystemConfig from './pages/SystemConfig'
-import Companies from './pages/Companies'
-import TaskMonitoring from './pages/TaskMonitoring'
-import CompanyRegistration from './pages/CompanyRegistration'
-import Kiosk from './pages/Kiosk'
-import KioskSetup from './pages/KioskSetup'
-import Dashboard from './pages/Dashboard'
-import TimeKeeping from './pages/TimeKeeping'
-import Tasks from './pages/Tasks'
-import Payroll from './pages/Payroll'
-import Profile from './pages/Profile'
-import KioskCredentials from './pages/KioskCredentials'
-import ShiftSchedules from './pages/ShiftSchedules'
-import People from './pages/People'
+
+// Route-level pages — lazy for code-splitting (468 kB → ~130 kB initial)
+const Login = lazy(() => import('./pages/Login'))
+const SystemConfig = lazy(() => import('./pages/SystemConfig'))
+const Companies = lazy(() => import('./pages/Companies'))
+const TaskMonitoring = lazy(() => import('./pages/TaskMonitoring'))
+const CompanyRegistration = lazy(() => import('./pages/CompanyRegistration'))
+const Kiosk = lazy(() => import('./pages/Kiosk'))
+const KioskSetup = lazy(() => import('./pages/KioskSetup'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const TimeKeeping = lazy(() => import('./pages/TimeKeeping'))
+const Tasks = lazy(() => import('./pages/Tasks'))
+const Payroll = lazy(() => import('./pages/Payroll'))
+const Profile = lazy(() => import('./pages/Profile'))
+const KioskCredentials = lazy(() => import('./pages/KioskCredentials'))
+const ShiftSchedules = lazy(() => import('./pages/ShiftSchedules'))
+const People = lazy(() => import('./pages/People'))
+
+function RouteLoader() {
+  return <div className="flex min-h-[50vh] items-center justify-center text-sm text-gray-400">Loading…</div>
+}
 
 // Single /profile route — wraps the page in the layout matching the user's role.
 function ProfileRoute() {
@@ -106,43 +112,45 @@ function ServerSettingsSync() {
 export default function App() {
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<CompanyRegistration />} />
+      <Suspense fallback={<RouteLoader />}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<CompanyRegistration />} />
 
-        <Route element={<RequireRole role="administrator"><AdminLayout /></RequireRole>}>
-          <Route path="/companies" element={<Companies />} />
-          <Route path="/task-monitoring" element={<TaskMonitoring />} />
-          <Route path="/settings" element={<SystemConfig />} />
-          <Route path="/kiosk-setup" element={<KioskSetup />} />
-        </Route>
+          <Route element={<RequireRole role="administrator"><AdminLayout /></RequireRole>}>
+            <Route path="/companies" element={<Companies />} />
+            <Route path="/task-monitoring" element={<TaskMonitoring />} />
+            <Route path="/settings" element={<SystemConfig />} />
+            <Route path="/kiosk-setup" element={<KioskSetup />} />
+          </Route>
 
-        <Route path="/shifts" element={<PageGate perm="shifts"><ChromeByRole><ShiftSchedules /></ChromeByRole></PageGate>} />
+          <Route path="/shifts" element={<PageGate perm="shifts"><ChromeByRole><ShiftSchedules /></ChromeByRole></PageGate>} />
 
-        {/* Single /profile route — renders inside the right chrome for the user's role */}
-        <Route
-          path="/profile"
-          element={
-            <RequireRole roles={['administrator', 'employee', 'ceo']}>
-              <ProfileRoute />
-            </RequireRole>
-          }
-        />
+          {/* Single /profile route — renders inside the right chrome for the user's role */}
+          <Route
+            path="/profile"
+            element={
+              <RequireRole roles={['administrator', 'employee', 'ceo']}>
+                <ProfileRoute />
+              </RequireRole>
+            }
+          />
 
-        {/* Stand-alone kiosk — publicly accessible, no login required */}
-        <Route path="/kiosk" element={<Kiosk />} />
+          {/* Stand-alone kiosk — publicly accessible, no login required */}
+          <Route path="/kiosk" element={<Kiosk />} />
 
-        <Route element={<RequireRole roles={['employee', 'ceo']}><MaintenanceGate><Layout /></MaintenanceGate></RequireRole>}>
-          <Route path="/" element={<PageGate perm="dashboard"><Dashboard /></PageGate>} />
-          <Route path="/timekeeping" element={<PageGate perm="timekeeping"><TimeKeeping /></PageGate>} />
-          <Route path="/tasks" element={<PageGate perm="tasks"><Tasks /></PageGate>} />
-          <Route path="/payroll" element={<PageGate perm="payroll"><Payroll /></PageGate>} />
-          <Route path="/kiosk-credentials" element={<PageGate perm="kiosk"><KioskCredentials /></PageGate>} />
-          <Route path="/people" element={<PageGate perm="employees"><People /></PageGate>} />
-        </Route>
+          <Route element={<RequireRole roles={['employee', 'ceo']}><MaintenanceGate><Layout /></MaintenanceGate></RequireRole>}>
+            <Route path="/" element={<PageGate perm="dashboard"><Dashboard /></PageGate>} />
+            <Route path="/timekeeping" element={<PageGate perm="timekeeping"><TimeKeeping /></PageGate>} />
+            <Route path="/tasks" element={<PageGate perm="tasks"><Tasks /></PageGate>} />
+            <Route path="/payroll" element={<PageGate perm="payroll"><Payroll /></PageGate>} />
+            <Route path="/kiosk-credentials" element={<PageGate perm="kiosk"><KioskCredentials /></PageGate>} />
+            <Route path="/people" element={<PageGate perm="employees"><People /></PageGate>} />
+          </Route>
 
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </Suspense>
       <SessionManager />
       <ServerSettingsSync />
     </AuthProvider>

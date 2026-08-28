@@ -1,56 +1,43 @@
 # 🚀 Deploying Unified Workforce online (Cloudflare)
 
-Two pieces are deployed: the **API** (Cloudflare Worker, already live) and the
-**frontend** (Cloudflare Pages — this guide).
+Single Worker serves both **API** and **frontend** (SPA) — built from the same repo.
 
-## 1. API (Worker) — already deployed ✅
+## 1. Deploy (API + Frontend) — already live ✅
 
-Live at `https://cadensiq.celestsolutions.workers.dev`.
-To update it after backend changes:
+Live at `https://cadensiq.celestsolutions.workers.dev` (API + app).
 
-```bash
-cd worker
-wrangler deploy
-```
-
-> ⚠️ If you changed `schema.sql`, also run:
-> ```bash
-> wrangler d1 execute workforce --file=./schema.sql --remote
-> ```
-
-## 2. Frontend (Cloudflare Pages) — one-time setup
-
-### Option A: Connect GitHub (auto-deploy on every push) — recommended
-
-1. Go to **dash.cloudflare.com** → **Workers & Pages** → **Create application** → **Pages** → **Connect to Git**
-2. Select the **`workforce`** repository → **Begin setup**
-3. Build settings:
-   - **Framework preset:** `None`
-   - **Build command:** `npm run build`
-   - **Build output directory:** `dist`
-4. Before saving, expand **Environment variables (advanced)** and add:
-   - Name: `VITE_API_URL`
-   - Value: `https://cadensiq.celestsolutions.workers.dev`
-5. **Save and deploy**
-
-Every future `git push` to `master` now automatically redeploys. 🎉
-
-### Option B: Direct upload (manual)
+From the project root after any change:
 
 ```bash
 npm run build
-npx wrangler pages deploy dist --project-name=cadensiq
+npx wrangler deploy --config worker/wrangler.jsonc
 ```
 
-## 3. Share with your client
+The Worker is configured in `worker/wrangler.jsonc:27-32` to serve `dist/` via `assets`
+(single-page-application fallback). No separate Pages project is needed.
+
+> ⚠️ If you changed `worker/schema.sql`, also run:
+> ```bash
+> npx wrangler d1 execute workforce --file=worker/schema.sql --remote
+> ```
+
+### Auto-deploy via GitHub (optional)
+Connect the repo as a **Worker** (not Pages) in Cloudflare Dashboard → Workers & Pages → Create → Worker → Connect to Git. Build command is `npm run build`, deploy command is `npx wrangler deploy --config worker/wrangler.jsonc`.
+
+> Legacy note: earlier docs described a separate Cloudflare Pages frontend (`cadensiq.pages.dev`).
+> That flow is deprecated — the current `wrangler.jsonc` `assets` binding replaced it.
+> Set `VITE_API_URL` only for local dev (`.env`); production uses same-origin (`location.origin`).
+
+## 2. Share with your client
 
 Your app will be live at:
 
 ```
-https://cadensiq.pages.dev        (or <project>.pages.dev)
+https://cadensiq.celestsolutions.workers.dev
+https://cadensiq.pages.dev        (legacy Pages URL, if still active — prefer the workers.dev URL)
 ```
 
-Custom domain (optional): Pages project → **Custom domains** → add e.g.
+Custom domain (optional): Cloudflare Dashboard → Workers & Pages → `cadensiq` → **Custom domains** → add e.g.
 `app.celestsolutions.com` (domain must be added to your Cloudflare account).
 
 ## Kiosk on the company phone

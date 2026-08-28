@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api, apiEnabled } from '../lib/api'
@@ -301,6 +301,17 @@ function CeoDashboard({ user }) {
     ? allTasks.filter((t) => t.assignee === `${selected.name} (${selected.companyName})`)
     : []
 
+  // Performance: pre-group tasks by assignee to avoid O(n*m) filters per employee card
+  const tasksByAssignee = useMemo(() => {
+    const map = new Map()
+    for (const t of allTasks) {
+      const key = t.assignee || ''
+      if (!map.has(key)) map.set(key, [])
+      map.get(key).push(t)
+    }
+    return map
+  }, [allTasks])
+
   const changeTaskStatus = async (taskId, status) => {
     setAllTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status } : t)))
     setViewingTask((prev) => (prev && prev.id === taskId ? { ...prev, status } : prev))
@@ -331,12 +342,9 @@ function CeoDashboard({ user }) {
         <div className="space-y-3">
           {clockedInEmployees.map((emp) => {
             const punch = clockState[emp.email]
-            const openCount = allTasks.filter(
-              (t) => t.assignee === `${emp.name} (${emp.companyName})` && t.status !== 'completed'
-            ).length
-            const doneCount = allTasks.filter(
-              (t) => t.assignee === `${emp.name} (${emp.companyName})` && t.status === 'completed'
-            ).length
+            const empTasks = tasksByAssignee.get(`${emp.name} (${emp.companyName})`) || []
+            const openCount = empTasks.filter((t) => t.status !== 'completed').length
+            const doneCount = empTasks.filter((t) => t.status === 'completed').length
             const isSelected = emp.email === selectedEmail
             return (
               <button

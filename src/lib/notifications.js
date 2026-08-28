@@ -10,9 +10,10 @@ export function loadNotifications() {
 }
 
 // Cloud mode: fetch from D1 via Worker. Falls back to localStorage.
+import { api, apiEnabled } from './api'
+
 export async function fetchNotifications() {
   try {
-    const { api, apiEnabled } = await import('./api')
     if (!apiEnabled()) return loadNotifications()
     const rows = await api('/api/notifications')
     // Worker returns {id,to,subject,body,createdAt} — normalize to local shape
@@ -25,7 +26,6 @@ export async function fetchNotifications() {
 
 export async function clearNotificationsRemote() {
   try {
-    const { api, apiEnabled } = await import('./api')
     if (!apiEnabled()) {
       clearNotifications()
       return
