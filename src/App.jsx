@@ -6,6 +6,7 @@ import RequireRole from './components/RequireRole'
 import Layout from './components/Layout'
 import AdminLayout from './components/AdminLayout'
 import SessionManager from './components/SessionManager'
+import WelcomeIntro from './components/WelcomeIntro'
 
 // Route-level pages — lazy for code-splitting (468 kB → ~130 kB initial)
 const Login = lazy(() => import('./pages/Login'))
@@ -153,6 +154,7 @@ export default function App() {
       </Suspense>
       <SessionManager />
       <ServerSettingsSync />
+      <WelcomeIntro />
     </AuthProvider>
   )
 }

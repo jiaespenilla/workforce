@@ -517,6 +517,24 @@ export default function Companies() {
     }
   }
 
+  const queueWelcomeForCompany = (company) => {
+    const welcomeSubject = `Welcome to ${company.name} — You're all set!`
+    const welcomeBody = `Welcome to ${company.name}!\n\nYour company is now active on Unified Workforce.\n\nIndustry: ${company.industry || '—'}${company.city ? ` · ${company.city}` : ''}\nTeam size: ${company.employees.length} member(s)\n\nQuick start:\n• View your Dashboard for an overview\n• Manage teammates in People\n• Set up Shift Schedules for your team\n• Clock in/out via the Time Kiosk (QR / PIN / fingerprint)\n\nTip: You can find this introduction again in Notifications (bell icon).\n\n— CelestSolutions`
+    for (const emp of company.employees) {
+      if (!emp.email) continue
+      const payload = { to: emp.email, subject: welcomeSubject, body: welcomeBody }
+      if (apiEnabled()) {
+        api('/api/notifications', { method: 'POST', body: payload }).catch(() => {})
+      } else {
+        try {
+          const notifications = JSON.parse(localStorage.getItem('uw_notifications')) || []
+          notifications.push({ id: `notif-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, ...payload, createdAt: new Date().toISOString(), status: 'pending-smtp' })
+          localStorage.setItem('uw_notifications', JSON.stringify(notifications))
+        } catch {}
+      }
+    }
+  }
+
   const handleApprove = (company) => {
     setApproving(company)
   }
@@ -525,6 +543,7 @@ export default function Companies() {
     if (!approving) return
     handleStatusChange(approving.id, 'approved')
     queueOwnerEmail(approving, 'approved')
+    queueWelcomeForCompany(approving)
     setApproving(null)
   }
 

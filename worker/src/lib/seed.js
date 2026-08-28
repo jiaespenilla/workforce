@@ -23,10 +23,10 @@ export async function ensureSeed(env) {
   await addUser(CEO_EMAIL, CEO_NAME, 'ceo', CEO_PASSWORD)
 
   const defaults = [
-    ['CEO', { dashboard: true, timekeeping: true, tasks: true, payroll: true, employees: true, kiosk: false, settings: false }],
-    ['HR Manager', { dashboard: true, timekeeping: true, tasks: true, payroll: false, employees: true, kiosk: true, settings: false }],
-    ['Team Lead', { dashboard: true, timekeeping: true, tasks: true, payroll: false, employees: false, kiosk: true, settings: false }],
-    ['Employee', { dashboard: true, timekeeping: true, tasks: true, payroll: false, employees: false, kiosk: true, settings: false }],
+    ['CEO', { dashboard: true, timekeeping: true, tasks: true, payroll: true, employees: true, shifts: true, kiosk: false, settings: false }],
+    ['HR Manager', { dashboard: true, timekeeping: true, tasks: true, payroll: false, employees: true, shifts: true, kiosk: true, settings: false }],
+    ['Team Lead', { dashboard: true, timekeeping: true, tasks: true, payroll: false, employees: false, shifts: true, kiosk: true, settings: false }],
+    ['Employee', { dashboard: true, timekeeping: true, tasks: true, payroll: false, employees: false, shifts: true, kiosk: true, settings: false }],
   ]
   for (const [name, perms] of defaults) {
     await env.DB.prepare('INSERT INTO roles (name, perms_json) VALUES (?, ?)').bind(name, JSON.stringify(perms)).run()
