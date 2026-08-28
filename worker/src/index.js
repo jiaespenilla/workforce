@@ -717,8 +717,10 @@ async function apiRoutes(path, method, request, env, url, claims) {
       // Users may only view their own credentials; admins can view any.
       if (!isAdmin && claims.sub !== targetEmail) return json({ error: 'Forbidden' }, 403)
       const row = await env.DB.prepare('SELECT * FROM employee_credentials WHERE email = ?').bind(targetEmail).first()
+      const wRow = await env.DB.prepare('SELECT credential_id FROM webauthn_credentials WHERE lower(email) = lower(?)').bind(targetEmail).first()
       return json({
-        fpToken: row?.fp_token || null,
+        fpToken: row?.fp_token || (wRow ? 'webauthn-registered' : null),
+        webauthn: !!wRow,
         pinSet: !!row?.pin_hash,
         qrCode: row?.qr_code || null,
       })
@@ -826,9 +828,10 @@ async function apiRoutes(path, method, request, env, url, claims) {
     return json(result)
   }
   if (path === '/api/notifications' && method === 'POST') {
-    // Sending platform notifications/email is an administrator action.
-    if (!isAdmin) return json({ error: 'Administrator only.' }, 403)
     const n = await readJson(request)
+    const isTaskCompleted = (n.subject||'').toLowerCase().includes('completed') && (n.subject||'').toLowerCase().includes('task')
+    // Allow any authenticated user to notify managers/CEO on task completion; otherwise admin only.
+    if (!isAdmin && !isTaskCompleted) return json({ error: 'Administrator only.' }, 403)
     await queueNotification(env, n)
     return json({ ok: true }, 201)
   }

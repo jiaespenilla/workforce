@@ -29,6 +29,11 @@ function currentWeek() {
   })
 }
 
+function systemDateKey(timeStr) {
+  try { return new Date(timeStr).toLocaleDateString('en-CA', { timeZone: getSystemTimeZone() }) } catch { return new Date(timeStr).toDateString() }
+}
+function systemTodayKey() { return new Date().toLocaleDateString('en-CA', { timeZone: getSystemTimeZone() }) }
+
 function inRange(timeStr, view) {
   const t = new Date(timeStr).getTime()
   const now = Date.now()
@@ -79,7 +84,7 @@ function CeoTimeKeeping() {
   const employees = allEmployees.filter((e) => e.active !== false)
 
   const getViewPunches = (email) => attendance.filter((p) => p.email === email && inRange(p.time, view))
-  const getTodayPunches = (email) => attendance.filter((p) => p.email === email && new Date(p.time).toDateString() === now.toDateString())
+  const getTodayPunches = (email) => attendance.filter((p) => p.email === email && systemDateKey(p.time) === systemTodayKey())
   const getLastPunch = (email) => {
     const list = getViewPunches(email).sort((a,b)=> new Date(a.time)-new Date(b.time))
     return list.length > 0 ? list[list.length - 1] : null
@@ -196,8 +201,8 @@ function CeoTimeKeeping() {
                 const days = Array.from({length: new Date(new Date().getFullYear(), new Date().getMonth()+1,0).getDate()}, (_,i)=>{
                   const d = new Date(new Date().getFullYear(), new Date().getMonth(), 1); d.setDate(i+1)
                   const key = d.toDateString()
-                  const count = employees.filter((e)=> getViewPunches(e.email).some((p)=> new Date(p.time).toDateString()===key)).length
-                  const isToday = key===new Date().toDateString()
+                  const count = employees.filter((e)=> getViewPunches(e.email).some((p)=> systemDateKey(p.time)===systemDateKey(key))).length
+                  const isToday = systemDateKey(key)===systemTodayKey()
                   return (
                     <button key={key} onClick={()=>setSelectedDate(key)} className={`rounded-lg border p-2 text-center hover:shadow-sm transition text-left ${count ? 'bg-brand-50 border-brand-200 hover:border-brand-300' : 'bg-gray-50 border-gray-100 hover:bg-white'} ${isToday ? 'ring-2 ring-brand-400' : ''}`}>
                       <p className="text-xs font-bold text-gray-900">{i+1}</p>
@@ -237,13 +242,13 @@ function CeoTimeKeeping() {
               <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
                 <div>
                   <h3 className="text-sm font-bold text-gray-900">{new Date(selectedDate).toLocaleDateString([], {weekday:'long', month:'long', day:'numeric', year:'numeric'})}</h3>
-                  <p className="text-xs text-gray-500">{attendance.filter((p)=> new Date(p.time).toDateString()===selectedDate).length} punches · {[...new Set(attendance.filter((p)=> new Date(p.time).toDateString()===selectedDate).map((p)=>p.email))].length} employees</p>
+                  <p className="text-xs text-gray-500">{attendance.filter((p)=> systemDateKey(p.time)===systemDateKey(selectedDate)).length} punches · {[...new Set(attendance.filter((p)=> systemDateKey(p.time)===systemDateKey(selectedDate)).map((p)=>p.email))].length} employees</p>
                 </div>
                 <button onClick={()=>setSelectedDate(null)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
               </div>
               <div className="overflow-y-auto divide-y divide-gray-100 flex-1">
                 {employees.map((emp)=>{
-                  const dayPunches = attendance.filter((p)=> p.email===emp.email && new Date(p.time).toDateString()===selectedDate).sort((a,b)=> new Date(a.time)-new Date(b.time))
+                  const dayPunches = attendance.filter((p)=> p.email===emp.email && systemDateKey(p.time)===systemDateKey(selectedDate)).sort((a,b)=> new Date(a.time)-new Date(b.time))
                   if (!dayPunches.length) return null
                   const firstIn = dayPunches.find((p)=>p.type==='in')
                   const lastOut = [...dayPunches].reverse().find((p)=>p.type==='out')
@@ -258,12 +263,12 @@ function CeoTimeKeeping() {
                     </div>
                   )
                 })}
-                {attendance.filter((p)=> new Date(p.time).toDateString()===selectedDate).length===0 && <p className="p-8 text-center text-sm text-gray-400">No punches for this day.</p>}
+                {attendance.filter((p)=> systemDateKey(p.time)===systemDateKey(selectedDate)).length===0 && <p className="p-8 text-center text-sm text-gray-400">No punches for this day.</p>}
               </div>
               <div className="border-t border-gray-100 p-4 flex justify-end gap-2">
                 <button onClick={()=>setSelectedDate(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
                 <button onClick={()=>{
-                  const dayPunches = attendance.filter((p)=> new Date(p.time).toDateString()===selectedDate)
+                  const dayPunches = attendance.filter((p)=> systemDateKey(p.time)===systemDateKey(selectedDate))
                   const rows = employees.map((emp)=>{
                     const ps = dayPunches.filter((p)=>p.email===emp.email).sort((a,b)=> new Date(a.time)-new Date(b.time))
                     if (!ps.length) return null
@@ -321,12 +326,12 @@ export default function TimeKeeping() {
   // history of the signed-in user's kiosk punches.
   const lastPunch = myPunches[0] || null
   const isClockedIn = lastPunch?.type === 'in'
-  const todayPunches = myPunches.filter((p) => new Date(p.time).toDateString() === new Date().toDateString())
+  const todayPunches = myPunches.filter((p) => systemDateKey(p.time) === systemTodayKey())
 
   const timesheetRows = (() => {
     if (view === 'day') {
       const d = new Date()
-      const punches = myPunches.filter((p) => new Date(p.time).toDateString() === d.toDateString()).sort((a,b)=> new Date(a.time)-new Date(b.time))
+      const punches = myPunches.filter((p) => systemDateKey(p.time) === systemDateKey(d)).sort((a,b)=> new Date(a.time)-new Date(b.time))
       const firstIn = punches.find((p)=>p.type==='in')
       const lastOut = [...punches].reverse().find((p)=>p.type==='out')
       return [{
@@ -343,7 +348,7 @@ export default function TimeKeeping() {
       const monday = startOfWeek(new Date())
       return Array.from({ length: 5 }, (_, i) => {
         const d = new Date(monday); d.setDate(monday.getDate()+i)
-        const punches = myPunches.filter((p)=> new Date(p.time).toDateString()===d.toDateString())
+        const punches = myPunches.filter((p)=> systemDateKey(p.time)===systemDateKey(d))
         const firstIn = punches.find((p)=>p.type==='in')
         const lastOut = [...punches].reverse().find((p)=>p.type==='out')
         const isToday = d.toDateString()===new Date().toDateString()
@@ -361,7 +366,7 @@ export default function TimeKeeping() {
     // month: last 30 days
     return Array.from({ length: 30 }, (_, i) => {
       const d = new Date(); d.setDate(d.getDate() - (29 - i)); d.setHours(0,0,0,0)
-      const punches = myPunches.filter((p)=> new Date(p.time).toDateString()===d.toDateString())
+      const punches = myPunches.filter((p)=> systemDateKey(p.time)===systemDateKey(d))
       const firstIn = punches.find((p)=>p.type==='in')
       const lastOut = [...punches].reverse().find((p)=>p.type==='out')
       return {
@@ -500,10 +505,10 @@ export default function TimeKeeping() {
                 const days = Array.from({length: new Date(new Date().getFullYear(), new Date().getMonth()+1,0).getDate()}, (_,i)=>{
                   const d = new Date(new Date().getFullYear(), new Date().getMonth(), 1); d.setDate(i+1)
                   const key = d.toDateString()
-                  const punches = myPunches.filter((p)=> new Date(p.time).toDateString()===key)
+                  const punches = myPunches.filter((p)=> systemDateKey(p.time)===systemDateKey(key))
                   const hrs = hoursForDay(punches)
                   const hasPunch = punches.length>0
-                  const isToday = key===new Date().toDateString()
+                  const isToday = systemDateKey(key)===systemTodayKey()
                   return (
                     <div key={key} className={`rounded-lg border p-2 text-left ${hasPunch ? 'bg-brand-50 border-brand-200' : 'bg-gray-50 border-gray-100'} ${isToday ? 'ring-2 ring-brand-400' : ''}`}>
                       <p className="text-xs font-bold text-gray-900">{i+1}</p>

@@ -13,6 +13,7 @@ export default function KioskCredentials() {
   const email = user?.email
 
   const [fpStatus, setFpStatus] = useState(null)
+  const [isWebauthn, setIsWebauthn] = useState(false)
   const [pinStatus, setPinStatus] = useState(null)
   const [pinInput, setPinInput] = useState('')
   const [qrImg, setQrImg] = useState(null)
@@ -30,6 +31,7 @@ export default function KioskCredentials() {
           cred = await getCredential(email)
         }
         setFpStatus(cred.fpToken ? 'registered' : null)
+        setIsWebauthn(!!cred.webauthn)
         setPinStatus(cred.pinSet ? { ok: true } : null)
         if (cred.qrCode) {
           setQrCodeStr(cred.qrCode)
@@ -104,7 +106,8 @@ export default function KioskCredentials() {
           </p>
           {fpStatus === 'registered' ? (
             <>
-              <p className="mt-2 text-xs font-medium text-brand-700">✓ Registered</p>
+              <p className="mt-2 text-xs font-medium text-brand-700">✓ Registered{isWebauthn && <span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200">Synced from Admin Setup</span>}</p>
+              {isWebauthn && <p className="mt-1 text-[11px] text-gray-500">Fingerprint was registered by Administrator — no need to re-capture.</p>}
               <button type="button" onClick={captureFingerprint} className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
                 Re-capture
               </button>

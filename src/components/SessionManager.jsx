@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getSessionTimeoutMinutes } from '../lib/systemSettings'
+import { getSessionTimeoutMinutes, syncSystemSettingsFromServer } from '../lib/systemSettings'
 
 // Watches user activity and auto-signs-out after the configured idle minutes.
 // A warning with countdown appears one minute before expiry.
@@ -21,6 +21,8 @@ export default function SessionManager() {
 
   useEffect(() => {
     if (!user) return undefined
+    // sync idle timeout from server every 30s so non-admins get admin's change without reload
+    const sync = setInterval(() => { syncSystemSettingsFromServer().catch(()=>{}) }, 30000)
     const t = setInterval(() => {
       const minutes = getSessionTimeoutMinutes()
       if (!minutes) {
@@ -40,7 +42,7 @@ export default function SessionManager() {
         setWarning(false)
       }
     }, 1000)
-    return () => clearInterval(t)
+    return () => { clearInterval(t); clearInterval(sync) }
   }, [user, logout, navigate])
 
   if (!warning || !user) return null

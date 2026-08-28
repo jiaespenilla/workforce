@@ -16,6 +16,6 @@ export const REGISTER_MAX_ATTEMPTS = 5
 export const KIOSK_WINDOW_MS = 15 * 60 * 1000
 export const KIOSK_MAX_ATTEMPTS = 200
 
-export const COMPANY_SETTING_KEYS = ['shift_schedules', 'company_locations', 'kiosk_configs']
+export const COMPANY_SETTING_KEYS = ['shift_schedules', 'company_locations', 'kiosk_configs', 'attachment_storage']
 export const GLOBAL_SETTINGS_SQL =
-  "SELECT key, value FROM settings WHERE key NOT LIKE 'shift_schedules:%' AND key NOT LIKE 'company_locations:%' AND key NOT LIKE 'kiosk_configs:%'"
+  "SELECT key, value FROM settings WHERE key NOT LIKE 'shift_schedules:%' AND key NOT LIKE 'company_locations:%' AND key NOT LIKE 'kiosk_configs:%' AND key NOT LIKE 'attachment_storage:%'"

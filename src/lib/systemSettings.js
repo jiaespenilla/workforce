@@ -19,8 +19,14 @@ export async function prefetchServerSettings() {
       ...(s.system_name ? { name: s.system_name } : {}),
       ...(s.version ? { version: s.version } : {}),
       ...(s.timezone ? { timezone: s.timezone } : {}),
+      ...(s.idle_timeout !== undefined ? { idle_timeout: s.idle_timeout } : s.idle_timeout_minutes !== undefined ? { idle_timeout: s.idle_timeout_minutes } : {}),
     }
     localStorage.setItem('uw_system_settings', JSON.stringify(_serverSettings))
+    if (s.idle_timeout !== undefined || s.idle_timeout_minutes !== undefined) {
+      const v = s.idle_timeout ?? s.idle_timeout_minutes
+      if (v !== undefined && v !== null && String(v).trim() !== '') localStorage.setItem('uw_session_timeout', String(v))
+      else localStorage.removeItem('uw_session_timeout')
+    }
     // Hydrate favicon from D1 (global) — overwrites local if server has value
     if (s.system_icon) {
       localStorage.setItem('uw_system_icon', s.system_icon)
@@ -80,9 +86,15 @@ export function setMaintenanceMode(on) {
 }
 
 // Idle session time-out in minutes. 0 disables auto-logout. Applies immediately.
+// Prefers server-synced value (_serverSettings.idle_timeout) so non-admins get admin's setting.
 export function getSessionTimeoutMinutes() {
+  if (_serverSettings && _serverSettings.idle_timeout !== undefined) {
+    const v = Number(_serverSettings.idle_timeout)
+    if (Number.isFinite(v) && v > 0) return Math.floor(v)
+    if (_serverSettings.idle_timeout === '' || v === 0) return 0
+  }
   const value = Number(localStorage.getItem('uw_session_timeout'))
-  return Number.isFinite(value) && value > 0 ? value : 0
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0
 }
 
 // Pull server-managed system details (cloud mode) into the active settings.
@@ -94,10 +106,18 @@ export async function syncSystemSettingsFromServer() {
       ...(s.system_name ? { name: s.system_name } : {}),
       ...(s.version ? { version: s.version } : {}),
       ...(s.timezone ? { timezone: s.timezone } : {}),
+      ...(s.idle_timeout !== undefined ? { idle_timeout: s.idle_timeout } : s.idle_timeout_minutes !== undefined ? { idle_timeout: s.idle_timeout_minutes } : {}),
     }
-    if (!Object.keys(mapped).length && !s.system_icon) return
-    _serverSettings = mapped
-    localStorage.setItem('uw_system_settings', JSON.stringify(mapped))
+    const hasIcon = s.system_icon !== undefined
+    const hasIdle = s.idle_timeout !== undefined || s.idle_timeout_minutes !== undefined
+    if (!Object.keys(mapped).length && !hasIcon && !hasIdle) return
+    _serverSettings = { ...(_serverSettings || {}), ...mapped }
+    localStorage.setItem('uw_system_settings', JSON.stringify(_serverSettings))
+    if (hasIdle) {
+      const v = s.idle_timeout ?? s.idle_timeout_minutes
+      if (v !== undefined && v !== null && String(v).trim() !== '') localStorage.setItem('uw_session_timeout', String(v))
+      else localStorage.removeItem('uw_session_timeout')
+    }
     if (s.system_icon) {
       localStorage.setItem('uw_system_icon', s.system_icon)
       try { document.querySelector("link[rel~='icon']")?.setAttribute('href', s.system_icon) } catch {}
@@ -110,7 +130,7 @@ export async function syncSystemSettingsFromServer() {
 }
 
 // Push system details to the server (cloud mode). Returns an error string or null.
-export async function pushSystemSettingsToServer({ name, version, timezone, system_icon }) {
+export async function pushSystemSettingsToServer({ name, version, timezone, system_icon, idle_timeout }) {
   if (!apiEnabled()) return null
   try {
     const body = {}
@@ -118,6 +138,7 @@ export async function pushSystemSettingsToServer({ name, version, timezone, syst
     if (version !== undefined) body.version = version
     if (timezone !== undefined) body.timezone = timezone
     if (system_icon !== undefined) body.system_icon = system_icon
+    if (idle_timeout !== undefined) body.idle_timeout = idle_timeout
     if (!Object.keys(body).length) return null
     await api('/api/settings', { method: 'PUT', body })
     return null
@@ -138,6 +159,13 @@ export async function pushSystemIconToServer(icon) {
 
 export function setSessionTimeoutMinutes(minutes) {
   const value = Number(minutes)
-  if (Number.isFinite(value) && value > 0) localStorage.setItem('uw_session_timeout', String(Math.floor(value)))
+  const normalized = Number.isFinite(value) && value > 0 ? String(Math.floor(value)) : ''
+  if (normalized) localStorage.setItem('uw_session_timeout', normalized)
   else localStorage.removeItem('uw_session_timeout')
+  // sync server value so non-admins receive it immediately
+  if (_serverSettings) _serverSettings.idle_timeout = normalized || ''
+  if (apiEnabled()) {
+    // fire-and-forget sync
+    api('/api/settings', { method: 'PUT', body: { idle_timeout: normalized } }).catch(()=>{})
+  }
 }

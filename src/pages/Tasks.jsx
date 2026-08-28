@@ -32,7 +32,8 @@ function loadLocalMyTasks(name) {
 export default function Tasks() {
   usePageTitle('Tasks')
   const { user } = useAuth()
-  return user?.role === 'ceo' ? <TaskMonitoring /> : <EmployeeTasks name={user?.name || ''} />
+  const canManage = user?.role === 'ceo' || (user?.role !== 'administrator' && canAction(user?.perms, 'tasks', 'add'))
+  return canManage ? <TaskMonitoring /> : <EmployeeTasks name={user?.name || ''} />
 }
 
 function EmployeeTasks({ name }) {
@@ -45,16 +46,20 @@ function EmployeeTasks({ name }) {
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ title:'', priority:'Medium', due:'' })
   const [companyName, setCompanyName] = useState('')
+  const [companyId, setCompanyId] = useState('')
+  const [detailTask, setDetailTask] = useState(null)
+  const [workNotes, setWorkNotes] = useState('')
+  const [attachName, setAttachName] = useState('')
+  const [attachData, setAttachData] = useState(null)
 
   useEffect(() => {
     if (apiEnabled()) {
       api('/api/tasks')
         .then((all) => setTasks(all.filter((t) => t.assignee && t.assignee.startsWith(`${name} (`))))
         .catch(() => setTasks(loadLocalMyTasks(name)))
-      // resolve company for assignee string
       api('/api/companies').then((cs)=>{
         const c = cs.find((co)=> (co.employees||[]).some((e)=> e.email.toLowerCase()=== (user?.email||'').toLowerCase()))
-        if (c) setCompanyName(c.name)
+        if (c) { setCompanyName(c.name); setCompanyId(c.id) }
       }).catch(()=>{})
     } else {
       setTasks(loadLocalMyTasks(name))
@@ -63,12 +68,49 @@ function EmployeeTasks({ name }) {
 
   const drop = async (status) => {
     if (dragId == null) return
+    const task = tasks.find((t)=> t.id===dragId)
     setTasks((t) => t.map((task) => (task.id === dragId ? { ...task, status } : task)))
     if (apiEnabled()) {
       await api(`/api/tasks/${dragId}`, { method: 'PUT', body: { status } }).catch(() => {})
+      if (status==='completed' && task) notifyCompleted(task)
     }
     setDragId(null)
     setOverCol(null)
+  }
+
+  const notifyCompleted = async (task) => {
+    try {
+      const cs = await api('/api/companies').catch(()=>[])
+      const comp = cs.find((c)=> c.id===companyId) || cs.find((c)=> (c.employees||[]).some((e)=> e.email.toLowerCase()===user?.email?.toLowerCase()))
+      if (!comp) return
+      const managers = comp.employees.filter((e)=>{
+        const r=(e.role||'').toLowerCase()
+        return r.includes('manager') || r.includes('lead') || r==='ceo' || r.includes('ceo')
+      }).filter((e)=> e.email.toLowerCase() !== user?.email?.toLowerCase())
+      for (const m of managers) {
+        await api('/api/notifications', {method:'POST', body:{to:m.email, subject:`Task completed: ${task.title} by ${name}`, body:`${name} has completed task "${task.title}" (Priority: ${task.priority}, Due: ${task.due || '—'}).\n\nPlease review in Task Monitoring.`}}).catch(()=>{})
+      }
+    } catch {}
+  }
+
+  const acceptTask = async (id) => {
+    const task = tasks.find((t)=>t.id===id)
+    setTasks((t)=> t.map((x)=> x.id===id ? {...x, status:'inprogress'} : x))
+    if (apiEnabled()) await api(`/api/tasks/${id}`, {method:'PUT', body:{status:'inprogress'}}).catch(()=>{})
+  }
+  const declineTask = async (id) => {
+    setTasks((t)=> t.map((x)=> x.id===id ? {...x, status:'declined'} : x))
+    if (apiEnabled()) await api(`/api/tasks/${id}`, {method:'PUT', body:{status:'declined'}}).catch(()=>{})
+  }
+  const saveWork = async () => {
+    if (!detailTask) return
+    const updates = { status: detailTask.status, notes: workNotes, attachName: attachName || null, attachData: attachData || null }
+    setTasks((ts)=> ts.map((t)=> t.id===detailTask.id ? {...t, ...updates} : t))
+    if (apiEnabled()) {
+      await api(`/api/tasks/${detailTask.id}`, {method:'PUT', body:{ status: detailTask.status, notes: workNotes }}).catch(()=>{})
+      // try to store attachment via notifications or just keep local for now
+    }
+    setDetailTask(null)
   }
 
   const canAdd = canAction(user?.perms, 'tasks', 'add')
@@ -99,15 +141,16 @@ function EmployeeTasks({ name }) {
     inprogress: filtered.filter((t) => t.status === 'inprogress').length,
     completed: filtered.filter((t) => t.status === 'completed').length,
   }
+  const declinedCount = filtered.filter((t)=> t.status==='declined').length
   const total = filtered.length
   const progress = total ? Math.round((counts.completed / total) * 100) : 0
-  const overdue = filtered.filter((t) => t.due && t.status !== 'completed' && new Date(t.due) < new Date(new Date().setHours(0,0,0,0))).length
+  const overdue = filtered.filter((t) => t.due && t.status !== 'completed' && t.status !== 'declined' && new Date(t.due) < new Date(new Date().setHours(0,0,0,0))).length
 
   const dueBadge = (due, status) => {
     if (!due) return <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">No due date</span>
     const d = new Date(due)
     const today = new Date(); today.setHours(0,0,0,0)
-    const isOverdue = d < today && status !== 'completed'
+    const isOverdue = d < today && status !== 'completed' && status !== 'declined'
     const isToday = d.getTime() === today.getTime()
     const isSoon = !isOverdue && !isToday && (d - today) / 86400000 <= 2
     if (isOverdue) return <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">Overdue · {due}</span>
@@ -167,6 +210,7 @@ function EmployeeTasks({ name }) {
             <span className="hidden h-4 w-px bg-gray-200 sm:block" />
             <span className="text-xs text-gray-500">{counts.pending} pending · {counts.inprogress} in progress · {counts.completed} completed</span>
             {overdue>0 && <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200">{overdue} overdue</span>}
+            {declinedCount>0 && <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">{declinedCount} declined</span>}
           </div>
           <div className="flex items-center gap-2">
             <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-100 sm:w-32">
@@ -196,28 +240,41 @@ function EmployeeTasks({ name }) {
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${counts[col.id] ? 'bg-white text-gray-700 ring-1 ring-gray-200' : 'bg-gray-100 text-gray-400'}`}>{counts[col.id]}</span>
             </div>
 
-            {filtered.filter((t) => t.status === col.id).map((task) => (
+            {(col.id==='pending' ? filtered.filter((t)=> t.status==='pending' || t.status==='declined') : filtered.filter((t)=> t.status===col.id)).map((task) => (
               <div
                 key={task.id}
-                draggable
+                draggable={task.status!=='declined'}
                 onDragStart={() => setDragId(task.id)}
                 onDragEnd={() => { setDragId(null); setOverCol(null) }}
-                className={`group cursor-grab rounded-xl border-l-4 bg-white p-4 shadow-sm transition hover:shadow-md active:cursor-grabbing ${priorityAccent[task.priority] || 'border-l-gray-300'} ${dragId === task.id ? 'opacity-40 scale-[0.98]' : ''}`}
+                className={`group rounded-xl border-l-4 bg-white p-4 shadow-sm transition hover:shadow-md ${priorityAccent[task.priority] || 'border-l-gray-300'} ${dragId === task.id ? 'opacity-40 scale-[0.98]' : ''} ${task.status==='declined' ? 'opacity-60 bg-gray-50' : 'cursor-grab active:cursor-grabbing'}`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className={`text-sm font-semibold leading-snug ${task.status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                  <h3 className={`text-sm font-semibold leading-snug ${task.status === 'completed' ? 'text-gray-400 line-through' : task.status==='declined' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                     {task.title}
                   </h3>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${priorityStyles[task.priority]}`}>{task.priority}</span>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${task.status==='declined' ? 'bg-gray-200 text-gray-600' : priorityStyles[task.priority]}`}>{task.status==='declined' ? 'Declined' : task.priority}</span>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-1.5">
                   {dueBadge(task.due, task.status)}
                 </div>
-                <p className="mt-2 text-[11px] text-gray-400">Drag to move →</p>
+                {col.id==='pending' && task.status==='pending' && (
+                  <div className="mt-3 flex gap-2">
+                    <button onClick={()=>acceptTask(task.id)} className="flex-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">Accept</button>
+                    <button onClick={()=>declineTask(task.id)} className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">Decline</button>
+                  </div>
+                )}
+                {col.id==='inprogress' && (
+                  <div className="mt-3">
+                    <button onClick={()=>{setDetailTask(task); setWorkNotes(task.notes||''); setAttachName(task.attachName||'')}} className="w-full rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100">View / Attach</button>
+                    {task.attachName && <p className="mt-1 text-[11px] text-emerald-600">📎 {task.attachName}</p>}
+                  </div>
+                )}
+                {col.id==='completed' && task.attachName && <p className="mt-2 text-[11px] text-emerald-600">📎 {task.attachName}</p>}
+                {task.status!=='declined' && col.id!=='pending' && <p className="mt-2 text-[11px] text-gray-400">Drag to move →</p>}
               </div>
             ))}
 
-            {filtered.filter((t) => t.status === col.id).length === 0 && (
+            {(col.id==='pending' ? filtered.filter((t)=> t.status==='pending' || t.status==='declined').length===0 : filtered.filter((t) => t.status === col.id).length === 0) && (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-white/60 p-6 text-center">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100"><svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg></div>
                 <p className="text-sm font-medium text-gray-500">No tasks</p>
@@ -227,6 +284,39 @@ function EmployeeTasks({ name }) {
           </div>
         ))}
       </div>
+      {detailTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={()=>setDetailTask(null)}>
+          <div className="absolute inset-0 bg-gray-900/50" />
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e)=>e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">{detailTask.title}</h3>
+                <p className="mt-1 text-xs text-gray-500">Due {detailTask.due || '—'} · {detailTask.priority}</p>
+              </div>
+              <button onClick={()=>setDetailTask(null)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
+            <div className="mt-4">
+              <label className="block text-xs font-medium text-gray-700">Work progress / notes</label>
+              <textarea value={workNotes} onChange={(e)=>setWorkNotes(e.target.value)} rows={4} placeholder="List down work done, checklist, etc." className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none" />
+            </div>
+            <div className="mt-4">
+              <label className="block text-xs font-medium text-gray-700">Attach document (pdf, doc, xls, image)</label>
+              <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" onChange={(e)=>{
+                const f=e.target.files?.[0]; if(!f) return
+                if(f.size>5*1024*1024){ alert('Max 5MB'); return }
+                const reader=new FileReader(); reader.onload=()=>{ setAttachData(reader.result); setAttachName(f.name) }; reader.readAsDataURL(f)
+              }} className="mt-1 w-full text-sm" />
+              {attachName && <p className="mt-1 text-xs text-emerald-600">Selected: {attachName}</p>}
+              {detailTask.attachName && !attachName && <p className="mt-1 text-xs text-gray-500">Current: {detailTask.attachName}</p>}
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={()=>setDetailTask(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm">Cancel</button>
+              <button onClick={saveWork} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white">Save</button>
+            </div>
+            <p className="mt-3 text-center text-[11px] text-gray-400">CEO will choose storage (GDrive/R2/D1) in System Configuration. For now files are stored as Data URL.</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
