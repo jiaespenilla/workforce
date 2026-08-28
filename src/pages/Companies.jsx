@@ -56,40 +56,16 @@ function buildCompanyForm(company) {
   }
 }
 
-function getCompanyLogoSrc(company) {
-  const raw = company?.logoName || company?.logo || null
-  if (!raw || typeof raw !== 'string') return null
-  const trimmed = raw.trim()
-  if (!trimmed) return null
-  if (trimmed.startsWith('data:image/') || trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('/') || trimmed.startsWith('blob:')) return trimmed
-  return null
+function initialsOf(name) {
+  return (name || '').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?'
 }
 
-function CompanyLogo({ company, size = 'h-12 w-12', textSize = 'text-base', dimWhenInactive = false }) {
-  const src = getCompanyLogoSrc(company)
-  const initials = (company.name || '')
-    .split(' ')
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() || '?'
-  const [imgError, setImgError] = useState(false)
-  const isInactive = dimWhenInactive && company?.active === false
-  if (src && !imgError) {
-    return (
-      <img
-        src={src}
-        alt={`${company.name} logo`}
-        className={`${size} shrink-0 rounded-xl object-cover ring-1 ring-gray-200 bg-white ${isInactive ? 'opacity-60 grayscale' : ''}`}
-        onError={() => setImgError(true)}
-      />
-    )
+function CompanyLogo({ company, size = 'h-12 w-12', textSize = 'text-base' }) {
+  const src = company?.logoName?.startsWith?.('data:image/') ? company.logoName : null
+  if (src) {
+    return <img src={src} alt="" className={`${size} shrink-0 rounded-xl object-cover ring-1 ring-gray-200 bg-white`} onError={(e) => { e.currentTarget.style.display = 'none' }} />
   }
-  return (
-    <div className={`flex ${size} shrink-0 items-center justify-center rounded-xl ${isInactive ? 'bg-gray-400' : 'bg-brand-600'} ${textSize} font-bold text-white shadow`}>
-      {initials}
-    </div>
-  )
+  return <div className={`flex ${size} shrink-0 items-center justify-center rounded-xl bg-brand-600 ${textSize} font-bold text-white`}>{initialsOf(company.name)}</div>
 }
 
 function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmployee, onEditCompany }) {
@@ -412,7 +388,7 @@ function CompanyCard({ company, onView, onApprove, onReject }) {
         onClick={() => setOpen(!open)}
         className="flex w-full items-center gap-3 px-4 py-4 text-left transition hover:bg-gray-50 sm:gap-4 sm:px-5"
       >
-        <CompanyLogo company={company} size="h-11 w-11" textSize="text-sm" dimWhenInactive />
+        <CompanyLogo company={company} size="h-11 w-11" textSize="text-sm" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <p className="truncate text-sm font-semibold text-gray-900 sm:text-[15px]">{company.name}</p>

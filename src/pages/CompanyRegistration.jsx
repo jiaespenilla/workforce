@@ -41,9 +41,7 @@ const inputCls = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 
 
 export default function CompanyRegistration() {
   usePageTitle('Company Registration')
-  const [logoName, setLogoName] = useState(null)
-  const [logoDataUrl, setLogoDataUrl] = useState(null)
-  const [logoError, setLogoError] = useState(null)
+  const [logo, setLogo] = useState(null) // data URL
   const [submitted, setSubmitted] = useState(false)
   const [companyName, setCompanyName] = useState('')
   const [nameError, setNameError] = useState('')
@@ -227,7 +225,7 @@ export default function CompanyRegistration() {
       contactPhone: data.contactPhone,
       contactEmail: data.contactEmail || ceo.email,
       registered: new Date().toISOString().slice(0, 10),
-      logoName: logoDataUrl || logoName || null,
+      logoName: logo || null,
       status: 'pending',
       active: true,
       owner: { name: ceo.name, title: 'CEO', email: ceo.email },
@@ -285,40 +283,22 @@ export default function CompanyRegistration() {
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0]
-                  if (!file) return
-                  setLogoError(null)
-                  if (!file.type.startsWith('image/')) { setLogoError('Please upload an image file (PNG, JPG, SVG).'); return }
-                  if (file.size > 2 * 1024 * 1024) { setLogoError('Image must be smaller than 2MB.'); return }
-                  const reader = new FileReader()
-                  reader.onload = () => {
-                    setLogoDataUrl(reader.result)
-                    setLogoName(file.name)
-                  }
-                  reader.onerror = () => setLogoError('Failed to read image.')
-                  reader.readAsDataURL(file)
+                  if (!file || !file.type.startsWith('image/') || file.size > 2 * 1024 * 1024) return
+                  const r = new FileReader()
+                  r.onload = () => setLogo(r.result)
+                  r.readAsDataURL(file)
                 }}
               />
               <div className="mx-auto flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-gray-200">
-                {logoDataUrl ? (
-                  <img src={logoDataUrl} alt="Logo preview" className="h-full w-full object-cover" />
-                ) : (
+                {logo ? <img src={logo} alt="" className="h-full w-full object-cover" /> : (
                   <svg className="h-5 w-5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                   </svg>
                 )}
               </div>
-              <p className="mt-2 text-xs font-medium text-gray-700">{logoName ? <span className="text-brand-700">{logoName} ✓</span> : 'Upload company logo (optional)'}</p>
-              <p className="mt-1 text-[11px] text-gray-400">PNG, JPG or SVG — max 2MB, square works best</p>
-              {logoError && <p className="mt-1 text-xs font-medium text-red-600">{logoError}</p>}
-              {logoDataUrl && (
-                <button
-                  type="button"
-                  onClick={(ev) => { ev.preventDefault(); setLogoDataUrl(null); setLogoName(null); setLogoError(null) }}
-                  className="mt-2 text-xs font-medium text-red-600 hover:text-red-700"
-                >
-                  Remove logo
-                </button>
-              )}
+              <p className="mt-2 text-xs font-medium text-gray-700">{logo ? <span className="text-brand-700">Logo ready ✓</span> : 'Upload company logo (optional)'}</p>
+              <p className="mt-1 text-[11px] text-gray-400">PNG, JPG or SVG — max 2MB</p>
+              {logo && <button type="button" onClick={(ev) => { ev.preventDefault(); setLogo(null) }} className="mt-2 text-xs text-red-600">Remove</button>}
             </label>
 
             <div className="grid gap-3 sm:grid-cols-2">
