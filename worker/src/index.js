@@ -454,6 +454,47 @@ async function route(request, env) {
     return json(rows.map((r) => ({ id: r.id, name: r.name, perms: safeParse(r.perms_json) })))
   }
 
+  /* kiosk credential identification — public, used by the stand-alone kiosk */
+  if (path === '/api/kiosk/identify' && method === 'POST') {
+    // Slow down credential (PIN) guessing from any single network.
+    const kioskKey = `kiosk:${clientIp(request)}`
+    if (await recentAttempts(env, kioskKey, KIOSK_WINDOW_MS) >= KIOSK_MAX_ATTEMPTS) {
+      return json({ error: 'Too many attempts. Please try again in 15 minutes.' }, 429)
+    }
+    await recordAttempts(env, [kioskKey])
+    const { method: credMethod, value } = await readJson(request)
+    const v = (value || '').trim()
+    if (!v) return json({ error: 'Credential is required.' }, 400)
+    const rows = await env.DB.prepare(
+      `SELECT ec.*, e.name AS emp_name, e.company_id, e.active as emp_active, c.active as company_active
+       FROM employee_credentials ec JOIN employees e ON e.email = ec.email JOIN companies c ON c.id = e.company_id WHERE e.active = 1 AND c.active = 1`
+    ).all().then((r) => r.results)
+    let match = null
+    for (const row of rows) {
+      if (credMethod === 'fingerprint' && row.fp_token && row.fp_token === v) match = row
+      if (credMethod === 'qr' && row.qr_code && row.qr_code === v) match = row
+      if (credMethod === 'pin' && row.pin_hash && (await verifySecret(v, row.pin_salt, row.pin_hash))) match = row
+      if (match) break
+    }
+    // Simulated hardware: touching the sensor with no scanner present matches
+    // the only registered fingerprint (if exactly one exists).
+    if (!match && credMethod === 'fingerprint' && v === 'SIM_FP') {
+      const fpRows = rows.filter((r) => r.fp_token)
+      if (fpRows.length === 1) match = fpRows[0]
+    }
+    if (!match) return json({ error: 'Not recognized. Please register your credential first.' }, 404)
+    const emp = await env.DB.prepare('SELECT name, company_id FROM employees WHERE email = ?').bind(match.email).first()
+    const company = await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(emp.company_id).first()
+    return json({ email: match.email, name: emp.name, role: 'employee', company: company?.name || '', companyId: emp.company_id })
+  }
+
+  /* kiosk employee directory fallback */
+  if (path === '/api/kiosk/directory' && method === 'GET') {
+    const rows = await env.DB.prepare(
+      `SELECT e.id, e.name, e.email, c.name AS company FROM employees e JOIN companies c ON c.id = e.company_id WHERE e.active = 1 AND c.active = 1`
+    ).all().then((r) => r.results)
+    return json(rows)
+  }
   /* ---- authenticated ---- */
   if (path.startsWith('/api/')) {
     const claims = await requireAuth(request, env)
@@ -710,47 +751,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
     }
   }
 
-  /* kiosk credential identification — public, used by the stand-alone kiosk */
-  if (path === '/api/kiosk/identify' && method === 'POST') {
-    // Slow down credential (PIN) guessing from any single network.
-    const kioskKey = `kiosk:${clientIp(request)}`
-    if (await recentAttempts(env, kioskKey, KIOSK_WINDOW_MS) >= KIOSK_MAX_ATTEMPTS) {
-      return json({ error: 'Too many attempts. Please try again in 15 minutes.' }, 429)
-    }
-    await recordAttempts(env, [kioskKey])
-    const { method: credMethod, value } = await readJson(request)
-    const v = (value || '').trim()
-    if (!v) return json({ error: 'Credential is required.' }, 400)
-    const rows = await env.DB.prepare(
-      `SELECT ec.*, e.name AS emp_name, e.company_id, e.active as emp_active, c.active as company_active
-       FROM employee_credentials ec JOIN employees e ON e.email = ec.email JOIN companies c ON c.id = e.company_id WHERE e.active = 1 AND c.active = 1`
-    ).all().then((r) => r.results)
-    let match = null
-    for (const row of rows) {
-      if (credMethod === 'fingerprint' && row.fp_token && row.fp_token === v) match = row
-      if (credMethod === 'qr' && row.qr_code && row.qr_code === v) match = row
-      if (credMethod === 'pin' && row.pin_hash && (await verifySecret(v, row.pin_salt, row.pin_hash))) match = row
-      if (match) break
-    }
-    // Simulated hardware: touching the sensor with no scanner present matches
-    // the only registered fingerprint (if exactly one exists).
-    if (!match && credMethod === 'fingerprint' && v === 'SIM_FP') {
-      const fpRows = rows.filter((r) => r.fp_token)
-      if (fpRows.length === 1) match = fpRows[0]
-    }
-    if (!match) return json({ error: 'Not recognized. Please register your credential first.' }, 404)
-    const emp = await env.DB.prepare('SELECT name, company_id FROM employees WHERE email = ?').bind(match.email).first()
-    const company = await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(emp.company_id).first()
-    return json({ email: match.email, name: emp.name, role: 'employee', company: company?.name || '', companyId: emp.company_id })
-  }
 
-  /* kiosk employee directory fallback */
-  if (path === '/api/kiosk/directory' && method === 'GET') {
-    const rows = await env.DB.prepare(
-      `SELECT e.id, e.name, e.email, c.name AS company FROM employees e JOIN companies c ON c.id = e.company_id WHERE e.active = 1 AND c.active = 1`
-    ).all().then((r) => r.results)
-    return json(rows)
-  }
 
   /* attendance — clock-in/out punches */
   if (path === '/api/attendance' && method === 'GET') {
