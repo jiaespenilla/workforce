@@ -216,6 +216,7 @@ function RolesPanel({ roles, onAdd, onRename, onRemove, onTogglePerm }) {
                     {[
                       ['people', 'People', [['add', 'Add'], ['edit', 'Edit'], ['delete', 'Delete / Status']]],
                       ['tasks', 'Tasks (CEO)', [['add', 'Add'], ['delete', 'Delete']]],
+                      ['locations', 'Work Locations', [['add', 'Add'], ['edit', 'Edit'], ['delete', 'Delete']]],
                     ].map(([module, moduleLabel, actions]) => (
                       <div key={module} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
                         <span className="w-full shrink-0 text-xs font-bold uppercase tracking-wide text-gray-500 sm:w-20 sm:normal-case sm:font-semibold sm:text-gray-700 sm:text-xs">{moduleLabel}</span>

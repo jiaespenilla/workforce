@@ -4,7 +4,7 @@ import { usePageTitle } from '../lib/documentMeta'
 import { getConfiguredRoles, canAction } from '../lib/roles'
 import { api, apiEnabled } from '../lib/api'
 import { getCompanyShifts, saveCompanyShiftData } from '../lib/shifts'
-import { getCompanyLocations } from '../lib/locations'
+import { getCompanyLocations, addCompanyLocation, renameCompanyLocation, removeCompanyLocation } from '../lib/locations'
 import Avatar from '../components/Avatar'
 import Pagination from '../components/Pagination'
 
@@ -22,6 +22,11 @@ export default function People() {
   const [savedName, setSavedName] = useState(null)
   const [shiftsData, setShiftsData] = useState({ shifts: [], assignments: {} })
   const [companyLocations, setCompanyLocations] = useState([])
+  const [newLocName, setNewLocName] = useState('')
+  const [locError, setLocError] = useState('')
+  const [editingLocId, setEditingLocId] = useState(null)
+  const [editingLocName, setEditingLocName] = useState('')
+  const canLocation = (a) => canAction(user?.perms, 'locations', a)
 
   const formRef = useRef({ name: '', email: '', role: roleOptions[roleOptions.length - 1] || '', locationId: '' })
   const [, forceRender] = useState(0)
@@ -220,6 +225,61 @@ export default function People() {
           Adding team members is not permitted for your role. Contact the system administrator.
         </div>
       )}
+
+      {/* Work Locations — where team members work, gated by locations permissions */}
+      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-gray-900">Work Locations</h2>
+            <p className="text-xs text-gray-500">Define where your team works — office, WFH, field, etc. Used when adding people.</p>
+          </div>
+          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-semibold text-blue-700 ring-1 ring-blue-200">{companyLocations.length} locations</span>
+        </div>
+        {locError && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700 ring-1 ring-red-200">{locError}</p>}
+        {canLocation('add') ? (
+          <div className="mt-4 flex gap-2">
+            <input value={newLocName} onChange={(e)=>{setNewLocName(e.target.value); setLocError('')}} placeholder="New location (e.g., Office)" className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200" />
+            <button type="button" onClick={async()=>{
+              if(!company) return setLocError('No company selected.')
+              if(!newLocName.trim()) return setLocError('Enter a location name.')
+              try{ const loc=await addCompanyLocation(company.id, newLocName); setCompanyLocations((p)=>[...p, loc]); setNewLocName(''); setLocError('')}catch(err){setLocError(err.message)}
+            }} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Add</button>
+          </div>
+        ) : <p className="mt-3 text-xs text-amber-600">Adding locations is restricted for your role.</p>}
+        <div className="mt-4 divide-y divide-gray-100 rounded-xl border border-gray-200">
+          {companyLocations.length===0 && <p className="p-4 text-center text-xs text-gray-400">No locations yet — add Office, WFH, Field Work, etc.</p>}
+          {companyLocations.map((loc)=>{
+            const inUse = people.some((e)=>(e.locationId||e.location)===loc.id || (e.location||'').trim().toLowerCase()===loc.name.trim().toLowerCase())
+            const isEditing = editingLocId===loc.id
+            return (
+              <div key={loc.id} className="flex items-center gap-2 p-3">
+                {isEditing ? (
+                  <>
+                    <input value={editingLocName} onChange={(e)=>setEditingLocName(e.target.value)} className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm" autoFocus />
+                    <button type="button" onClick={async()=>{
+                      if(!editingLocName.trim()) return setLocError('Name required.')
+                      if(!canLocation('edit')) return setLocError('Editing locations is restricted for your role.')
+                      try{ await renameCompanyLocation(company.id, loc.id, editingLocName); setCompanyLocations((p)=>p.map((l)=>l.id===loc.id?{...l,name:editingLocName.trim()}:l)); setEditingLocId(null); setLocError('')}catch(err){setLocError(err.message)}
+                    }} className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white">Save</button>
+                    <button type="button" onClick={()=>setEditingLocId(null)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs">Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 text-sm font-medium text-gray-900">{loc.name}</span>
+                    {inUse && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">In use</span>}
+                    {canLocation('edit') && <button type="button" onClick={()=>{setEditingLocId(loc.id); setEditingLocName(loc.name); setLocError('')}} className="rounded-lg border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">Edit</button>}
+                    {canLocation('delete') && <button type="button" onClick={async()=>{
+                      if(!canLocation('delete')) return setLocError('Deleting locations is restricted for your role.')
+                      if(inUse){ setLocError(`Cannot delete "${loc.name}" — ${people.filter((e)=>(e.locationId||e.location)===loc.id || (e.location||'').toLowerCase()===loc.name.toLowerCase()).length} employee(s) use it. Reassign them first.`); return}
+                      try{ await removeCompanyLocation(company.id, loc.id, people); setCompanyLocations((p)=>p.filter((l)=>l.id!==loc.id)); setLocError('')}catch(err){setLocError(err.message)}
+                    }} className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">Delete</button>}
+                  </>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </section>
 
       {/* People table */}
       <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">

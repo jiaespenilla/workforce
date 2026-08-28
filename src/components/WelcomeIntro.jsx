@@ -16,7 +16,21 @@ export default function WelcomeIntro() {
   useEffect(() => {
     if (!user || user.role === 'administrator') return
     const key = `uw_welcome_seen_${user.email.toLowerCase()}`
-    if (localStorage.getItem(key)) return
+    if (localStorage.getItem(key)) {
+      // still fetch company for later reopen, but don't auto-open
+      if (apiEnabled()) {
+        api('/api/companies').then((cs) => {
+          const c = cs.find((co) => (co.employees || []).some((e) => e.email.toLowerCase() === user.email.toLowerCase())) || cs[0] || null
+          if (c) setCompany(c)
+        }).catch(() => {})
+      }
+      // allow manual reopen via notification click
+      const handler = () => {
+        setOpen(true)
+      }
+      window.addEventListener('uw:open-welcome', handler)
+      return () => window.removeEventListener('uw:open-welcome', handler)
+    }
 
     let cancelled = false
     const load = async () => {
@@ -39,7 +53,9 @@ export default function WelcomeIntro() {
     }
     // slight delay so page renders first
     const t = setTimeout(load, 800)
-    return () => { cancelled = true; clearTimeout(t) }
+    const reopen = () => setOpen(true)
+    window.addEventListener('uw:open-welcome', reopen)
+    return () => { cancelled = true; clearTimeout(t); window.removeEventListener('uw:open-welcome', reopen) }
   }, [user])
 
   if (!open || !user || user.role === 'administrator') return null

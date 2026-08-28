@@ -5,10 +5,14 @@ import { useAuth } from '../context/AuthContext'
 import { getSystemTimeZone } from '../lib/systemSettings'
 import { api, apiEnabled } from '../lib/api'
 
+function startOfDay(d) { const x = new Date(d); x.setHours(0,0,0,0); return x }
+function endOfDay(d) { const x = new Date(d); x.setHours(23,59,59,999); return x }
+function startOfWeek(d) { const x = new Date(d); x.setDate(d.getDate() - ((d.getDay()+6)%7)); x.setHours(0,0,0,0); return x }
+function startOfMonth(d) { const x = new Date(d.getFullYear(), d.getMonth(), 1); x.setHours(0,0,0,0); return x }
+
 function currentWeek() {
   const now = new Date()
-  const monday = new Date(now)
-  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7))
+  const monday = startOfWeek(now)
   return Array.from({ length: 5 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
@@ -23,6 +27,26 @@ function currentWeek() {
       status: isPast ? 'Missed' : d.toDateString() === now.toDateString() ? 'In progress' : 'Upcoming',
     }
   })
+}
+
+function inRange(timeStr, view) {
+  const t = new Date(timeStr).getTime()
+  const now = Date.now()
+  if (view === 'day') return t >= startOfDay(new Date()).getTime() && t <= endOfDay(new Date()).getTime()
+  if (view === 'week') return t >= startOfWeek(new Date()).getTime()
+  if (view === 'month') return t >= startOfMonth(new Date()).getTime()
+  return true
+}
+
+function hoursForDay(punchesForDay) {
+  const sorted = [...punchesForDay].sort((a,b)=> new Date(a.time)-new Date(b.time))
+  let total = 0
+  let lastIn = null
+  for (const p of sorted) {
+    if (p.type === 'in') lastIn = new Date(p.time)
+    else if (p.type === 'out' && lastIn) { total += new Date(p.time) - lastIn; lastIn = null }
+  }
+  return total / 3600000
 }
 
 // CEO view — no clock in/out; shows the employees' timesheet with a real-time clock
@@ -52,12 +76,11 @@ function CeoTimeKeeping() {
   }, [])
   const employees = allEmployees.filter((e) => e.active !== false)
 
-  // Get today's attendance for each employee
-  const todayStr = now.toDateString()
-  const getTodayPunches = (email) => attendance.filter((p) => p.email === email && new Date(p.time).toDateString() === todayStr)
+  const getViewPunches = (email) => attendance.filter((p) => p.email === email && inRange(p.time, view))
+  const getTodayPunches = (email) => attendance.filter((p) => p.email === email && new Date(p.time).toDateString() === now.toDateString())
   const getLastPunch = (email) => {
-    const today = getTodayPunches(email)
-    return today.length > 0 ? today[today.length - 1] : null
+    const list = getViewPunches(email).sort((a,b)=> new Date(a.time)-new Date(b.time))
+    return list.length > 0 ? list[list.length - 1] : null
   }
 
   return (
@@ -106,11 +129,15 @@ function CeoTimeKeeping() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {employees.map((emp) => {
-                const todayPunches = getTodayPunches(emp.email)
-                const lastPunch = getLastPunch(emp.email)
-                const clockIn = todayPunches.find((p) => p.type === 'in')
-                const clockOut = todayPunches.find((p) => p.type === 'out')
-                const status = lastPunch?.type === 'in' ? 'Clocked in' : clockOut ? 'Clocked out' : 'No record today'
+                const viewPunches = getViewPunches(emp.email).sort((a,b)=> new Date(a.time)-new Date(b.time))
+                const todayPunches = view === 'day' ? viewPunches : viewPunches
+                const lastPunch = viewPunches[viewPunches.length-1] || null
+                const clockIn = viewPunches.find((p) => p.type === 'in')
+                const clockOut = [...viewPunches].reverse().find((p) => p.type === 'out')
+                const hrs = hoursForDay(viewPunches).toFixed(1)
+                const status = view === 'day'
+                  ? (lastPunch?.type === 'in' ? 'Clocked in' : clockOut ? 'Clocked out' : 'No record today')
+                  : (viewPunches.length ? `${viewPunches.length} punches · ${hrs}h` : 'No records')
                 const statusStyle = lastPunch?.type === 'in'
                   ? 'bg-brand-100 text-brand-700'
                   : clockOut ? 'bg-gray-100 text-gray-600' : 'bg-gray-100 text-gray-500'
@@ -122,10 +149,10 @@ function CeoTimeKeeping() {
                     </td>
                     <td className="px-6 py-3 text-gray-600">{emp.companyName}</td>
                     <td className="px-6 py-3 tabular-nums text-gray-700">
-                      {clockIn ? new Date(clockIn.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                      {clockIn ? new Date(clockIn.time).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '—'}
                     </td>
                     <td className="px-6 py-3 tabular-nums text-gray-700">
-                      {clockOut ? new Date(clockOut.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                      {clockOut ? new Date(clockOut.time).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '—'}
                     </td>
                     <td className="px-6 py-3">
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusStyle}`}>{status}</span>
@@ -142,8 +169,8 @@ function CeoTimeKeeping() {
           </table>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-6 py-3 text-sm">
-          <span className="text-gray-500">Today's attendance</span>
-          <span className="font-semibold text-gray-900">{employees.filter((e) => getLastPunch(e.email)?.type === 'in').length} currently clocked in</span>
+          <span className="text-gray-500">{view === 'day' ? "Today's" : view === 'week' ? 'This week —' : 'This month —'} {employees.length} active</span>
+          <span className="font-semibold text-gray-900">{employees.filter((e) => getLastPunch(e.email)?.type === 'in').length} currently clocked in · {employees.reduce((s,e)=> s + hoursForDay(getViewPunches(e.email)),0).toFixed(1)}h total</span>
         </div>
       </div>
     </div>
@@ -184,8 +211,61 @@ export default function TimeKeeping() {
   const isClockedIn = lastPunch?.type === 'in'
   const todayPunches = myPunches.filter((p) => new Date(p.time).toDateString() === new Date().toDateString())
 
-  const totalHours = week.reduce((s, d) => s + d.hours, 0)
-  const totalOT = week.reduce((s, d) => s + d.ot, 0)
+  const timesheetRows = (() => {
+    if (view === 'day') {
+      const d = new Date()
+      const punches = myPunches.filter((p) => new Date(p.time).toDateString() === d.toDateString()).sort((a,b)=> new Date(a.time)-new Date(b.time))
+      const firstIn = punches.find((p)=>p.type==='in')
+      const lastOut = [...punches].reverse().find((p)=>p.type==='out')
+      return [{
+        day: d.toLocaleDateString([], { weekday: 'short' }),
+        date: d.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+        in: firstIn ? new Date(firstIn.time).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : null,
+        out: lastOut ? new Date(lastOut.time).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : null,
+        hours: hoursForDay(punches),
+        ot: 0,
+        status: punches.length ? (lastOut ? 'Complete' : 'In progress') : 'No record',
+      }]
+    }
+    if (view === 'week') {
+      const monday = startOfWeek(new Date())
+      return Array.from({ length: 5 }, (_, i) => {
+        const d = new Date(monday); d.setDate(monday.getDate()+i)
+        const punches = myPunches.filter((p)=> new Date(p.time).toDateString()===d.toDateString())
+        const firstIn = punches.find((p)=>p.type==='in')
+        const lastOut = [...punches].reverse().find((p)=>p.type==='out')
+        const isToday = d.toDateString()===new Date().toDateString()
+        return {
+          day: d.toLocaleDateString([], { weekday:'short'}),
+          date: d.toLocaleDateString([], { month:'short', day:'numeric'}),
+          in: firstIn ? new Date(firstIn.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : null,
+          out: lastOut ? new Date(lastOut.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : null,
+          hours: hoursForDay(punches),
+          ot: 0,
+          status: punches.length ? (isToday && !lastOut ? 'In progress' : 'Complete') : (d < new Date() && !isToday ? 'Missed' : 'Upcoming'),
+        }
+      })
+    }
+    // month: last 30 days
+    return Array.from({ length: 30 }, (_, i) => {
+      const d = new Date(); d.setDate(d.getDate() - (29 - i)); d.setHours(0,0,0,0)
+      const punches = myPunches.filter((p)=> new Date(p.time).toDateString()===d.toDateString())
+      const firstIn = punches.find((p)=>p.type==='in')
+      const lastOut = [...punches].reverse().find((p)=>p.type==='out')
+      return {
+        day: d.toLocaleDateString([], { weekday:'short'}),
+        date: d.toLocaleDateString([], { month:'short', day:'numeric'}),
+        in: firstIn ? new Date(firstIn.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : null,
+        out: lastOut ? new Date(lastOut.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : null,
+        hours: hoursForDay(punches),
+        ot: 0,
+        status: punches.length ? 'Complete' : (d.toDateString()===new Date().toDateString() ? 'In progress' : d < new Date() ? 'Missed' : 'Upcoming'),
+      }
+    })
+  })()
+
+  const totalHours = timesheetRows.reduce((s, d) => s + d.hours, 0)
+  const totalOT = 0
 
   return (
     <div className="space-y-6">
@@ -259,8 +339,8 @@ export default function TimeKeeping() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {week.map((d) => (
-                <tr key={d.day} className={d.status === 'In progress' ? 'bg-brand-50/60' : 'hover:bg-gray-50'}>
+              {timesheetRows.map((d, idx) => (
+                <tr key={`${d.day}-${d.date}-${idx}`} className={d.status === 'In progress' ? 'bg-brand-50/60' : 'hover:bg-gray-50'}>
                   <td className="px-6 py-3 font-medium text-gray-900">{d.day}</td>
                   <td className="px-6 py-3 text-gray-600">{d.date}</td>
                   <td className="px-6 py-3 tabular-nums text-gray-700">{d.in ?? '—'}</td>
@@ -282,7 +362,7 @@ export default function TimeKeeping() {
           </table>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-6 py-3 text-sm">
-          <span className="text-gray-500">Weekly totals</span>
+          <span className="text-gray-500">{view === 'day' ? 'Daily total' : view === 'week' ? 'Weekly total' : 'Monthly total'}</span>
           <span className="font-semibold text-gray-900">{totalHours.toFixed(1)}h regular · {totalOT.toFixed(1)}h overtime</span>
         </div>
       </div>

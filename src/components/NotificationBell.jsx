@@ -94,13 +94,29 @@ export default function NotificationBell() {
             )}
             {visible.map((n) => {
               const unread = new Date(n.createdAt).getTime() > readAt
+              const subject = (n.subject || '').toLowerCase()
+              const isWelcome = subject.startsWith('welcome to')
+              const isApproved = subject.includes('approved') || subject.includes('registration for')
               return (
                 <button
                   key={n.id}
                   type="button"
                   onClick={() => {
                     setOpen(false)
-                    navigate(user?.role === 'administrator' ? '/companies' : '/tasks')
+                    if (isWelcome) {
+                      // reopen welcome intro modal
+                      window.dispatchEvent(new CustomEvent('uw:open-welcome'))
+                      return
+                    }
+                    if (isApproved) {
+                      // best practice: approved company → admin sees companies list, others see dashboard
+                      navigate(user?.role === 'administrator' ? '/companies' : '/')
+                      return
+                    }
+                    // default: tasks or people notifications go to relevant page
+                    if (subject.includes('task')) navigate('/tasks')
+                    else if (subject.includes('people') || subject.includes('team')) navigate('/people')
+                    else navigate(user?.role === 'administrator' ? '/companies' : '/')
                   }}
                   className="block w-full border-b border-gray-50 px-4 py-3 text-left transition hover:bg-brand-50/60"
                 >
