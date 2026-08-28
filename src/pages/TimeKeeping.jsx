@@ -55,6 +55,7 @@ function CeoTimeKeeping() {
   const { user } = useAuth()
   const [now, setNow] = useState(new Date())
   const [view, setView] = useState('week')
+  const [layout, setLayout] = useState('table')
   const [attendance, setAttendance] = useState([])
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000)
@@ -104,19 +105,33 @@ function CeoTimeKeeping() {
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-base font-semibold text-gray-900">Employee Timesheet ({employees.length} active)</h2>
-          <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
-            {['day', 'week', 'month'].map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={`rounded-md px-4 py-1.5 text-sm font-medium capitalize transition ${view === v ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-              >
-                {v}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
+              {['day', 'week', 'month'].map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize transition ${view === v ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
+              {[
+                ['table','Table','M3 8h18M3 12h18M3 16h18'],
+                ['calendar','Calendar','M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7H3v12a2 2 0 002 2z'],
+                ['compact','Compact','M4 6h16M4 10h16M4 14h10M4 18h10'],
+              ].map(([k,label,icon])=> (
+                <button key={k} onClick={()=>setLayout(k)} title={label} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${layout===k?'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200':'text-gray-500 hover:text-gray-700'}`}>
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d={icon} /></svg>
+                  <span className="hidden sm:inline">{label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-        <div className="overflow-x-auto">
+        {layout === 'table' && <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
@@ -167,7 +182,53 @@ function CeoTimeKeeping() {
               )}
             </tbody>
           </table>
-        </div>
+        </div>}
+        {layout === 'calendar' && (
+          <div className="p-4">
+            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+              {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d)=><div key={d} className="py-1">{d}</div>)}
+            </div>
+            <div className="mt-1 grid grid-cols-7 gap-1">
+              {(() => {
+                const first = startOfMonth(new Date())
+                const blanks = Array.from({length: first.getDay()}, (_,i)=><div key={`b-${i}`} />)
+                const days = Array.from({length: new Date(new Date().getFullYear(), new Date().getMonth()+1,0).getDate()}, (_,i)=>{
+                  const d = new Date(new Date().getFullYear(), new Date().getMonth(), 1); d.setDate(i+1)
+                  const key = d.toDateString()
+                  const count = employees.filter((e)=> getViewPunches(e.email).some((p)=> new Date(p.time).toDateString()===key)).length
+                  const isToday = key===new Date().toDateString()
+                  return (
+                    <div key={key} className={`rounded-lg border p-2 text-center ${count ? 'bg-brand-50 border-brand-200' : 'bg-gray-50 border-gray-100'} ${isToday ? 'ring-2 ring-brand-400' : ''}`}>
+                      <p className="text-xs font-bold text-gray-900">{i+1}</p>
+                      <p className="text-[11px] font-semibold text-brand-700">{count ? `${count} in` : '—'}</p>
+                    </div>
+                  )
+                })
+                return [...blanks, ...days]
+              })()}
+            </div>
+            <p className="mt-3 text-center text-[11px] text-gray-400">Calendar shows how many employees clocked in each day this month.</p>
+          </div>
+        )}
+        {layout === 'compact' && (
+          <div className="divide-y divide-gray-100">
+            {employees.map((emp)=>{
+              const vp = getViewPunches(emp.email)
+              const hrs = hoursForDay(vp).toFixed(1)
+              const last = vp[vp.length-1]
+              return (
+                <div key={`${emp.companyId}-${emp.email}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{emp.name} <span className="text-xs text-gray-400">· {emp.companyName}</span></p>
+                    <p className="text-xs text-gray-500">{vp.length} punches · {hrs}h · {last ? new Date(last.time).toLocaleDateString() : 'No record'}</p>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${last?.type==='in'?'bg-brand-100 text-brand-700':'bg-gray-100 text-gray-500'}`}>{last?.type==='in'?'In':'Out'}</span>
+                </div>
+              )
+            })}
+            {employees.length===0 && <p className="p-6 text-center text-xs text-gray-400">No active employees.</p>}
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-6 py-3 text-sm">
           <span className="text-gray-500">{view === 'day' ? "Today's" : view === 'week' ? 'This week —' : 'This month —'} {employees.length} active</span>
           <span className="font-semibold text-gray-900">{employees.filter((e) => getLastPunch(e.email)?.type === 'in').length} currently clocked in · {employees.reduce((s,e)=> s + hoursForDay(getViewPunches(e.email)),0).toFixed(1)}h total</span>
@@ -181,6 +242,7 @@ export default function TimeKeeping() {
   usePageTitle('Time Keeping')
   const { user } = useAuth()
   const [view, setView] = useState('week')
+  const [layout, setLayout] = useState('table')
   const [myPunches, setMyPunches] = useState([])
   const week = currentWeek()
 
@@ -313,19 +375,33 @@ export default function TimeKeeping() {
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-base font-semibold text-gray-900">Timesheet</h2>
-          <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
-            {['day', 'week', 'month'].map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={`rounded-md px-4 py-1.5 text-sm font-medium capitalize transition ${view === v ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-              >
-                {v}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
+              {['day', 'week', 'month'].map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize transition ${view === v ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
+              {[
+                ['table','Table','M3 8h18M3 12h18M3 16h18'],
+                ['calendar','Calendar','M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7H3v12a2 2 0 002 2z'],
+                ['compact','Compact','M4 6h16M4 10h16M4 14h10M4 18h10'],
+              ].map(([k,label,icon])=> (
+                <button key={k} onClick={()=>setLayout(k)} title={label} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${layout===k?'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200':'text-gray-500 hover:text-gray-700'}`}>
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d={icon} /></svg>
+                  <span className="hidden sm:inline">{label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-        <div className="overflow-x-auto">
+        {layout === 'table' && <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
@@ -360,7 +436,57 @@ export default function TimeKeeping() {
               ))}
             </tbody>
           </table>
-        </div>
+        </div>}
+        {layout === 'calendar' && (
+          <div className="p-4">
+            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+              {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d)=><div key={d} className="py-1">{d}</div>)}
+            </div>
+            <div className="mt-1 grid grid-cols-7 gap-1">
+              {(() => {
+                const first = startOfMonth(new Date())
+                const startDay = first.getDay()
+                const blanks = Array.from({length: startDay}, (_,i)=><div key={`b-${i}`} />)
+                const days = Array.from({length: new Date(new Date().getFullYear(), new Date().getMonth()+1,0).getDate()}, (_,i)=>{
+                  const d = new Date(new Date().getFullYear(), new Date().getMonth(), 1); d.setDate(i+1)
+                  const key = d.toDateString()
+                  const punches = myPunches.filter((p)=> new Date(p.time).toDateString()===key)
+                  const hrs = hoursForDay(punches)
+                  const hasPunch = punches.length>0
+                  const isToday = key===new Date().toDateString()
+                  return (
+                    <div key={key} className={`rounded-lg border p-2 text-left ${hasPunch ? 'bg-brand-50 border-brand-200' : 'bg-gray-50 border-gray-100'} ${isToday ? 'ring-2 ring-brand-400' : ''}`}>
+                      <p className="text-xs font-bold text-gray-900">{i+1}</p>
+                      {hasPunch ? (
+                        <>
+                          <p className="mt-1 text-[10px] leading-tight text-gray-600">{punches.find((p)=>p.type==='in') ? new Date(punches.find((p)=>p.type==='in').time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—'} → {[...punches].reverse().find((p)=>p.type==='out') ? new Date([...punches].reverse().find((p)=>p.type==='out').time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—'}</p>
+                          <p className="text-[11px] font-semibold text-brand-700">{hrs.toFixed(1)}h</p>
+                        </>
+                      ) : <p className="mt-1 text-[10px] text-gray-400">—</p>}
+                    </div>
+                  )
+                })
+                return [...blanks, ...days]
+              })()}
+            </div>
+          </div>
+        )}
+        {layout === 'compact' && (
+          <div className="divide-y divide-gray-100">
+            {timesheetRows.map((d,idx)=>(
+              <div key={`${d.day}-${idx}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
+                <div className="flex items-center gap-3">
+                  <span className={`flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold ${d.hours? 'bg-brand-100 text-brand-700' : 'bg-gray-100 text-gray-500'}`}>{d.day.slice(0,2)}</span>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{d.day} · {d.date}</p>
+                    <p className="text-xs text-gray-500">{d.in || '—'} → {d.out || '—'} · {d.hours ? `${d.hours.toFixed(1)}h` : 'No hours'}</p>
+                  </div>
+                </div>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${d.status==='Complete'?'bg-brand-100 text-brand-700': d.status==='In progress'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-500'}`}>{d.status}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-6 py-3 text-sm">
           <span className="text-gray-500">{view === 'day' ? 'Daily total' : view === 'week' ? 'Weekly total' : 'Monthly total'}</span>
           <span className="font-semibold text-gray-900">{totalHours.toFixed(1)}h regular · {totalOT.toFixed(1)}h overtime</span>

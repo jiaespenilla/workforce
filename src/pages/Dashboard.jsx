@@ -268,6 +268,8 @@ function CeoDashboard({ user }) {
   const [allTasks, setAllTasks] = useState([])
   const [clockState, setClockState] = useState({})
   const [allEmployees, setAllEmployees] = useState([])
+  const [genDate, setGenDate] = useState('')
+  const [genTargetDate, setGenTargetDate] = useState(() => new Date().toISOString().slice(0,10))
 
   useEffect(() => {
     api('/api/companies')
@@ -320,6 +322,26 @@ function CeoDashboard({ user }) {
     }
   }
 
+  const handleGenerateFromDate = async () => {
+    if (!genDate) return alert('Select a source date.')
+    const src = allTasks.filter((t)=> t.due === genDate)
+    if (!src.length) return alert(`No tasks found for ${genDate}.`)
+    const target = genTargetDate || new Date().toISOString().slice(0,10)
+    let created = 0
+    for (const t of src) {
+      try {
+        if (apiEnabled()) {
+          const c = await api('/api/tasks', { method: 'POST', body: { title: t.title, assignee: t.assignee, priority: t.priority, due: target, status: 'pending' } })
+          setAllTasks((p)=> [...p, c])
+        } else {
+          setAllTasks((p)=> [...p, { ...t, id: Date.now()+created, due: target, status: 'pending' }])
+        }
+        created++
+      } catch {}
+    }
+    alert(`${created} task(s) generated from ${genDate} → ${target}.`)
+  }
+
 
   return (
     <div className="space-y-6">
@@ -335,6 +357,25 @@ function CeoDashboard({ user }) {
           <p className="mb-1 text-right text-[11px] font-medium uppercase tracking-wide text-gray-400">Export all tasks ({allTasks.length})</p>
           <TaskExportToolbar tasks={allTasks} />
         </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-gray-900">Generate tasks from date</h3>
+            <p className="mt-1 text-xs text-gray-500">Duplicate tasks from a previous (or current) date to a new due date.</p>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-xs font-medium text-gray-700">From
+              <input type="date" value={genDate} onChange={(e)=>setGenDate(e.target.value)} className="ml-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
+            </label>
+            <label className="text-xs font-medium text-gray-700">To
+              <input type="date" value={genTargetDate} onChange={(e)=>setGenTargetDate(e.target.value)} className="ml-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
+            </label>
+            <button onClick={handleGenerateFromDate} className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-brand-700">Generate</button>
+          </div>
+        </div>
+        {genDate && <p className="mt-2 text-xs text-gray-400">{allTasks.filter((t)=>t.due===genDate).length} task(s) on {genDate} will be duplicated.</p>}
       </div>
 
       <div className={selected ? 'grid items-start gap-6 lg:grid-cols-[1fr_minmax(320px,420px)]' : ''}>
@@ -476,6 +517,7 @@ export default function Dashboard() {
   const [allTasks, setAllTasks] = useState([])
   const [clockState, setClockState] = useState({})
   const [allEmployees, setAllEmployees] = useState([])
+  const [myPunches, setMyPunches] = useState([])
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000)
@@ -495,11 +537,15 @@ export default function Dashboard() {
         }
         setClockState(latest)
       }).catch(() => setClockState(getLocalClockInState()))
+      if (user?.email) {
+        api(`/api/attendance?email=${encodeURIComponent(user.email)}`).then(setMyPunches).catch(()=>{})
+      }
     } else {
       setAllTasks(loadLocalMyTasks(user?.name || ''))
       setClockState(getLocalClockInState())
+      try { setMyPunches((JSON.parse(localStorage.getItem('uw_punches'))||[]).filter((p)=>p.email===user?.email)) } catch { setMyPunches([]) }
     }
-  }, [user?.name])
+  }, [user?.name, user?.email])
 
   useEffect(() => {
     api('/api/companies')
@@ -522,6 +568,21 @@ export default function Dashboard() {
     { label: 'Hours This Week', value: '0.0', sub: 'Clock in to start tracking', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
   ]
 
+  // compute weekly hours for employee chart from myPunches
+  const weekDays = (() => {
+    const monday = new Date(now); monday.setDate(now.getDate() - ((now.getDay()+6)%7)); monday.setHours(0,0,0,0)
+    return Array.from({length:5},(_,i)=>{
+      const d=new Date(monday); d.setDate(monday.getDate()+i)
+      const dayPunches = myPunches.filter((p)=> new Date(p.time).toDateString()===d.toDateString()).sort((a,b)=> new Date(a.time)-new Date(b.time))
+      let total=0; let lastIn=null
+      for(const p of dayPunches){ if(p.type==='in') lastIn=new Date(p.time); else if(lastIn){ total+=new Date(p.time)-lastIn; lastIn=null }}
+      return { label: d.toLocaleDateString([],{weekday:'short'}), hours: +(total/3600000).toFixed(1) }
+    })
+  })()
+  const weekMax = Math.max(...weekDays.map((d)=>d.hours), 1)
+  const recentPunches = myPunches.slice(0,4)
+  const upcomingTasks = myTasks.slice(0,3)
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -530,24 +591,25 @@ export default function Dashboard() {
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
             Good {now.getHours() < 12 ? 'morning' : now.getHours() < 18 ? 'afternoon' : 'evening'}, {firstName}
           </h1>
-          <p className="mt-1 text-sm leading-relaxed text-gray-500">Here's what's happening across your organization.</p>
+          <p className="mt-1 text-sm leading-relaxed text-gray-500">Here's your daily overview — hours, tasks and quick actions.</p>
         </div>
-        <p className="shrink-0 text-sm font-medium text-gray-600 tabular-nums">
-          {now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })} ·{' '}
-          <span className="text-brand-600">{now.toLocaleTimeString()}</span>
-        </p>
+        <div className="shrink-0 rounded-xl border border-gray-200 bg-white px-4 py-3 text-right shadow-sm">
+          <p className="text-sm font-bold tabular-nums text-gray-900">{now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}</p>
+          <p className="text-xs text-gray-500">{now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((s) => (
-          <div key={s.label} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div key={s.label} className="group relative overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md hover:border-brand-200">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-600 to-emerald-400 opacity-0 transition group-hover:opacity-100" />
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-500">{s.label}</p>
-                <p className="mt-2 text-3xl font-bold text-gray-900">{s.value}</p>
-                <p className="mt-1 text-xs text-brand-600">{s.sub}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{s.label}</p>
+                <p className="mt-2 text-3xl font-bold tracking-tight text-gray-900">{s.value}</p>
+                <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />{s.sub}</p>
               </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-50 to-emerald-50 text-brand-600 ring-1 ring-brand-100">
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
                   <path strokeLinecap="round" strokeLinejoin="round" d={s.icon} />
                 </svg>
@@ -561,16 +623,47 @@ export default function Dashboard() {
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm lg:col-span-2">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-base font-semibold text-gray-900">Weekly Hours Overview</h2>
-            <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">This week</span>
+            <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">{weekDays.reduce((s,d)=>s+d.hours,0).toFixed(1)}h this week</span>
           </div>
-          <Chart />
+          <div className="flex h-44 items-end justify-between gap-3">
+            {weekDays.map((d)=>(
+              <div key={d.label} className="flex flex-1 flex-col items-center gap-2">
+                <span className={`text-xs font-semibold tabular-nums ${d.hours? 'text-brand-700' : 'text-gray-400'}`}>{d.hours.toFixed(1)}h</span>
+                <div className={`w-full rounded-t-lg transition-all ${d.hours? 'bg-gradient-to-t from-brand-600 to-emerald-400' : 'bg-gray-100'}`} style={{ height: `${Math.max((d.hours/weekMax)*100,6)}%` }} />
+                <span className="text-xs font-medium text-gray-500">{d.label}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-center text-[11px] text-gray-400">Mon–Fri from your kiosk punches</p>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-base font-semibold text-gray-900">Recent Activity</h2>
-          <div className="flex h-full min-h-[160px] items-center justify-center rounded-xl border-2 border-dashed border-gray-200 text-sm text-gray-400">
-            No recent activity yet.
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm flex flex-col">
+          <h2 className="text-base font-semibold text-gray-900">Today's Timeline</h2>
+          <p className="text-xs text-gray-500">{recentPunches.length} punches today</p>
+          <div className="mt-4 flex-1 space-y-3">
+            {recentPunches.length ? recentPunches.map((p,i)=>(
+              <div key={i} className="flex items-center gap-3 rounded-lg bg-gray-50 px-3 py-2.5">
+                <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${p.type==='in'?'bg-brand-600 text-white':'bg-gray-900 text-white'}`}>{p.type==='in'?'IN':'OUT'}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-gray-900 capitalize">{p.type} · {new Date(p.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p>
+                  <p className="text-[11px] text-gray-500">{new Date(p.time).toLocaleDateString()}</p>
+                </div>
+              </div>
+            )) : <div className="rounded-xl border-2 border-dashed border-gray-200 p-6 text-center text-sm text-gray-400">No punches yet — use the kiosk to clock in.</div>}
           </div>
+          {upcomingTasks.length >0 && (
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-400">Up next</p>
+              <ul className="mt-2 space-y-2">
+                {upcomingTasks.map((t)=>(
+                  <li key={t.id} className="flex items-center justify-between rounded-lg bg-brand-50/60 px-3 py-2">
+                    <span className="truncate text-xs font-medium text-gray-800">{t.title}</span>
+                    <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600">{t.due || 'No due'}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
 
@@ -579,14 +672,14 @@ export default function Dashboard() {
           <Link
             key={s.to}
             to={s.to}
-            className="flex flex-col items-center gap-3 rounded-xl border border-gray-200 bg-white p-6 text-center shadow-sm transition hover:border-brand-300 hover:bg-brand-50 hover:shadow-md"
+            className="group flex flex-col items-center gap-3 rounded-xl border border-gray-200 bg-white p-6 text-center shadow-sm transition hover:border-brand-300 hover:bg-brand-50 hover:shadow-md"
           >
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 text-white">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 text-white shadow transition group-hover:scale-105 group-hover:bg-brand-700">
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
                 <path strokeLinecap="round" strokeLinejoin="round" d={s.icon} />
               </svg>
             </div>
-            <span className="text-sm font-semibold text-gray-800">{s.label}</span>
+            <span className="text-sm font-semibold text-gray-800 group-hover:text-brand-700">{s.label}</span>
           </Link>
         ))}
       </div>

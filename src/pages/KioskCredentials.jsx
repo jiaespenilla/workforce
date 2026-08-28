@@ -79,7 +79,7 @@ export default function KioskCredentials() {
   if (!user) return null
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Main Menu</p>
