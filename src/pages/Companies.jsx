@@ -84,7 +84,10 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
   const [editRole, setEditRole] = useState('')
   const [editLocId, setEditLocId] = useState('')
   const [editActive, setEditActive] = useState(true)
-  const roleOptions = getConfiguredRoles().filter((r)=>!r.perms.settings).map((r)=>r.name)
+  const [empSaveMsg, setEmpSaveMsg] = useState('')
+  const baseRoles = getConfiguredRoles().filter((r)=>!r.perms.settings).map((r)=>r.name)
+  const roleOptions = baseRoles.length ? baseRoles : ['CEO','HR Manager','Team Lead','Employee']
+  const [locsLoaded, setLocsLoaded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -277,6 +280,7 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
 
         {tab === 'employees' && (
           <div className="p-6">
+            <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">Admin edit mode — change <span className="font-semibold">Role</span>, <span className="font-semibold">Location</span> or <span className="font-semibold">Active</span> then Save. Changes apply immediately.</div>
             <table className="w-full text-left text-sm">
               <thead className="text-xs uppercase tracking-wide text-gray-500">
                 <tr>
@@ -319,6 +323,8 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
                               const loc = locations.find((l)=>l.id===editLocId)
                               onEditEmployee(company.id, emp.email, { role: editRole, locationId: editLocId || null, location: loc?.name || editLocId || null, active: editActive })
                               setEditingEmpEmail(null)
+                              setEmpSaveMsg(`${emp.name} updated`)
+                              setTimeout(()=>setEmpSaveMsg(''), 3000)
                             }} className="rounded bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white">Save</button>
                             <button type="button" onClick={()=>setEditingEmpEmail(null)} className="rounded border border-gray-300 px-3 py-1.5 text-xs">Cancel</button>
                           </div>
@@ -349,7 +355,10 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
                         setEditRole(emp.role || roleOptions[0] || '')
                         setEditLocId(emp.locationId || locations.find((l)=>l.name===emp.location)?.id || '')
                         setEditActive(emp.active !== false)
-                      }} className="rounded-lg border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">Edit</button>
+                      }} className="inline-flex items-center gap-1 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100">
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        Edit
+                      </button>
                     </td>
                   </tr>
                   )
@@ -361,7 +370,8 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
                 )}
               </tbody>
             </table>
-            <p className="mt-4 text-[11px] text-gray-500">Edit role/location/active and save. Click status pill to quickly toggle.</p>
+            {empSaveMsg && <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">{empSaveMsg}</p>}
+            <p className="mt-3 text-[11px] text-gray-500">Click <span className="font-semibold">Edit</span> to change role, location or active status, then <span className="font-semibold">Save</span>. Or tap the status pill for a quick toggle.</p>
           </div>
         )}
 
