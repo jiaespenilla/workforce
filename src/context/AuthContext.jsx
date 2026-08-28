@@ -2,27 +2,9 @@ import { createContext, useContext, useState } from 'react'
 import { commitPendingSystemSettings } from '../lib/systemSettings'
 import { loadRegisteredCompanies } from '../lib/companies'
 import { getConfiguredRoles } from '../lib/roles'
-import { getStoredPassword, setStoredPassword } from '../lib/passwords'
-import { tryApiLogin } from '../lib/api'
+import { tryApiLogin, apiEnabled, api } from '../lib/api'
 
 const AuthContext = createContext(null)
-
-const ADMIN_CREDENTIALS = {
-  username: 'admin_celestine',
-  password: 'Celest!ne2026!',
-}
-
-const CEO_EMAIL = 'ceo@celestsolutions.com'
-const CEO_DEFAULT_PASSWORD = 'P@ssw0rd2026!'
-const COMPANY_DEFAULT_PASSWORD = 'P@ssw0rd2026!'
-
-export function getCeoEmail() {
-  return CEO_EMAIL
-}
-
-function getCeoPassword() {
-  return localStorage.getItem('uw_ceo_password') || CEO_DEFAULT_PASSWORD
-}
 
 // Resolve an email against registered companies (owner or any listed employee).
 function findCompanyAccount(email) {
@@ -63,23 +45,15 @@ export function AuthProvider({ children }) {
     localStorage.setItem('uw_user', JSON.stringify(u))
   }
 
-  const login = (email, password) => {
+  // Local demo-mode login (no API configured). The local account list is demo
+  // data only, so any password is accepted — real authentication always goes
+  // through serverLogin() against the Worker API.
+  const login = (email) => {
     const identifier = email.trim().toLowerCase()
-    if (identifier === ADMIN_CREDENTIALS.username) {
-      throw new Error('ADMIN_PASSWORD_REQUIRED')
-    }
-    if (identifier === CEO_EMAIL) {
-      throw new Error('CEO_PASSWORD_REQUIRED')
-    }
 
     const account = findCompanyAccount(identifier)
     if (!account) {
       throw new Error('ACCOUNT_NOT_FOUND')
-    }
-
-    const expected = getStoredPassword(identifier) || COMPANY_DEFAULT_PASSWORD
-    if (password !== expected) {
-      return null
     }
 
     const { company, emp } = account
@@ -120,50 +94,7 @@ export function AuthProvider({ children }) {
       perms,
       phone: profile.phone || '',
       avatar: profile.avatar || null,
-      usingDefaultPassword: !getStoredPassword(identifier),
-      initials: name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(),
-    }
-    persistUser(u)
-    return u
-  }
-
-  const loginAdmin = (username, password) => {
-    if (
-      username.trim().toLowerCase() !== ADMIN_CREDENTIALS.username ||
-      password !== ADMIN_CREDENTIALS.password
-    ) {
-      return null
-    }
-    const profile = readProfiles()[ADMIN_CREDENTIALS.username] || {}
-    const name = profile.name || 'Aizl Jo Bornillo'
-    const u = {
-      email: ADMIN_CREDENTIALS.username,
-      name,
-      role: 'administrator',
-      roleLabel: 'Administrator',
-      phone: profile.phone || '',
-      avatar: profile.avatar || null,
       usingDefaultPassword: false,
-      initials: name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(),
-    }
-    persistUser(u)
-    return u
-  }
-
-  const loginCeo = (email, password) => {
-    if (email.trim().toLowerCase() !== CEO_EMAIL || password !== getCeoPassword()) {
-      return null
-    }
-    const profile = readProfiles()[CEO_EMAIL] || {}
-    const name = profile.name || 'Celestine Espenilla'
-    const u = {
-      email: CEO_EMAIL,
-      name,
-      role: 'ceo',
-      roleLabel: 'CEO',
-      phone: profile.phone || '',
-      avatar: profile.avatar || null,
-      usingDefaultPassword: !localStorage.getItem('uw_ceo_password'),
       initials: name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(),
     }
     persistUser(u)
@@ -185,29 +116,19 @@ export function AuthProvider({ children }) {
   }
 
   // Change the signed-in user's password. Returns error string or null on success.
-  const changeOwnPassword = (currentPassword, newPassword) => {
+  const changeOwnPassword = async (currentPassword, newPassword) => {
     if (!user) return 'Not signed in.'
-    const expected =
-      user.email === CEO_EMAIL
-        ? getCeoPassword()
-        : user.email === ADMIN_CREDENTIALS.username
-          ? ADMIN_CREDENTIALS.password
-          : getStoredPassword(user.email) || COMPANY_DEFAULT_PASSWORD
-    if (currentPassword !== expected) {
-      return 'Current password is incorrect.'
-    }
-    if (!newPassword || newPassword.length < 8) {
+    if (apiEnabled()) {
+      // Cloud mode: the server verifies the current password, stores a PBKDF2
+      // hash, and clears the must-change-password flag.
+      try {
+        await api('/api/change-password', { method: 'POST', body: { currentPassword, newPassword } })
+      } catch (err) {
+        return err.message || 'Password change failed.'
+      }
+    } else if (!newPassword || newPassword.length < 8) {
+      // Local demo mode — demo accounts accept any password, just validate length.
       return 'New password must be at least 8 characters.'
-    }
-    if (newPassword === COMPANY_DEFAULT_PASSWORD) {
-      return 'New password cannot be the default password.'
-    }
-    if (user.email === CEO_EMAIL) {
-      localStorage.setItem('uw_ceo_password', newPassword)
-    } else if (user.email === ADMIN_CREDENTIALS.username) {
-      return 'The administrator password cannot be changed here.'
-    } else {
-      setStoredPassword(user.email, newPassword)
     }
     persistUser({ ...user, usingDefaultPassword: false })
     return null
@@ -246,7 +167,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, loginAdmin, loginCeo, logout, updateProfile, changeOwnPassword, serverLogin }}>
+    <AuthContext.Provider value={{ user, login, logout, updateProfile, changeOwnPassword, serverLogin }}>
       {children}
     </AuthContext.Provider>
   )

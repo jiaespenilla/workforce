@@ -1,7 +1,8 @@
 import { usePageTitle } from '../lib/documentMeta'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth, getCeoEmail } from '../context/AuthContext'
+import { useAuth } from '../context/AuthContext'
+import { apiEnabled } from '../lib/api'
 import { getActiveSettings } from '../lib/systemSettings'
 import { getSystemIcon } from '../lib/documentMeta'
 import { getAllCompanies } from '../lib/companies'
@@ -9,7 +10,7 @@ import { getAllCompanies } from '../lib/companies'
 export default function Login() {
   usePageTitle('Login Page')
   const navigate = useNavigate()
-  const { login, loginAdmin, loginCeo, serverLogin } = useAuth()
+  const { login, serverLogin } = useAuth()
   const [error, setError] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(() => sessionStorage.getItem('uw_session_expired') === '1')
@@ -26,34 +27,24 @@ export default function Login() {
     setError(null)
     const identifier = email.trim().toLowerCase()
 
-    // Cloud mode first — falls back to local demo accounts when no API is configured.
-    let serverUser = null
+    if (apiEnabled()) {
+      // Cloud mode: the server is the only source of truth for authentication.
+      try {
+        const serverUser = await serverLogin(identifier, password)
+        if (serverUser) {
+          navigate(serverUser.role === 'administrator' ? '/settings' : '/', { replace: true })
+          return
+        }
+        // Server unreachable — never fall back to local auth in cloud mode.
+        return setError('Cannot reach the server. Check your connection and try again.')
+      } catch (err) {
+        return setError(err.message || 'Sign-in failed.')
+      }
+    }
+
+    // Local demo mode (no API configured) — demo data only.
     try {
-      serverUser = await serverLogin(identifier, password)
-    } catch (err) {
-      return setError(err.message || 'Sign-in failed.')
-    }
-    if (serverUser) {
-      navigate(serverUser.role === 'administrator' ? '/settings' : '/', { replace: true })
-      return
-    }
-
-    if (identifier === 'admin_celestine') {
-      const user = loginAdmin(email, password)
-      if (!user) return setError('Invalid credentials. Please try again.')
-      navigate('/settings', { replace: true })
-      return
-    }
-
-    if (identifier === getCeoEmail()) {
-      const user = loginCeo(identifier, password)
-      if (!user) return setError('Invalid credentials. Please try again.')
-      navigate('/', { replace: true })
-      return
-    }
-
-    try {
-      const user = login(identifier, password)
+      login(email, password)
       navigate('/', { replace: true })
     } catch (err) {
       if (err.message === 'ACCOUNT_NOT_FOUND') {
@@ -67,7 +58,6 @@ export default function Login() {
       }
     }
   }
-
   const inputCls =
     'mt-1 w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10'
 
@@ -196,14 +186,7 @@ export default function Login() {
             </a>
           </p>
 
-          <details className="mt-7 rounded-xl border border-gray-200 bg-gray-50 p-4 text-xs">
-            <summary className="cursor-pointer font-semibold text-gray-600">Account help</summary>
-            <p className="mt-2 leading-relaxed text-gray-500">
-              Administrator: <span className="font-medium text-gray-700">admin_celestine</span><br />
-              Platform CEO: <span className="font-medium text-gray-700">{getCeoEmail()}</span><br />
-              Company owners &amp; employees: sign in with your registered email — default password <span className="font-medium text-gray-700">P@ssw0rd2026!</span>
-            </p>
-          </details>
+
 
           <p className="mt-8 text-center text-xs text-gray-500">
             {settings.name} · <span className="font-semibold text-gray-700">CelestSolutions</span>

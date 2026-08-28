@@ -36,8 +36,49 @@ async function hmac(text, secret) {
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-async function hashPassword(password, salt) {
-  return sha256(`${salt}:${password}`)
+const PBKDF2_ITERATIONS = 25000
+
+async function pbkdf2(password, salt, iterations = PBKDF2_ITERATIONS) {
+  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits'])
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode(salt), iterations },
+    key,
+    256
+  )
+  return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+// New hashes use PBKDF2-SHA256, stored as "pbkdf2:<iterations>:<hex>".
+// Legacy single-pass SHA-256 hashes are upgraded transparently on the next
+// successful login (see verifyPassword). 25k iterations keeps login well
+// within Workers' free-plan CPU limit; raise on a paid plan if desired.
+async function hashPassword(password, salt, iterations = PBKDF2_ITERATIONS) {
+  return `pbkdf2:${iterations}:${await pbkdf2(password, salt, iterations)}`
+}
+
+function timingSafeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false
+  let result = 0
+  for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return result === 0
+}
+
+// Verifies a password in either hash format. Returns { ok, legacy } so the
+// caller can transparently upgrade legacy SHA-256 hashes to PBKDF2.
+async function verifyPassword(password, user) {
+  if (user.password_hash.startsWith('pbkdf2:')) {
+    const [, iterations, hash] = user.password_hash.split(':')
+    const candidate = await pbkdf2(password, user.password_salt, Number(iterations))
+    return { ok: timingSafeEqual(candidate, hash), legacy: false }
+  }
+  const candidate = await sha256(`${user.password_salt}:${password}`)
+  return { ok: timingSafeEqual(candidate, user.password_hash), legacy: true }
+}
+
+async function upgradeUserPassword(env, userId, password) {
+  const salt = crypto.randomUUID()
+  await env.DB.prepare('UPDATE users SET password_salt = ?, password_hash = ? WHERE id = ?')
+    .bind(salt, await hashPassword(password, salt), userId).run()
 }
 
 function b64url(text) {
@@ -53,7 +94,7 @@ async function createToken(user, secret) {
 async function verifyToken(token, secret) {
   if (!token || !token.includes('.')) return null
   const [payload, sig] = token.split('.')
-  if ((await hmac(payload, secret)) !== sig) return null
+  if (!timingSafeEqual(await hmac(payload, secret), sig)) return null
   try {
     const data = JSON.parse(atob(payload))
     if (!data.exp || data.exp < Date.now()) return null
@@ -203,8 +244,10 @@ async function route(request, env) {
     const id = (identifier || '').trim().toLowerCase()
     const user = await env.DB.prepare('SELECT * FROM users WHERE lower(email) = ? OR lower(email) = ?').bind(id, id).first()
     if (!user) return json({ error: 'Invalid credentials.' }, 401)
-    const hash = await hashPassword(password || '', user.password_salt)
-    if (hash !== user.password_hash) return json({ error: 'Invalid credentials.' }, 401)
+    const { ok: passwordOk, legacy } = await verifyPassword(password || '', user)
+    if (!passwordOk) return json({ error: 'Invalid credentials.' }, 401)
+    // Transparently upgrade legacy single-pass SHA-256 hashes to PBKDF2.
+    if (legacy) await upgradeUserPassword(env, user.id, password || '')
     // Block inactive company/employee logins (admin/ceo have no company row)
     if (user.role !== 'administrator' && user.role !== 'ceo') {
       const empCompany = await env.DB.prepare('SELECT c.active as company_active, e.active as emp_active FROM employees e JOIN companies c ON c.id = e.company_id WHERE lower(e.email) = ? LIMIT 1').bind(id).first()
@@ -216,7 +259,7 @@ async function route(request, env) {
     const token = await createToken({ email: user.email, role: user.role, name: user.name }, env.AUTH_SECRET)
     return json({
       token,
-      user: { email: user.email, name: user.name, role: user.role, usingDefaultPassword: false },
+      user: { email: user.email, name: user.name, role: user.role, usingDefaultPassword: !!user.must_change_password },
     })
   }
 
@@ -289,6 +332,21 @@ async function apiRoutes(path, method, request, env, url, claims) {
 
   /* me */
   if (path === '/api/me' && method === 'GET') return json({ email: claims.sub, name: claims.name, role: claims.role })
+
+  /* change own password (any authenticated user) */
+  if (path === '/api/change-password' && method === 'POST') {
+    const { currentPassword, newPassword } = await readJson(request)
+    if (!newPassword || String(newPassword).length < 8) return json({ error: 'New password must be at least 8 characters.' }, 400)
+    if (newPassword === DEFAULT_EMPLOYEE_PASSWORD) return json({ error: 'New password cannot be the default password.' }, 400)
+    const user = await env.DB.prepare('SELECT * FROM users WHERE lower(email) = ?').bind(String(claims.sub).toLowerCase()).first()
+    if (!user) return json({ error: 'Account not found.' }, 404)
+    const { ok } = await verifyPassword(String(currentPassword || ''), user)
+    if (!ok) return json({ error: 'Current password is incorrect.' }, 401)
+    const salt = crypto.randomUUID()
+    await env.DB.prepare('UPDATE users SET password_salt = ?, password_hash = ?, must_change_password = 0 WHERE id = ?')
+      .bind(salt, await hashPassword(String(newPassword), salt), user.id).run()
+    return json({ ok: true })
+  }
 
   /* bootstrap — everything the app needs in one call */
   if (path === '/api/bootstrap' && method === 'GET') {

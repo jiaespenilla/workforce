@@ -39,7 +39,7 @@ export default function Profile() {
     reader.readAsDataURL(file)
   }
 
-  const submitPassword = (e) => {
+  const submitPassword = async (e) => {
     e.preventDefault()
     setPwError(null)
     setPwSaved(false)
@@ -47,7 +47,7 @@ export default function Profile() {
       setPwError('New password and confirmation do not match.')
       return
     }
-    const error = changeOwnPassword(currentPw, newPw)
+    const error = await changeOwnPassword(currentPw, newPw)
     if (error) {
       setPwError(error)
       return
