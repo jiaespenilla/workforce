@@ -160,6 +160,33 @@ export default function KioskSetup() {
     }
   }
 
+  const savePin = async () => {
+    if (!credEmail) return setCredError('Select an employee first.')
+    if (pinInput.length < 4 || pinInput.length > 8) return setCredError('PIN must be 4–8 digits.')
+    await setPin(credEmail, pinInput)
+    setPinInput('')
+    setPinStatus({ ok: true })
+    setCredError(null)
+  }
+
+  const generateQr = async () => {
+    if (!credEmail) return setCredError('Select an employee first.')
+    const code = await ensureQrCode(credEmail)
+    setQrCodeStr(code)
+    setQrImg(await QRCode.toDataURL(code, { width: 240, margin: 1 }))
+    setCredError(null)
+  }
+
+  const update = (key, value) => setConfig((c) => ({ ...c, [key]: value }))
+
+  const save = async (e) => {
+    e.preventDefault()
+    if (!configCompanyId) return
+    await saveCompanyKioskConfig(configCompanyId, config)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 3000)
+  }
+
   const inputCls = 'mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10'
   const systemName = getActiveSettings().name
 
