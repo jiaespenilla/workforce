@@ -313,7 +313,7 @@ function EmployeeTasks({ name }) {
               <button onClick={()=>setDetailTask(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm">Cancel</button>
               <button onClick={saveWork} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white">Save</button>
             </div>
-            <p className="mt-3 text-center text-[11px] text-gray-400">CEO will choose storage (GDrive/R2/D1) in System Configuration. For now files are stored as Data URL.</p>
+
           </div>
         </div>
       )}

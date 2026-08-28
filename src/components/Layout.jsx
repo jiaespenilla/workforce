@@ -16,6 +16,11 @@ const nav = [
   { to: '/payroll', label: 'Payroll', key: 'payroll', icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
   { to: '/shifts', label: 'Shift Schedules', key: 'shifts', ceoOnly: true, icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
   { to: '/people', label: 'People', key: 'employees', ceoOnly: true, icon: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z' },
+  { to: '/profile', label: 'Profile', key: 'profile', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+]
+
+const settingsNav = [
+  { to: '/storage-setup', label: 'Storage Setup', icon: 'M3 7v10a2 2 0 002 2h1l3 3h8l3-3h1a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2z' },
 ]
 
 function Logo({ light = false }) {
@@ -74,8 +79,37 @@ export default function Layout({ children }) {
         return (
           <>
             <p className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Main Menu</p>
-            <nav className="space-y-1">
+                        <nav className="space-y-1">
               {allowed.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/'}
+                  onClick={() => setOpen(false)}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <svg className={`h-5 w-5 ${isActive ? 'text-brand-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+                        <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                      </svg>
+                      {item.label}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </nav>
+
+            {/* Settings section */}
+            <p className="px-3 pb-2 pt-6 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Settings</p>
+            <nav className="space-y-1">
+              {settingsNav.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
