@@ -1,27 +1,9 @@
 import { createContext, useContext, useState } from 'react'
 import { commitPendingSystemSettings } from '../lib/systemSettings'
-import { loadRegisteredCompanies } from '../lib/companies'
 import { getConfiguredRoles } from '../lib/roles'
 import { tryApiLogin, apiEnabled, api } from '../lib/api'
 
 const AuthContext = createContext(null)
-
-// Resolve an email against registered companies (owner or any listed employee).
-function findCompanyAccount(email) {
-  const normalized = email.trim().toLowerCase()
-  for (const company of loadRegisteredCompanies()) {
-    for (const emp of company.employees) {
-      if ((emp.email || '').trim().toLowerCase() === normalized) {
-        return { company, emp }
-      }
-    }
-  }
-  return null
-}
-
-function isCompanyActiveForLogin(company) {
-  return company && company.active !== false
-}
 
 function readProfiles() {
   try {
@@ -43,62 +25,6 @@ export function AuthProvider({ children }) {
   const persistUser = (u) => {
     setUser(u)
     localStorage.setItem('uw_user', JSON.stringify(u))
-  }
-
-  // Local demo-mode login (no API configured). The local account list is demo
-  // data only, so any password is accepted — real authentication always goes
-  // through serverLogin() against the Worker API.
-  const login = (email) => {
-    const identifier = email.trim().toLowerCase()
-
-    const account = findCompanyAccount(identifier)
-    if (!account) {
-      throw new Error('ACCOUNT_NOT_FOUND')
-    }
-
-    const { company, emp } = account
-    if (!isCompanyActiveForLogin(company)) {
-      throw new Error('COMPANY_INACTIVE')
-    }
-    if (emp.active === false) {
-      throw new Error('EMPLOYEE_INACTIVE')
-    }
-    const identifierOwner =
-      (company.owner?.email || '').trim().toLowerCase() === identifier ||
-      company.employees[0]?.email?.trim().toLowerCase() === identifier
-    // CEO access: registered as the account owner, has the CEO role, or is the first listed member.
-    const isOwner = identifierOwner || (emp.role || '').trim().toLowerCase() === 'ceo'
-    const role = isOwner ? 'ceo' : 'employee'
-
-    // Saved profile details override registration defaults.
-    const profile = readProfiles()[identifier] || {}
-    const name = profile.name || emp.name || company.owner?.name || 'Company User'
-
-    // Attach the permissions of the matching role configured in System Configuration.
-    let perms = null
-    if (isOwner) {
-      perms =
-        getConfiguredRoles().find((r) => r.name.toLowerCase() === 'ceo')?.perms ||
-        { dashboard: true, timekeeping: true, tasks: true, payroll: true, kiosk: false, settings: false }
-    } else {
-      const roleName = (emp.role || '').trim().toLowerCase()
-      perms = getConfiguredRoles().find((r) => r.name.toLowerCase() === roleName)?.perms || null
-    }
-
-    const u = {
-      email: identifier,
-      name,
-      role,
-      roleLabel: isOwner ? 'CEO' : emp.role || 'Employee',
-      companyName: company.name,
-      perms,
-      phone: profile.phone || '',
-      avatar: profile.avatar || null,
-      usingDefaultPassword: false,
-      initials: name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(),
-    }
-    persistUser(u)
-    return u
   }
 
   // Update the signed-in user's profile (name / phone / avatar).
@@ -167,7 +93,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateProfile, changeOwnPassword, serverLogin }}>
+    <AuthContext.Provider value={{ user, logout, updateProfile, changeOwnPassword, serverLogin }}>
       {children}
     </AuthContext.Provider>
   )

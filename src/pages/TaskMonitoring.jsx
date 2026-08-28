@@ -2,7 +2,6 @@ import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { canAction } from '../lib/roles'
-import { getScopedEmployees } from '../lib/companies'
 import { api, apiEnabled } from '../lib/api'
 
 const columns = [
@@ -35,7 +34,12 @@ export default function TaskMonitoring() {
   const [overCol, setOverCol] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ title: '', assignee: '', priority: 'Medium', due: '' })
-  const employees = getScopedEmployees(user)
+  const [employees, setEmployees] = useState([])
+  useEffect(() => {
+    api('/api/companies')
+      .then((cs) => setEmployees(cs.flatMap((c) => c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id })))))
+      .catch(() => setEmployees([]))
+  }, [])
   const activeEmployees = employees.filter((e) => e.active !== false)
 
   useEffect(() => {

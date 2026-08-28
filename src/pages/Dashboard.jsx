@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getAllEmployees, getScopedEmployees } from '../lib/companies'
 import { api, apiEnabled } from '../lib/api'
 import Avatar from '../components/Avatar'
 
@@ -268,7 +267,15 @@ function CeoDashboard({ user }) {
   const [viewingTask, setViewingTask] = useState(null)
   const [allTasks, setAllTasks] = useState([])
   const [clockState, setClockState] = useState({})
-  const employees = getAllEmployees().filter((e) => e.active !== false && e.email !== user.email)
+  const [allEmployees, setAllEmployees] = useState([])
+
+  useEffect(() => {
+    api('/api/companies')
+      .then((cs) => setAllEmployees(cs.flatMap((c) => c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id })))))
+      .catch(() => setAllEmployees([]))
+  }, [])
+
+  const employees = allEmployees.filter((e) => e.active !== false && e.email !== user.email)
 
   useEffect(() => {
     if (apiEnabled()) {
@@ -489,7 +496,13 @@ export default function Dashboard() {
     }
   }, [user?.name])
 
-  const employees = getAllEmployees()
+  const [allEmployees, setAllEmployees] = useState([])
+  useEffect(() => {
+    api('/api/companies')
+      .then((cs) => setAllEmployees(cs.flatMap((c) => c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id })))))
+      .catch(() => setAllEmployees([]))
+  }, [])
+  const employees = allEmployees
   const activeCount = employees.filter((e) => e.active !== false).length
   const myTasks = allTasks
   const firstName = (user?.name || '').split(' ')[0] || 'there'

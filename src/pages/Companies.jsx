@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { usePageTitle } from '../lib/documentMeta'
-import { loadRegisteredCompanies } from '../lib/companies'
 import { api, apiEnabled } from '../lib/api'
 import { getCompanyLocations, addCompanyLocation, renameCompanyLocation, removeCompanyLocation } from '../lib/locations'
 
@@ -466,7 +465,7 @@ export default function Companies() {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [activeFilter, setActiveFilter] = useState('all')
-  const [companies, setCompanies] = useState(apiEnabled() ? [] : loadRegisteredCompanies)
+  const [companies, setCompanies] = useState([])
   const [viewingId, setViewingId] = useState(null)
   const [rejecting, setRejecting] = useState(null)
   const [rejectReason, setRejectReason] = useState('')

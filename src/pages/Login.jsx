@@ -5,17 +5,15 @@ import { useAuth } from '../context/AuthContext'
 import { apiEnabled } from '../lib/api'
 import { getActiveSettings } from '../lib/systemSettings'
 import { getSystemIcon } from '../lib/documentMeta'
-import { getAllCompanies } from '../lib/companies'
 
 export default function Login() {
   usePageTitle('Login Page')
   const navigate = useNavigate()
-  const { login, serverLogin } = useAuth()
+  const { serverLogin } = useAuth()
   const [error, setError] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(() => sessionStorage.getItem('uw_session_expired') === '1')
   const settings = getActiveSettings()
-  const activeCompanies = getAllCompanies().filter((c) => c.active !== false).length
 
   if (sessionExpired) sessionStorage.removeItem('uw_session_expired')
 
@@ -27,35 +25,20 @@ export default function Login() {
     setError(null)
     const identifier = email.trim().toLowerCase()
 
-    if (apiEnabled()) {
-      // Cloud mode: the server is the only source of truth for authentication.
-      try {
-        const serverUser = await serverLogin(identifier, password)
-        if (serverUser) {
-          navigate(serverUser.role === 'administrator' ? '/settings' : '/', { replace: true })
-          return
-        }
-        // Server unreachable — never fall back to local auth in cloud mode.
-        return setError('Cannot reach the server. Check your connection and try again.')
-      } catch (err) {
-        return setError(err.message || 'Sign-in failed.')
-      }
+    if (!apiEnabled()) {
+      return setError('The API is not configured. Set VITE_API_URL to continue.')
     }
 
-    // Local demo mode (no API configured) — demo data only.
+    // The server is the only source of truth for authentication.
     try {
-      login(email, password)
-      navigate('/', { replace: true })
-    } catch (err) {
-      if (err.message === 'ACCOUNT_NOT_FOUND') {
-        setError('No account found for this email. Register your company first.')
-      } else if (err.message === 'COMPANY_INACTIVE') {
-        setError('Your company is deactivated. Contact administrator.')
-      } else if (err.message === 'EMPLOYEE_INACTIVE') {
-        setError('Your account is deactivated. Contact administrator.')
-      } else {
-        setError('Invalid credentials. Please try again.')
+      const serverUser = await serverLogin(identifier, password)
+      if (serverUser) {
+        navigate(serverUser.role === 'administrator' ? '/settings' : '/', { replace: true })
+        return
       }
+      return setError('Cannot reach the server. Check your connection and try again.')
+    } catch (err) {
+      return setError(err.message || 'Sign-in failed.')
     }
   }
   const inputCls =
@@ -89,7 +72,7 @@ export default function Login() {
 
         <div className="grid grid-cols-3 gap-6">
           {[
-            [String(activeCompanies), 'Active companies'],
+            [String.fromCharCode(0x2713), 'Secure cloud platform'],
             ['99.9%', 'Platform uptime'],
             ['24/7', 'Support coverage'],
           ].map(([v, l]) => (

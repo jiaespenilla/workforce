@@ -1,7 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { usePageTitle } from '../lib/documentMeta'
-import { getScopedCompanies, loadRegisteredCompanies } from '../lib/companies'
 import { getConfiguredRoles, canAction } from '../lib/roles'
 import { api, apiEnabled } from '../lib/api'
 import { getCompanyShifts, saveCompanyShiftData } from '../lib/shifts'
@@ -29,16 +28,12 @@ export default function People() {
 
   // Load companies (scoped to the signed-in user's own company).
   const load = async () => {
-    let scoped
-    if (apiEnabled()) {
-      try {
-        const all = await api('/api/companies')
-        scoped = user?.companyName ? all.filter((c) => c.name === user.companyName) : all
-      } catch {
-        scoped = getScopedCompanies(user)
-      }
-    } else {
-      scoped = getScopedCompanies(user)
+    let scoped = []
+    try {
+      const all = await api('/api/companies')
+      scoped = user?.companyName ? all.filter((c) => c.name === user.companyName) : all
+    } catch {
+      scoped = []
     }
     setCompanies(scoped)
     setCompanyId((prev) => prev || scoped[0]?.id || null)
@@ -103,14 +98,6 @@ export default function People() {
           body: { name: cleanName, email: cleanEmail, role: form.role || 'Unassigned', active: true, ...locPayload },
         })
       }
-      if (!apiEnabled()) {
-        try {
-          const updated = loadRegisteredCompanies().map((c) =>
-            c.id === company.id ? { ...c, employees: [...c.employees, { name: cleanName, email: cleanEmail, role: form.role || 'Unassigned', active: true, ...locPayload }] } : c
-          )
-          localStorage.setItem('uw_companies', JSON.stringify(updated))
-        } catch {}
-      }
       await load()
       setSavedName(`${cleanName} (${cleanEmail})`)
       form.name = ''
@@ -129,15 +116,6 @@ export default function People() {
     if (apiEnabled() && emp.id) {
       await api(`/api/employees/${emp.id}`, { method: 'PUT', body: updates }).catch((err) => setError(err.message))
     }
-    // Local mode / optimistic update
-    try {
-      const updated = loadRegisteredCompanies().map((c) =>
-        c.id === companyId
-          ? { ...c, employees: c.employees.map((e) => (e.email === emp.email ? { ...e, ...updates } : e)) }
-          : c
-      )
-      localStorage.setItem('uw_companies', JSON.stringify(updated))
-    } catch { /* ignore */ }
     await load()
     setEditingId(null)
   }
@@ -152,12 +130,6 @@ export default function People() {
     if (apiEnabled() && emp.id) {
       await api(`/api/employees/${emp.id}`, { method: 'DELETE' }).catch((err) => setError(err.message))
     }
-    try {
-      const updated = loadRegisteredCompanies().map((c) =>
-        c.id === companyId ? { ...c, employees: c.employees.filter((e) => e.email !== emp.email) } : c
-      )
-      localStorage.setItem('uw_companies', JSON.stringify(updated))
-    } catch { /* ignore */ }
     await load()
   }
 

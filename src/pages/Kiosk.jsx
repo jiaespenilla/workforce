@@ -4,7 +4,6 @@ import { getActiveSettings } from '../lib/systemSettings'
 import { getSystemIcon } from '../lib/documentMeta'
 import { loadKioskConfig } from './KioskSetup'
 import { getCompanyShifts, decideAction } from '../lib/shifts'
-import { getAllCompanies } from '../lib/companies'
 import { getCompanyKioskConfig } from '../lib/kioskConfig'
 import { api, apiEnabled } from '../lib/api'
 
@@ -160,37 +159,10 @@ export default function Kiosk() {
         }
       }
       if (!match) {
-        // Local fallback — match against locally registered credentials
-        let credMap = {}
-        try { credMap = JSON.parse(localStorage.getItem('uw_credentials')) || {} } catch { credMap = {} }
-        const { getAllEmployees } = await import('../lib/companies')
-        const all = getAllEmployees()
-        for (const [email, c] of Object.entries(credMap)) {
-          const emp = all.find((e) => e.email === email)
-          if (!emp) continue
-          if (method === 'fingerprint' && c.fpToken && c.fpToken === value) match = { email, name: emp.name, company: emp.companyName, companyId: emp.companyId }
-          if (method === 'pin' && c.pin && c.pin === value) match = { email, name: emp.name, company: emp.companyName, companyId: emp.companyId }
-          if (method === 'qr' && c.qrCode && c.qrCode === value) match = { email, name: emp.name, company: emp.companyName, companyId: emp.companyId }
-          if (match) break
-        }
-        // Simulated sensor: exactly one registered fingerprint identifies the person.
-        if (!match && method === 'fingerprint' && value === 'SIM_FP') {
-          const fpEntries = Object.entries(credMap).filter(([, c]) => c.fpToken)
-          if (fpEntries.length === 1) {
-            const [email, c] = fpEntries[0]
-            const emp = all.find((e) => e.email === email)
-            if (emp) match = { email, name: emp.name, company: emp.companyName }
-          }
-        }
-      }
-      if (!match) {
         setAuthError('Credential not recognized. Register it in Kiosk Setup first.')
         return false
       }
       if (match.companyId) setKioskCompanyId(match.companyId)
-      else if (match.company) {
-        try { const cid = getAllCompanies().find((c)=>c.name===match.company)?.id; if(cid) setKioskCompanyId(cid) } catch {}
-      }
       await recordPunch(match)
       return true
     } finally {
@@ -247,11 +219,8 @@ export default function Kiosk() {
   }
 
   function company_id_by_name(companyName) {
-    try {
-      return getAllCompanies().find((c) => c.name === companyName)?.id
-    } catch {
-      return undefined
-    }
+    // Company ids come from the identify response; no local company list exists.
+    return undefined
   }
 
   const header = (

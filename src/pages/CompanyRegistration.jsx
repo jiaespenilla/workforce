@@ -96,10 +96,6 @@ export default function CompanyRegistration() {
           const res = await api(`/api/companies/check?name=${encodeURIComponent(trimmed)}`)
           if (res.exists) setNameError(`"${trimmed}" is already registered. Please choose a different company name.`)
           else setNameError('')
-        } else {
-          const { loadRegisteredCompanies } = await import('../lib/companies')
-          const exists = loadRegisteredCompanies().some((c) => (c.name || '').trim().toLowerCase() === trimmed.toLowerCase())
-          setNameError(exists ? `"${trimmed}" is already registered. Please choose a different company name.` : '')
         }
       } catch {
         setNameError('')
@@ -208,7 +204,7 @@ export default function CompanyRegistration() {
       emails.add(m.email)
     }
 
-    // Final duplicate-name guard before submit (covers race + local mode)
+    // Final duplicate-name guard before submit (covers race conditions)
     const trimmedCompanyName = (companyName || data.companyName || '').trim()
     if (!trimmedCompanyName) {
       alert('Company name is required.')
@@ -217,18 +213,6 @@ export default function CompanyRegistration() {
     if (nameError) {
       alert(nameError)
       return
-    }
-    // Local-mode synchronous duplicate check as last guard
-    if (!apiEnabled()) {
-      try {
-        const { loadRegisteredCompanies } = await import('../lib/companies')
-        if (loadRegisteredCompanies().some((c) => (c.name || '').trim().toLowerCase() === trimmedCompanyName.toLowerCase())) {
-          const msg = `"${trimmedCompanyName}" is already registered. Please choose a different company name.`
-          setNameError(msg)
-          alert(msg)
-          return
-        }
-      } catch { /* ignore */ }
     }
 
     const ceo = members.find((m) => m.role === 'CEO') || members[0]
@@ -257,24 +241,7 @@ export default function CompanyRegistration() {
         alert(`Registration failed to save: ${err.message}`)
         return
       }
-    } else {
-      // Local demo mode
-      try {
-        const existing = JSON.parse(localStorage.getItem('uw_companies')) || []
-        localStorage.setItem('uw_companies', JSON.stringify([company, ...existing]))
-        const notifications = JSON.parse(localStorage.getItem('uw_notifications')) || []
-        notifications.push({
-          id: `notif-${Date.now()}`,
-          to: NOTIFICATION_RECIPIENT,
-          subject: `New company registration: ${company.name}`,
-          body: `A new company has registered on Unified Workforce.\n\nCompany: ${company.name}\nIndustry: ${company.industry}\nLocation: ${company.city}\nContact email: ${company.contactEmail}\nRegistered: ${company.registered}\n\nTeam (${members.length}):\n${members.map((m) => `- ${m.name} — ${m.role} (${m.email})`).join('\n')}`,
-          createdAt: new Date().toISOString(),
-          status: 'pending-smtp',
-        })
-        localStorage.setItem('uw_notifications', JSON.stringify(notifications))
-      } catch {
-        // storage unavailable — registration still succeeds in UI
-      }
+
     }
     setSubmitted(true)
   }

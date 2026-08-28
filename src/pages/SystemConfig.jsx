@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { getActiveSettings, getPendingSettings, queueSystemSettings, pushSystemSettingsToServer, pushSystemIconToServer, getSystemTimeZone, isMaintenanceMode, setMaintenanceMode, getSessionTimeoutMinutes, setSessionTimeoutMinutes } from '../lib/systemSettings'
 import { getLegalDocs, saveLegalDocs } from '../lib/legal'
 import { getConfiguredRoles, saveRolesList, canAction } from '../lib/roles'
-import { getAllCompanies } from '../lib/companies'
 import { getSystemIcon, setSystemIcon, applyFavicon } from '../lib/documentMeta'
 import { SYSTEM_ICON_PRESETS } from '../lib/iconPresets'
 import { api, apiEnabled } from '../lib/api'
@@ -71,10 +70,15 @@ function LocalToggle({ defaultOn = false }) {
 function RolesPanel({ roles, onAdd, onRename, onRemove, onTogglePerm }) {
   const [expanded, setExpanded] = useState(null)
   const [roleQuery, setRoleQuery] = useState('')
+  const [companies, setCompanies] = useState([])
+
+  useEffect(() => {
+    api('/api/companies').then(setCompanies).catch(() => setCompanies([]))
+  }, [])
 
   // Group every registered employee under their role name.
   const membersByRole = {}
-  for (const company of getAllCompanies()) {
+  for (const company of companies) {
     for (const emp of company.employees) {
       const roleName = (emp.role || '').trim() || 'Unassigned'
       if (!membersByRole[roleName]) membersByRole[roleName] = []
@@ -278,18 +282,20 @@ function StatusPanel({ settings }) {
   }, [])
 
   const tz = getSystemTimeZone()
-  const companies = getAllCompanies()
+  const [companies, setCompanies] = useState([])
+  const [tasks, setTasks] = useState([])
+  const [notifications, setNotifications] = useState([])
+
+  useEffect(() => {
+    api('/api/companies').then(setCompanies).catch(() => setCompanies([]))
+    api('/api/tasks').then(setTasks).catch(() => setTasks([]))
+    api('/api/notifications').then(setNotifications).catch(() => setNotifications([]))
+  }, [])
+
   const activeCompanies = companies.filter((c) => c.active !== false)
   const employees = companies.flatMap((c) => c.employees)
   const activeEmployees = employees.filter((e) => e.active !== false)
   const pendingCount = companies.filter((c) => (c.status || 'pending') === 'pending').length
-
-  let notifications = []
-  let tasks = []
-  try {
-    notifications = JSON.parse(localStorage.getItem('uw_notifications')) || []
-    tasks = JSON.parse(localStorage.getItem('uw_ceo_tasks')) || []
-  } catch { /* ignore */ }
 
   let storageBytes = 0
   for (let i = 0; i < localStorage.length; i++) {

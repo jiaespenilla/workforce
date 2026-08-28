@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 import { getActiveSettings } from '../lib/systemSettings'
 import { api, apiEnabled } from '../lib/api'
-import { getActiveCompanies } from '../lib/companies'
 import { getCredential, setFingerprint, setPin, ensureQrCode } from '../lib/credentials'
 import { getDefaultKioskConfig, getCompanyKioskConfig, saveCompanyKioskConfig, loadKioskConfig as loadKioskConfigPerCompany } from '../lib/kioskConfig'
 
@@ -53,9 +52,9 @@ function QrGlyph({ className }) {
 
 export default function KioskSetup() {
   usePageTitle('Kiosk Setup')
-  const [companies, setCompanies] = useState(() => getActiveCompanies())
-  const [configCompanyId, setConfigCompanyId] = useState(() => getActiveCompanies()[0]?.id || '')
-  const [config, setConfig] = useState(() => loadKioskConfig(getActiveCompanies()[0]?.id))
+  const [companies, setCompanies] = useState([])
+  const [configCompanyId, setConfigCompanyId] = useState('')
+  const [config, setConfig] = useState(() => loadKioskConfig())
 
   useEffect(() => {
     if (!apiEnabled()) return

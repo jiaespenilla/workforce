@@ -2,7 +2,6 @@ import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getAllEmployees, getScopedEmployees } from '../lib/companies'
 import { getSystemTimeZone } from '../lib/systemSettings'
 import { api, apiEnabled } from '../lib/api'
 
@@ -45,7 +44,13 @@ function CeoTimeKeeping() {
   }, [])
 
   const tz = getSystemTimeZone()
-  const employees = getScopedEmployees(user).filter((e) => e.active !== false)
+  const [allEmployees, setAllEmployees] = useState([])
+  useEffect(() => {
+    api('/api/companies')
+      .then((cs) => setAllEmployees(cs.flatMap((c) => c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id })))))
+      .catch(() => setAllEmployees([]))
+  }, [])
+  const employees = allEmployees.filter((e) => e.active !== false)
 
   // Get today's attendance for each employee
   const todayStr = now.toDateString()
