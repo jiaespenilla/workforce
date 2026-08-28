@@ -90,15 +90,15 @@ export default function TaskMonitoring() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">CEO Overview</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900">Task Monitoring</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Task Monitoring</h1>
+          <p className="mt-1 text-sm leading-relaxed text-gray-500">
             Monitor tasks across all companies and assign new work to active employees.
           </p>
         </div>
-        <button hidden={!canAction(user?.perms, 'tasks', 'add')} onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 self-start rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700">
+        <button hidden={!canAction(user?.perms, 'tasks', 'add')} onClick={() => setShowForm(!showForm)} className="flex shrink-0 items-center gap-2 self-start rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 sm:self-auto">
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
           </svg>

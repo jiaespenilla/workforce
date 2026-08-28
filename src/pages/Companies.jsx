@@ -56,6 +56,42 @@ function buildCompanyForm(company) {
   }
 }
 
+function getCompanyLogoSrc(company) {
+  const raw = company?.logoName || company?.logo || null
+  if (!raw || typeof raw !== 'string') return null
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  if (trimmed.startsWith('data:image/') || trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('/') || trimmed.startsWith('blob:')) return trimmed
+  return null
+}
+
+function CompanyLogo({ company, size = 'h-12 w-12', textSize = 'text-base', dimWhenInactive = false }) {
+  const src = getCompanyLogoSrc(company)
+  const initials = (company.name || '')
+    .split(' ')
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '?'
+  const [imgError, setImgError] = useState(false)
+  const isInactive = dimWhenInactive && company?.active === false
+  if (src && !imgError) {
+    return (
+      <img
+        src={src}
+        alt={`${company.name} logo`}
+        className={`${size} shrink-0 rounded-xl object-cover ring-1 ring-gray-200 bg-white ${isInactive ? 'opacity-60 grayscale' : ''}`}
+        onError={() => setImgError(true)}
+      />
+    )
+  }
+  return (
+    <div className={`flex ${size} shrink-0 items-center justify-center rounded-xl ${isInactive ? 'bg-gray-400' : 'bg-brand-600'} ${textSize} font-bold text-white shadow`}>
+      {initials}
+    </div>
+  )
+}
+
 function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmployee, onEditCompany }) {
   const [tab, setTab] = useState('details')
   const [editing, setEditing] = useState(false)
@@ -80,12 +116,6 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
     }
   }, [tab, company.id])
   const status = company.status || 'pending'
-  const initials = company.name
-    .split(' ')
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase()
   const activeCount = company.employees.filter((e) => e.active !== false).length
 
   const inputCls = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200'
@@ -107,9 +137,7 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-4 border-b border-gray-100 p-6">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-base font-bold text-white">
-            {initials}
-          </div>
+          <CompanyLogo company={company} size="h-12 w-12" textSize="text-base" />
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-bold text-gray-900">{company.name}</h2>
             <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -375,12 +403,6 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
 function CompanyCard({ company, onView, onApprove, onReject }) {
   const [open, setOpen] = useState(false)
   const status = company.status || 'pending'
-  const initials = company.name
-    .split(' ')
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase()
   const activeCount = company.employees.filter((e) => e.active !== false).length
 
   return (
@@ -390,9 +412,7 @@ function CompanyCard({ company, onView, onApprove, onReject }) {
         onClick={() => setOpen(!open)}
         className="flex w-full items-center gap-3 px-4 py-4 text-left transition hover:bg-gray-50 sm:gap-4 sm:px-5"
       >
-        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white shadow ${company.active===false?'bg-gray-400':'bg-brand-600'}`}>
-          {initials}
-        </div>
+        <CompanyLogo company={company} size="h-11 w-11" textSize="text-sm" dimWhenInactive />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <p className="truncate text-sm font-semibold text-gray-900 sm:text-[15px]">{company.name}</p>
