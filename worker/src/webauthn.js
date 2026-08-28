@@ -71,7 +71,7 @@ export async function buildRegistrationOptions(env, { username, origin }) {
     userName: username,
     userDisplayName: username,
     // Stable but distinct user identifier derived from the email.
-    userID: base64UrlToBytes(encodeURIComponent(`uid:${username}`)),
+    userID: new TextEncoder().encode(`uid:${username}`),
     timeout: 120000,
     attestationType: 'none',
     authenticatorSelection: {
