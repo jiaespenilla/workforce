@@ -141,6 +141,41 @@ function HttpError(status, message) {
   return err
 }
 
+/* ---------------- rate limiting (D1-backed) ---------------- */
+
+const LOGIN_WINDOW_MS = 15 * 60 * 1000
+const LOGIN_MAX_ATTEMPTS = 8       // failed attempts per account
+const LOGIN_IP_MAX_ATTEMPTS = 24   // failed attempts per IP across all accounts
+const REGISTER_WINDOW_MS = 60 * 60 * 1000
+const REGISTER_MAX_ATTEMPTS = 5    // registrations per IP
+const KIOSK_WINDOW_MS = 15 * 60 * 1000
+const KIOSK_MAX_ATTEMPTS = 60      // kiosk credential attempts per IP
+
+function clientIp(request) {
+  return request.headers.get('CF-Connecting-IP') || 'unknown'
+}
+
+async function recentAttempts(env, key, windowMs) {
+  const cutoff = new Date(Date.now() - windowMs).toISOString()
+  const { n } = await env.DB.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE key = ? AND attempt_at >= ?')
+    .bind(key, cutoff).first()
+  return n || 0
+}
+
+// Records attempt timestamps and opportunistically prunes rows older than a day.
+async function recordAttempts(env, keys) {
+  const now = new Date().toISOString()
+  const dayCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  await env.DB.batch([
+    ...keys.map((key) => env.DB.prepare('INSERT INTO login_attempts (key, attempt_at) VALUES (?, ?)').bind(key, now)),
+    env.DB.prepare('DELETE FROM login_attempts WHERE attempt_at < ?').bind(dayCutoff),
+  ])
+}
+
+async function clearAttempts(env, key) {
+  await env.DB.prepare('DELETE FROM login_attempts WHERE key = ?').bind(key).run()
+}
+
 async function readJson(request) {
   try {
     return await request.json()
@@ -260,12 +295,28 @@ async function route(request, env) {
   if (path === '/api/login' && method === 'POST') {
     const { identifier, password } = await readJson(request)
     const id = (identifier || '').trim().toLowerCase()
-    const user = await env.DB.prepare('SELECT * FROM users WHERE lower(email) = ? OR lower(email) = ?').bind(id, id).first()
-    if (!user) return json({ error: 'Invalid credentials.' }, 401)
+    // Brute-force protection: cap failed attempts per account and per IP.
+    const idKey = `login:id:${id}`
+    const ipKey = `login:ip:${clientIp(request)}`
+    const [byId, byIp] = await Promise.all([
+      recentAttempts(env, idKey, LOGIN_WINDOW_MS),
+      recentAttempts(env, ipKey, LOGIN_WINDOW_MS),
+    ])
+    if (byId >= LOGIN_MAX_ATTEMPTS || byIp >= LOGIN_IP_MAX_ATTEMPTS) {
+      return json({ error: 'Too many sign-in attempts. Please try again in 15 minutes.' }, 429)
+    }
+    const fail = async () => {
+      await recordAttempts(env, [idKey, ipKey])
+      return json({ error: 'Invalid credentials.' }, 401)
+    }
+    const user = await env.DB.prepare('SELECT * FROM users WHERE lower(email) = ?').bind(id).first()
+    if (!user) return fail()
     const { ok: passwordOk, legacy } = await verifyPassword(password || '', user)
-    if (!passwordOk) return json({ error: 'Invalid credentials.' }, 401)
+    if (!passwordOk) return fail()
     // Transparently upgrade legacy single-pass SHA-256 hashes to PBKDF2.
     if (legacy) await upgradeUserPassword(env, user.id, password || '')
+    // Successful sign-in — reset the failure counter for this account.
+    await clearAttempts(env, idKey)
     // Block inactive company/employee logins (admin/ceo have no company row)
     if (user.role !== 'administrator' && user.role !== 'ceo') {
       const empCompany = await env.DB.prepare('SELECT c.active as company_active, e.active as emp_active FROM employees e JOIN companies c ON c.id = e.company_id WHERE lower(e.email) = ? LIMIT 1').bind(id).first()
@@ -291,6 +342,12 @@ async function route(request, env) {
   // Public company registration — no auth required so new customers can sign up.
   // Must run before requireAuth, otherwise unauthenticated POST returns 401 "Unauthorized".
   if (path === '/api/companies' && method === 'POST') {
+    // Registration spam protection: max 5 registrations per IP per hour.
+    const regKey = `register:${clientIp(request)}`
+    if (await recentAttempts(env, regKey, REGISTER_WINDOW_MS) >= REGISTER_MAX_ATTEMPTS) {
+      return json({ error: 'Too many registrations from this network. Please try again later.' }, 429)
+    }
+    await recordAttempts(env, [regKey])
     const body = await readJson(request)
     const trimmedName = (body.name || '').trim()
     if (trimmedName) {
@@ -574,6 +631,12 @@ async function apiRoutes(path, method, request, env, url, claims) {
 
   /* kiosk credential identification — public, used by the stand-alone kiosk */
   if (path === '/api/kiosk/identify' && method === 'POST') {
+    // Slow down credential (PIN) guessing from any single network.
+    const kioskKey = `kiosk:${clientIp(request)}`
+    if (await recentAttempts(env, kioskKey, KIOSK_WINDOW_MS) >= KIOSK_MAX_ATTEMPTS) {
+      return json({ error: 'Too many attempts. Please try again in 15 minutes.' }, 429)
+    }
+    await recordAttempts(env, [kioskKey])
     const { method: credMethod, value } = await readJson(request)
     const v = (value || '').trim()
     if (!v) return json({ error: 'Credential is required.' }, 400)

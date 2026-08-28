@@ -128,3 +128,12 @@ CREATE TABLE IF NOT EXISTS attendance (
   overtime INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+-- Brute-force protection counters (failed logins, registrations, kiosk attempts)
+CREATE TABLE IF NOT EXISTS login_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  key TEXT NOT NULL,                 -- e.g. "login:id:<email>", "login:ip:<ip>", "register:<ip>", "kiosk:<ip>"
+  attempt_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_login_attempts_key_time ON login_attempts (key, attempt_at);
+CREATE INDEX IF NOT EXISTS idx_login_attempts_time ON login_attempts (attempt_at);
