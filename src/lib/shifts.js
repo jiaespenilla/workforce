@@ -1,11 +1,11 @@
 // Shift schedules per company.
-// Shape: { [companyId]: { shifts: [{id,name,start,end}], assignments: { email: shiftId } } }
-// Cloud mode persists via the Worker settings API; local mode uses localStorage.
+// Shape: { shifts: [{id,name,start,end}], assignments: { email: shiftId } }
+// Cloud mode persists via the per-company settings API (one key per company,
+// so companies never overwrite each other); local mode uses localStorage.
 
 import { api, apiEnabled } from './api'
 
 const KEY = 'uw_shift_schedules'
-const SETTINGS_KEY = 'shift_schedules'
 
 const EMPTY = { shifts: [], assignments: {} }
 
@@ -21,39 +21,32 @@ function writeLocalAll(all) {
   localStorage.setItem(KEY, JSON.stringify(all))
 }
 
-export async function loadAllShiftSchedules() {
+export async function getCompanyShifts(companyId) {
+  if (!companyId) return { ...EMPTY }
   if (apiEnabled()) {
     try {
-      const settings = await api('/api/settings')
-      const raw = settings[SETTINGS_KEY]
-      return raw ? JSON.parse(raw) : {}
+      const data = await api(`/api/company-settings/${encodeURIComponent(companyId)}`)
+      return data?.shift_schedules || { ...EMPTY }
     } catch {
-      return {}
+      return { ...EMPTY }
     }
   }
-  return readLocalAll()
+  return readLocalAll()[companyId] || { ...EMPTY }
 }
 
 export async function saveCompanyShifts(companyId, data) {
   if (apiEnabled()) {
-    await api('/api/settings', { method: 'PUT', body: { [SETTINGS_KEY]: JSON.stringify(data) } })
-  } else {
-    const all = readLocalAll()
-    all[companyId] = data
-    writeLocalAll(all)
+    await api(`/api/company-settings/${encodeURIComponent(companyId)}`, { method: 'PUT', body: { shift_schedules: data } })
+    return
   }
-}
-
-export async function getCompanyShifts(companyId) {
-  const all = await loadAllShiftSchedules()
-  return all[companyId] || { ...EMPTY }
+  const all = readLocalAll()
+  all[companyId] = data
+  writeLocalAll(all)
 }
 
 export async function saveCompanyShiftData(companyId, updater) {
-  const all = await loadAllShiftSchedules()
-  const current = all[companyId] || { ...EMPTY }
+  const current = await getCompanyShifts(companyId)
   const next = updater({ ...EMPTY, ...current })
-  all[companyId] = next
   await saveCompanyShifts(companyId, next)
   return next
 }

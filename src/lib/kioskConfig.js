@@ -39,33 +39,22 @@ function writeLocalAll(all) {
   localStorage.setItem(KEY, JSON.stringify(all))
 }
 
-export async function loadAllKioskConfigs() {
-  if (apiEnabled()) {
-    try {
-      const settings = await api('/api/settings')
-      const raw = settings[SETTINGS_KEY]
-      return raw ? JSON.parse(raw) : {}
-    } catch { return {} }
-  }
-  return readLocalAll()
-}
-
-export async function saveAllKioskConfigs(all) {
-  if (apiEnabled()) {
-    await api('/api/settings', { method: 'PUT', body: { [SETTINGS_KEY]: JSON.stringify(all) } })
-  } else {
-    writeLocalAll(all)
-  }
-}
-
 export function getDefaultKioskConfig() {
   return { ...DEFAULTS }
 }
 
 export async function getCompanyKioskConfig(companyId) {
   if (!companyId) return { ...DEFAULTS }
-  const all = await loadAllKioskConfigs()
-  // If only legacy global exists and no per-company, use it as fallback
+  if (apiEnabled()) {
+    try {
+      const data = await api(`/api/company-settings/${encodeURIComponent(companyId)}`)
+      return { ...DEFAULTS, ...(data?.kiosk_configs || {}) }
+    } catch {
+      return { ...DEFAULTS }
+    }
+  }
+  const all = readLocalAll()
+  // If only legacy global config exists and no per-company, use it as fallback
   if (all._legacy && !all[companyId]) {
     return { ...DEFAULTS, ...all._legacy }
   }
@@ -87,14 +76,19 @@ export function getCompanyKioskConfigSync(companyId) {
 }
 
 export async function saveCompanyKioskConfig(companyId, config) {
-  const all = await loadAllKioskConfigs()
-  all[companyId] = { ...DEFAULTS, ...config }
-  // Remove legacy key after first per-company save to avoid confusion
-  if (all._legacy) delete all._legacy
-  await saveAllKioskConfigs(all)
-  // Also update local for immediate sync
-  try { localStorage.setItem(KEY, JSON.stringify(all)) } catch {}
-  return all[companyId]
+  const next = { ...DEFAULTS, ...config }
+  if (apiEnabled()) {
+    await api(`/api/company-settings/${encodeURIComponent(companyId)}`, { method: 'PUT', body: { kiosk_configs: next } })
+  } else {
+    const all = readLocalAll()
+    all[companyId] = next
+    // Remove legacy key after first per-company save to avoid confusion
+    if (all._legacy) delete all._legacy
+    writeLocalAll(all)
+  }
+  // Also update local cache for immediate sync (kiosk idle screen reads sync)
+  try { localStorage.setItem(KEY, JSON.stringify({ ...readLocalAll(), [companyId]: next })) } catch {}
+  return next
 }
 
 // Legacy compat: global load/save still used elsewhere — keep but map to default

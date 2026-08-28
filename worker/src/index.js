@@ -223,6 +223,46 @@ async function ensureSeed(env) {
   await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').bind('timezone', '(GMT+08:00) Asia/Manila').run()
 }
 
+// One-time migration: shift schedules, locations and kiosk configs used to be
+// stored as ONE JSON blob per feature ({ [companyId]: data }) — companies
+// overwrote each other on every save. They now live in per-company settings
+// keys ("<feature>:<companyId>"). The legacy aggregate keys are split and
+// removed automatically on first use.
+const COMPANY_SETTING_KEYS = ['shift_schedules', 'company_locations', 'kiosk_configs']
+// Only non-company (global) settings are exposed via /api/settings.
+const GLOBAL_SETTINGS_SQL =
+  "SELECT key, value FROM settings WHERE key NOT LIKE 'shift_schedules:%' AND key NOT LIKE 'company_locations:%' AND key NOT LIKE 'kiosk_configs:%'"
+
+let companySettingsMigrated = false
+async function migrateCompanySettings(env) {
+  if (companySettingsMigrated) return
+  const marker = await env.DB.prepare("SELECT key FROM settings WHERE key = 'company_settings_v2'").first()
+  if (marker) {
+    companySettingsMigrated = true
+    return
+  }
+  const rows = await env.DB.prepare(
+    "SELECT key, value FROM settings WHERE key IN ('shift_schedules','company_locations','kiosk_configs')"
+  ).all().then((r) => r.results)
+  const statements = []
+  for (const row of rows) {
+    try {
+      const all = JSON.parse(row.value || '{}')
+      for (const [companyId, payload] of Object.entries(all)) {
+        if (companyId === '_legacy' || payload === undefined || payload === null) continue
+        statements.push(
+          env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+            .bind(`${row.key}:${companyId}`, JSON.stringify(payload))
+        )
+      }
+    } catch { /* corrupt legacy blob — skip */ }
+  }
+  statements.push(env.DB.prepare("DELETE FROM settings WHERE key IN ('shift_schedules','company_locations','kiosk_configs')"))
+  statements.push(env.DB.prepare("INSERT INTO settings (key, value) VALUES ('company_settings_v2', '1') ON CONFLICT(key) DO NOTHING"))
+  await env.DB.batch(statements)
+  companySettingsMigrated = true
+}
+
 /* ---------------- mapping ---------------- */
 
 function mapCompany(row, employees) {
@@ -255,6 +295,7 @@ export default {
       // API requests → router (seeds the database on first use)
       if (url.pathname.startsWith('/api/')) {
         await ensureSeed(env)
+        await migrateCompanySettings(env)
         return await route(request, env)
       }
 
@@ -335,8 +376,27 @@ async function route(request, env) {
   // Public branding — login page fetches this before any token exists.
   // Must be public so incognito/mobile (no localStorage) shows "CadensIQ".
   if ((path === '/api/settings' || path === '/api/public/settings') && method === 'GET') {
-    const rows = await env.DB.prepare('SELECT key, value FROM settings').all().then((r) => r.results)
+    const rows = await env.DB.prepare(GLOBAL_SETTINGS_SQL).all().then((r) => r.results)
     return json(Object.fromEntries(rows.map((r) => [r.key, r.value])))
+  }
+
+  // Per-company data (shift schedules, locations, kiosk config). Public read
+  // because the stand-alone kiosk needs it without signing in — but scoped to
+  // ONE company per call, so no cross-company data is exposed.
+  {
+    const m = path.match(/^\/api\/company-settings\/([^/]+)$/)
+    if (m && method === 'GET') {
+      const companyId = decodeURIComponent(m[1])
+      const rows = await env.DB.prepare('SELECT key, value FROM settings WHERE key IN (?, ?, ?)').bind(
+        `shift_schedules:${companyId}`, `company_locations:${companyId}`, `kiosk_configs:${companyId}`
+      ).all().then((r) => r.results)
+      const out = {}
+      for (const row of rows) {
+        const base = row.key.slice(0, row.key.lastIndexOf(':'))
+        try { out[base] = JSON.parse(row.value) } catch { out[base] = null }
+      }
+      return json(out)
+    }
   }
 
   // Public company registration — no auth required so new customers can sign up.
@@ -425,7 +485,7 @@ async function apiRoutes(path, method, request, env, url, claims) {
 
   /* bootstrap — everything the app needs in one call */
   if (path === '/api/bootstrap' && method === 'GET') {
-    const settingsRows = await env.DB.prepare('SELECT key, value FROM settings').all().then((r) => r.results)
+    const settingsRows = await env.DB.prepare(GLOBAL_SETTINGS_SQL).all().then((r) => r.results)
     const roleRows = await env.DB.prepare('SELECT * FROM roles ORDER BY id').all().then((r) => r.results)
     // Tenant scoping: company accounts only see their own company, employees
     // and tasks; platform accounts (admin / platform CEO) see everything.
@@ -462,8 +522,29 @@ async function apiRoutes(path, method, request, env, url, claims) {
 
   /* settings */
   if (path === '/api/settings' && method === 'GET') {
-    const rows = await env.DB.prepare('SELECT key, value FROM settings').all().then((r) => r.results)
+    const rows = await env.DB.prepare(GLOBAL_SETTINGS_SQL).all().then((r) => r.results)
     return json(Object.fromEntries(rows.map((r) => [r.key, r.value])))
+  }
+  /* per-company settings (shift schedules, locations, kiosk configs) */
+  {
+    const m = path.match(/^\/api\/company-settings\/([^/]+)$/)
+    if (m && method === 'PUT') {
+      const companyId = decodeURIComponent(m[1])
+      // Company owners may only change their own company's settings.
+      const callerCompany = await callerCompanyId(env, claims)
+      if (!isAdmin && callerCompany !== companyId) return json({ error: 'You can only change settings for your own company.' }, 403)
+      const body = await readJson(request)
+      const statements = []
+      for (const [key, value] of Object.entries(body)) {
+        if (!COMPANY_SETTING_KEYS.includes(key)) return json({ error: `Key "${key}" is not company-scoped.` }, 400)
+        statements.push(
+          env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+            .bind(`${key}:${companyId}`, typeof value === 'string' ? value : JSON.stringify(value))
+        )
+      }
+      if (statements.length) await env.DB.batch(statements)
+      return json({ ok: true })
+    }
   }
   if (path === '/api/settings' && method === 'PUT') {
     // Only administrators and company owners may change settings.
@@ -819,8 +900,8 @@ async function apiRoutes(path, method, request, env, url, claims) {
       env.DB.prepare(
         "DELETE FROM users WHERE role <> 'administrator' AND lower(email) <> lower(?)"
       ).bind(CEO_EMAIL),
-      // Clear per-company blobs stored in settings (shifts, locations, kiosk configs)
-      env.DB.prepare("DELETE FROM settings WHERE key IN ('shift_schedules','company_locations','kiosk_configs')"),
+      // Clear per-company settings (shifts, locations, kiosk configs)
+      env.DB.prepare("DELETE FROM settings WHERE key LIKE 'shift_schedules:%' OR key LIKE 'company_locations:%' OR key LIKE 'kiosk_configs:%'"),
     ])
     return json({ ok: true, message: 'All tenant data reset.' })
   }
