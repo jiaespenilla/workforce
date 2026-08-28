@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { usePageTitle } from '../lib/documentMeta'
 import { api, apiEnabled } from '../lib/api'
 import { getCompanyLocations, addCompanyLocation, renameCompanyLocation, removeCompanyLocation } from '../lib/locations'
+import { getConfiguredRoles } from '../lib/roles'
 import Pagination from '../components/Pagination'
 
 const STATUS_STYLES = {
@@ -68,7 +69,7 @@ function CompanyLogo({ company, size = 'h-12 w-12', textSize = 'text-base' }) {
   return <div className={`flex ${size} shrink-0 items-center justify-center rounded-xl bg-brand-600 ${textSize} font-bold text-white`}>{initialsOf(company.name)}</div>
 }
 
-function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmployee, onEditCompany }) {
+function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmployee, onEditEmployee, onEditCompany }) {
   const [tab, setTab] = useState('details')
   const [editing, setEditing] = useState(false)
   // Form is (re)built from the current company every time Edit starts —
@@ -79,6 +80,11 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
   const [editingLocId, setEditingLocId] = useState(null)
   const [editingLocName, setEditingLocName] = useState('')
   const [locError, setLocError] = useState('')
+  const [editingEmpEmail, setEditingEmpEmail] = useState(null)
+  const [editRole, setEditRole] = useState('')
+  const [editLocId, setEditLocId] = useState('')
+  const [editActive, setEditActive] = useState(true)
+  const roleOptions = getConfiguredRoles().filter((r)=>!r.perms.settings).map((r)=>r.name)
 
   useEffect(() => {
     let cancelled = false
@@ -278,11 +284,48 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
                   <th className="pb-2">Role</th>
                   <th className="pb-2">Location</th>
                   <th className="pb-2">Status</th>
+                  <th className="pb-2"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {company.employees.map((emp) => {
                   const locName = locations.find((l)=>l.id===(emp.locationId||emp.location))?.name || emp.location || '—'
+                  const isEditing = editingEmpEmail === emp.email
+                  if (isEditing) {
+                    return (
+                      <tr key={emp.email}>
+                        <td className="py-3" colSpan={5}>
+                          <div className="flex flex-wrap items-end gap-2 rounded-lg border border-brand-200 bg-brand-50/60 p-3">
+                            <div className="min-w-[120px] flex-1">
+                              <p className="text-xs font-medium text-gray-700">{emp.name}</p>
+                              <p className="text-[11px] text-gray-500">{emp.email}</p>
+                            </div>
+                            <label className="text-xs">Role
+                              <select value={editRole} onChange={(e)=>setEditRole(e.target.value)} className="ml-1 rounded border border-gray-300 px-2 py-1 text-xs">
+                                {roleOptions.map((r)=><option key={r}>{r}</option>)}
+                                {!roleOptions.includes(editRole) && editRole && <option>{editRole}</option>}
+                              </select>
+                            </label>
+                            <label className="text-xs">Location
+                              <select value={editLocId} onChange={(e)=>setEditLocId(e.target.value)} className="ml-1 rounded border border-gray-300 px-2 py-1 text-xs">
+                                <option value="">—</option>
+                                {locations.map((l)=><option key={l.id} value={l.id}>{l.name}</option>)}
+                              </select>
+                            </label>
+                            <label className="flex items-center gap-1 text-xs">
+                              <input type="checkbox" checked={editActive} onChange={(e)=>setEditActive(e.target.checked)} className="rounded" /> Active
+                            </label>
+                            <button type="button" onClick={()=>{
+                              const loc = locations.find((l)=>l.id===editLocId)
+                              onEditEmployee(company.id, emp.email, { role: editRole, locationId: editLocId || null, location: loc?.name || editLocId || null, active: editActive })
+                              setEditingEmpEmail(null)
+                            }} className="rounded bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white">Save</button>
+                            <button type="button" onClick={()=>setEditingEmpEmail(null)} className="rounded border border-gray-300 px-3 py-1.5 text-xs">Cancel</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  }
                   return (
                   <tr key={emp.email}>
                     <td className="py-3">
@@ -300,17 +343,25 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
                         <StatusPill on={emp.active !== false} />
                       </button>
                     </td>
+                    <td className="py-3">
+                      <button type="button" onClick={()=>{
+                        setEditingEmpEmail(emp.email)
+                        setEditRole(emp.role || roleOptions[0] || '')
+                        setEditLocId(emp.locationId || locations.find((l)=>l.name===emp.location)?.id || '')
+                        setEditActive(emp.active !== false)
+                      }} className="rounded-lg border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">Edit</button>
+                    </td>
                   </tr>
                   )
                 })}
                 {company.employees.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-6 text-center text-xs text-gray-500">No employees yet.</td>
+                    <td colSpan={5} className="py-6 text-center text-xs text-gray-500">No employees yet.</td>
                   </tr>
                 )}
               </tbody>
             </table>
-            <p className="mt-4 text-[11px] text-gray-500">Click an employee's status pill to switch between Active and Inactive. Locations are set in People.</p>
+            <p className="mt-4 text-[11px] text-gray-500">Edit role/location/active and save. Click status pill to quickly toggle.</p>
           </div>
         )}
 
@@ -604,6 +655,17 @@ export default function Companies() {
       }
     )
 
+  const handleEditEmployee = (companyId, empEmail, updates) =>
+    mutateCompanies(
+      (prev) => prev.map((c) => c.id === companyId ? { ...c, employees: c.employees.map((e) => e.email === empEmail ? { ...e, ...updates } : e) } : c),
+      () => {
+        const company = companies.find((c) => c.id === companyId)
+        const emp = company?.employees.find((e) => e.email === empEmail)
+        if (!emp?.id) return Promise.resolve()
+        return api(`/api/employees/${emp.id}`, { method: 'PUT', body: updates })
+      }
+    )
+
   const handleEditCompany = (id, updates) =>
     mutateCompanies(
       (prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)),
@@ -746,6 +808,7 @@ export default function Companies() {
           onClose={() => setViewingId(null)}
           onToggleActive={handleToggleActive}
           onToggleEmployee={handleToggleEmployee}
+          onEditEmployee={handleEditEmployee}
           onEditCompany={handleEditCompany}
         />
       )}

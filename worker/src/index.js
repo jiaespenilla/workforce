@@ -291,6 +291,18 @@ async function route(request, env) {
     ).all().then((r) => r.results)
     return json(rows)
   }
+  // Kiosk device: read punches for a single employee (to decide next clock action)
+  if (path === '/api/attendance' && method === 'GET') {
+    const kioskToken = kioskTokenFrom(request)
+    if (kioskToken) {
+      const tokenCompany = await kioskTokenCompanyId(env, kioskToken)
+      if (!tokenCompany) return json({ error: 'Invalid kiosk device token.' }, 401)
+      const email = (url.searchParams.get('email') || '').trim().toLowerCase()
+      if (!email) return json([])
+      const rows = await env.DB.prepare('SELECT * FROM attendance WHERE email = ? AND company_id = ? ORDER BY id DESC').bind(email, tokenCompany).all().then((r) => r.results)
+      return json(rows)
+    }
+  }
   // Kiosk devices record punches with a per-company device token (X-Kiosk-Token)
   // instead of a user login. App users keep using Bearer auth (handled below).
   if (path === '/api/attendance' && method === 'POST') {

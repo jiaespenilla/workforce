@@ -263,6 +263,7 @@ function TaskProgressModal({ task, onClose, onStatusChange }) {
 }
 
 function CeoDashboard({ user }) {
+  const [now, setNow] = useState(new Date())
   const [selectedEmail, setSelectedEmail] = useState(null)
   const [viewingTask, setViewingTask] = useState(null)
   const [allTasks, setAllTasks] = useState([])
@@ -270,6 +271,10 @@ function CeoDashboard({ user }) {
   const [allEmployees, setAllEmployees] = useState([])
   const [genDate, setGenDate] = useState('')
   const [genTargetDate, setGenTargetDate] = useState(() => new Date().toISOString().slice(0,10))
+  const [genConfirmOpen, setGenConfirmOpen] = useState(false)
+  const [genResult, setGenResult] = useState(null)
+
+  useEffect(() => { const t=setInterval(()=>setNow(new Date()),1000); return ()=>clearInterval(t) }, [])
 
   useEffect(() => {
     api('/api/companies')
@@ -278,6 +283,7 @@ function CeoDashboard({ user }) {
   }, [])
 
   const employees = allEmployees.filter((e) => e.active !== false && e.email !== user.email)
+  const firstName = (user?.name || '').split(' ')[0] || 'there'
 
   useEffect(() => {
     if (apiEnabled()) {
@@ -322,10 +328,14 @@ function CeoDashboard({ user }) {
     }
   }
 
-  const handleGenerateFromDate = async () => {
-    if (!genDate) return alert('Select a source date.')
+  const handleGenerateFromDate = () => {
+    if (!genDate) { setGenResult({ type:'error', msg:'Select a source date.' }); return }
     const src = allTasks.filter((t)=> t.due === genDate)
-    if (!src.length) return alert(`No tasks found for ${genDate}.`)
+    if (!src.length) { setGenResult({ type:'error', msg:`No tasks found for ${genDate}.` }); return }
+    setGenConfirmOpen(true)
+  }
+  const doGenerate = async () => {
+    const src = allTasks.filter((t)=> t.due === genDate)
     const target = genTargetDate || new Date().toISOString().slice(0,10)
     let created = 0
     for (const t of src) {
@@ -339,7 +349,9 @@ function CeoDashboard({ user }) {
         created++
       } catch {}
     }
-    alert(`${created} task(s) generated from ${genDate} → ${target}.`)
+    setGenConfirmOpen(false)
+    setGenResult({ type:'success', msg:`${created} task(s) duplicated from ${genDate} → ${target}.` })
+    setTimeout(()=>setGenResult(null), 4000)
   }
 
 
@@ -348,14 +360,20 @@ function CeoDashboard({ user }) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">CEO Overview</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Active Employees</h1>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+            Good {now.getHours()<12?'morning':now.getHours()<18?'afternoon':'evening'}, {firstName}
+          </h1>
           <p className="mt-1 text-sm leading-relaxed text-gray-500">
             {clockedInEmployees.length} currently clocked-in via kiosk · click an employee to view their tasks.
           </p>
         </div>
-        <div className="shrink-0">
-          <p className="mb-1 text-right text-[11px] font-medium uppercase tracking-wide text-gray-400">Export all tasks ({allTasks.length})</p>
-          <TaskExportToolbar tasks={allTasks} />
+        <div className="shrink-0 text-right">
+          <p className="text-sm font-semibold tabular-nums text-gray-900">{now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}</p>
+          <p className="text-xs text-gray-500">{now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'})}</p>
+          <div className="mt-2">
+            <p className="mb-1 text-right text-[11px] font-medium uppercase tracking-wide text-gray-400">Export all tasks ({allTasks.length})</p>
+            <TaskExportToolbar tasks={allTasks} />
+          </div>
         </div>
       </div>
 
@@ -375,8 +393,34 @@ function CeoDashboard({ user }) {
             <button onClick={handleGenerateFromDate} className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-brand-700">Generate</button>
           </div>
         </div>
-        {genDate && <p className="mt-2 text-xs text-gray-400">{allTasks.filter((t)=>t.due===genDate).length} task(s) on {genDate} will be duplicated.</p>}
+        {genDate && <p className="mt-2 text-xs text-gray-400">{allTasks.filter((t)=>t.due===genDate).length} task(s) on {genDate} will be duplicated to {genTargetDate}.</p>}
+        {genResult && (
+          <div className={`rounded-lg px-4 py-3 text-xs font-medium ring-1 ${genResult.type==='success'?'bg-emerald-50 text-emerald-700 ring-emerald-200':'bg-amber-50 text-amber-700 ring-amber-200'}`}>{genResult.msg}</div>
+        )}
       </div>
+
+      {genConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={()=>setGenConfirmOpen(false)}>
+          <div className="absolute inset-0 bg-gray-900/50" />
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onClick={(e)=>e.stopPropagation()}>
+            <h3 className="text-base font-bold text-gray-900">Confirm generate tasks</h3>
+            <p className="mt-1 text-sm text-gray-500">Duplicate <span className="font-semibold text-gray-900">{allTasks.filter((t)=>t.due===genDate).length} task(s)</span> from <span className="font-mono text-xs bg-gray-100 px-1 py-0.5 rounded">{genDate}</span> to <span className="font-mono text-xs bg-brand-50 px-1 py-0.5 rounded text-brand-700">{genTargetDate}</span>?</p>
+            <div className="mt-4 max-h-40 overflow-y-auto divide-y divide-gray-100 rounded-lg border border-gray-200 bg-gray-50">
+              {allTasks.filter((t)=>t.due===genDate).slice(0,5).map((t)=>(
+                <div key={t.id} className="px-3 py-2 text-xs">
+                  <p className="font-medium text-gray-900 truncate">{t.title}</p>
+                  <p className="text-gray-500">{t.assignee} · {t.priority}</p>
+                </div>
+              ))}
+              {allTasks.filter((t)=>t.due===genDate).length>5 && <p className="px-3 py-2 text-center text-xs text-gray-400">+{allTasks.filter((t)=>t.due===genDate).length-5} more</p>}
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={()=>setGenConfirmOpen(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={doGenerate} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Confirm &amp; Generate</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className={selected ? 'grid items-start gap-6 lg:grid-cols-[1fr_minmax(320px,420px)]' : ''}>
         {/* Clocked-in employee list */}

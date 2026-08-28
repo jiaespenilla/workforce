@@ -56,6 +56,7 @@ function CeoTimeKeeping() {
   const [now, setNow] = useState(new Date())
   const [view, setView] = useState('week')
   const [layout, setLayout] = useState('table')
+  const [selectedDate, setSelectedDate] = useState(null)
   const [attendance, setAttendance] = useState([])
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000)
@@ -198,10 +199,10 @@ function CeoTimeKeeping() {
                   const count = employees.filter((e)=> getViewPunches(e.email).some((p)=> new Date(p.time).toDateString()===key)).length
                   const isToday = key===new Date().toDateString()
                   return (
-                    <div key={key} className={`rounded-lg border p-2 text-center ${count ? 'bg-brand-50 border-brand-200' : 'bg-gray-50 border-gray-100'} ${isToday ? 'ring-2 ring-brand-400' : ''}`}>
+                    <button key={key} onClick={()=>setSelectedDate(key)} className={`rounded-lg border p-2 text-center hover:shadow-sm transition text-left ${count ? 'bg-brand-50 border-brand-200 hover:border-brand-300' : 'bg-gray-50 border-gray-100 hover:bg-white'} ${isToday ? 'ring-2 ring-brand-400' : ''}`}>
                       <p className="text-xs font-bold text-gray-900">{i+1}</p>
                       <p className="text-[11px] font-semibold text-brand-700">{count ? `${count} in` : '—'}</p>
-                    </div>
+                    </button>
                   )
                 })
                 return [...blanks, ...days]
@@ -227,6 +228,55 @@ function CeoTimeKeeping() {
               )
             })}
             {employees.length===0 && <p className="p-6 text-center text-xs text-gray-400">No active employees.</p>}
+          </div>
+        )}
+        {selectedDate && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={()=>setSelectedDate(null)}>
+            <div className="absolute inset-0 bg-gray-900/50" />
+            <div className="relative w-full max-w-lg max-h-[80vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col" onClick={(e)=>e.stopPropagation()}>
+              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">{new Date(selectedDate).toLocaleDateString([], {weekday:'long', month:'long', day:'numeric', year:'numeric'})}</h3>
+                  <p className="text-xs text-gray-500">{attendance.filter((p)=> new Date(p.time).toDateString()===selectedDate).length} punches · {[...new Set(attendance.filter((p)=> new Date(p.time).toDateString()===selectedDate).map((p)=>p.email))].length} employees</p>
+                </div>
+                <button onClick={()=>setSelectedDate(null)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+              </div>
+              <div className="overflow-y-auto divide-y divide-gray-100 flex-1">
+                {employees.map((emp)=>{
+                  const dayPunches = attendance.filter((p)=> p.email===emp.email && new Date(p.time).toDateString()===selectedDate).sort((a,b)=> new Date(a.time)-new Date(b.time))
+                  if (!dayPunches.length) return null
+                  const firstIn = dayPunches.find((p)=>p.type==='in')
+                  const lastOut = [...dayPunches].reverse().find((p)=>p.type==='out')
+                  const hrs = hoursForDay(dayPunches).toFixed(1)
+                  return (
+                    <div key={emp.email} className="px-5 py-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{emp.name} <span className="text-xs text-gray-500">{emp.companyName}</span></p>
+                        <p className="text-xs text-gray-500">{firstIn ? new Date(firstIn.time).toLocaleTimeString(): '—'} → {lastOut ? new Date(lastOut.time).toLocaleTimeString(): '—'} · {hrs}h</p>
+                      </div>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${lastOut ? 'bg-gray-100 text-gray-600' : dayPunches[dayPunches.length-1]?.type==='in' ? 'bg-brand-100 text-brand-700' : 'bg-gray-100 text-gray-500'}`}>{dayPunches[dayPunches.length-1]?.type==='in'?'Clocked in':'Clocked out'}</span>
+                    </div>
+                  )
+                })}
+                {attendance.filter((p)=> new Date(p.time).toDateString()===selectedDate).length===0 && <p className="p-8 text-center text-sm text-gray-400">No punches for this day.</p>}
+              </div>
+              <div className="border-t border-gray-100 p-4 flex justify-end gap-2">
+                <button onClick={()=>setSelectedDate(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
+                <button onClick={()=>{
+                  const dayPunches = attendance.filter((p)=> new Date(p.time).toDateString()===selectedDate)
+                  const rows = employees.map((emp)=>{
+                    const ps = dayPunches.filter((p)=>p.email===emp.email).sort((a,b)=> new Date(a.time)-new Date(b.time))
+                    if (!ps.length) return null
+                    const firstIn = ps.find((p)=>p.type==='in')
+                    const lastOut = [...ps].reverse().find((p)=>p.type==='out')
+                    const hrs = hoursForDay(ps).toFixed(1)
+                    return `<tr><td>${emp.name}</td><td>${emp.companyName}</td><td>${firstIn? new Date(firstIn.time).toLocaleTimeString(): '—'}</td><td>${lastOut? new Date(lastOut.time).toLocaleTimeString(): '—'}</td><td>${hrs}h</td></tr>`
+                  }).filter(Boolean).join('')
+                  const html = `<html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;font-size:12px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#ecfdf5}</style></head><body><h2>Attendance — ${selectedDate}</h2><p>${dayPunches.length} punches, ${new Set(dayPunches.map((p)=>p.email)).size} employees</p><table><thead><tr><th>Employee</th><th>Company</th><th>Clock In</th><th>Clock Out</th><th>Hours</th></tr></thead><tbody>${rows || '<tr><td colspan=5>No records</td></tr>'}</tbody></table></body></html>`
+                  const win = window.open('', '_blank'); if(win){ win.document.write(html); win.document.close(); win.focus(); win.print() }
+                }} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Export PDF</button>
+              </div>
+            </div>
           </div>
         )}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-6 py-3 text-sm">

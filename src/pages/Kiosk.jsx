@@ -227,14 +227,19 @@ export default function Kiosk() {
     let punches = []
     if (apiEnabled()) {
       try {
-        punches = await api(`/api/attendance?email=${encodeURIComponent(match.email)}`)
+        const headers = deviceToken ? { 'X-Kiosk-Token': deviceToken } : {}
+        const all = await api(`/api/attendance?email=${encodeURIComponent(match.email)}`, { headers })
+        // API may return paginated envelope {data, total} or plain array
+        punches = Array.isArray(all) ? all : (all.data || [])
+        // fallback: filter to this email only (public kiosk endpoint already does)
+        punches = punches.filter((p) => (p.email || '').toLowerCase() === match.email.toLowerCase())
       } catch {
         punches = []
       }
     } else {
-      try { punches = JSON.parse(localStorage.getItem('uw_punches')) || [] } catch { punches = [] }
+      try { punches = (JSON.parse(localStorage.getItem('uw_punches')) || []).filter((p) => (p.email || '').toLowerCase() === match.email.toLowerCase()) } catch { punches = [] }
     }
-    const action = decideAction(punches, shift, nowDate).action
+    const { action, overtime } = decideAction(punches, shift, nowDate)
 
     const punchRecord = {
       email: match.email,
@@ -247,17 +252,22 @@ export default function Kiosk() {
     if (apiEnabled()) {
       await api('/api/attendance', {
         method: 'POST',
-        body: { email: match.email, company_id: match.companyId || company_id_by_name(match), type: action, time: nowDate.toISOString() },
+        body: { email: match.email, company_id: match.companyId || company_id_by_name(match), type: action, time: nowDate.toISOString(), overtime: !!overtime },
         headers: deviceToken ? { 'X-Kiosk-Token': deviceToken } : {},
       }).catch(() => {})
     } else {
-      punches.push(punchRecord)
-      localStorage.setItem('uw_punches', JSON.stringify(punches))
+      // merge back to global uw_punches
+      try {
+        const all = JSON.parse(localStorage.getItem('uw_punches')) || []
+        all.push({ ...punchRecord, overtime: !!overtime })
+        localStorage.setItem('uw_punches', JSON.stringify(all))
+      } catch { localStorage.setItem('uw_punches', JSON.stringify([{ ...punchRecord, overtime: !!overtime }])) }
     }
 
     setResult({
       name: match.name,
       action, // 'in' | 'out'
+      overtime: !!overtime,
       time: nowDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       shiftName: shift?.name || null,
     })
