@@ -6,7 +6,7 @@ import { api, apiEnabled } from './api'
 const FALLBACK_TEAM_ROLES = ['CEO', 'HR Manager', 'Team Lead', 'Employee']
 
 // Page-level permission keys (Main Menu broken down per page).
-const PAGE_KEYS = ['dashboard', 'timekeeping', 'tasks', 'payroll', 'employees', 'shifts']
+const PAGE_KEYS = ['dashboard', 'timekeeping', 'tasks', 'payroll', 'employees', 'shifts', 'storage']
 
 // Fill in missing permission keys and migrate the old single "mainMenu" flag.
 function normalizePerms(perms) {

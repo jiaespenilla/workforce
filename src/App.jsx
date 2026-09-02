@@ -148,7 +148,7 @@ export default function App() {
             <Route path="/payroll" element={<PageGate perm="payroll"><Payroll /></PageGate>} />
                                     <Route path="/kiosk-credentials" element={<PageGate perm="kiosk"><KioskCredentials /></PageGate>} />
             <Route path="/people" element={<PageGate perm="employees"><People /></PageGate>} />
-            <Route path="/storage-setup" element={<PageGate perm="tasks"><StorageSetup /></PageGate>} />
+            <Route path="/storage-setup" element={<PageGate perm="storage"><StorageSetup /></PageGate>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/login" replace />} />

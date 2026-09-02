@@ -450,17 +450,6 @@ function CeoDashboard({ user }) {
         )}
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-bold text-gray-900">Attachment Storage</h3>
-        <p className="mt-1 text-xs text-gray-500">Configure where task attachments are stored (D1, R2, or Google Drive).</p>
-        <button
-          onClick={() => window.location.href = '/storage-setup'}
-          className="mt-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-        >
-          Open Storage Setup
-        </button>
-      </div>
-
       {genConfirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={()=>setGenConfirmOpen(false)}>
           <div className="absolute inset-0 bg-gray-900/50" />

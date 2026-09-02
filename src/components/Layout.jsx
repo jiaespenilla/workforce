@@ -20,7 +20,7 @@ const nav = [
 ]
 
 const settingsNav = [
-  { to: '/storage-setup', label: 'Storage Setup', icon: 'M3 7v10a2 2 0 002 2h1l3 3h8l3-3h1a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2z' },
+  { to: '/storage-setup', label: 'Storage Setup', key: 'storage', icon: 'M3 7v10a2 2 0 002 2h1l3 3h8l3-3h1a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2z' },
 ]
 
 function Logo({ light = false }) {
@@ -106,10 +106,12 @@ export default function Layout({ children }) {
               ))}
             </nav>
 
-            {/* Settings section */}
+            {/* Settings section — gated by the role's per-page permissions */}
+            {settingsNav.filter((item) => user.perms?.[item.key] !== false).length > 0 && (
+            <>
             <p className="px-3 pb-2 pt-6 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Settings</p>
             <nav className="space-y-1">
-              {settingsNav.map((item) => (
+              {settingsNav.filter((item) => user.perms?.[item.key] !== false).map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
@@ -134,6 +136,8 @@ export default function Layout({ children }) {
                 </NavLink>
               ))}
             </nav>
+            </>
+            )}
           </>
         )
       })()}

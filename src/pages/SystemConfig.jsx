@@ -197,6 +197,7 @@ function RolesPanel({ roles, onAdd, onRename, onRemove, onTogglePerm }) {
                     ['employees', 'People'],
                     ['shifts', 'Shift Schedules'],
                     ['kiosk', 'Kiosk'],
+                    ['storage', 'Storage Setup'],
                     ['settings', 'This Console'],
                   ].map(([key, label]) => (
                     <label key={key} className="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 transition hover:bg-white hover:shadow-sm">
@@ -670,7 +671,7 @@ export default function SystemConfig() {
   const addRole = () =>
     mutateRoles((prev) => [
       ...prev,
-      { name: '', users: 0, access: 'Custom scope', perms: { dashboard: true, timekeeping: true, tasks: true, payroll: true, employees: true, shifts: true, kiosk: true, settings: false } },
+      { name: '', users: 0, access: 'Custom scope', perms: { dashboard: true, timekeeping: true, tasks: true, payroll: true, employees: true, shifts: true, kiosk: true, storage: true, settings: false } },
     ])
 
   const removeRole = (index) => mutateRoles((prev) => prev.filter((_, i) => i !== index))
