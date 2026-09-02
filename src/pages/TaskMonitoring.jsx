@@ -44,7 +44,10 @@ export default function TaskMonitoring() {
 
   useEffect(() => {
     if (apiEnabled()) {
-      api('/api/tasks').then(setTasks).catch(() => setTasks(loadLocalTasks()))
+      // /api/tasks returns a paginated envelope { data, total } — unwrap it.
+      api('/api/tasks')
+        .then((res) => setTasks(Array.isArray(res) ? res : (res.data || [])))
+        .catch(() => setTasks(loadLocalTasks()))
     } else {
       setTasks(loadLocalTasks())
     }
@@ -85,6 +88,8 @@ export default function TaskMonitoring() {
   }
 
   const counts = Object.fromEntries(columns.map((c) => [c.id, tasks.filter((t) => t.status === c.id).length]))
+  const overdue = tasks.filter((t) => t.due && t.status !== 'completed' && new Date(t.due) < new Date(new Date().toDateString())).length
+  const completionPct = tasks.length ? Math.round(((counts.completed || 0) / tasks.length) * 100) : 0
 
   const inputCls = 'rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200'
 
@@ -104,6 +109,31 @@ export default function TaskMonitoring() {
           </svg>
           New Task
         </button>
+      </div>
+
+      {/* Task progress summary — accurate, computed from the live task list */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {[
+          ['Total tasks', tasks.length, 'bg-gray-50 text-gray-700'],
+          ['Completed', counts.completed || 0, 'bg-emerald-50 text-emerald-700'],
+          ['In progress', counts.inprogress || 0, 'bg-amber-50 text-amber-700'],
+          ['Pending', counts.pending || 0, 'bg-brand-50 text-brand-700'],
+          ['Overdue', overdue, overdue > 0 ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'],
+        ].map(([label, value, tone]) => (
+          <div key={label} className={`rounded-xl border border-gray-200 ${tone} p-4 shadow-sm`}>
+            <p className="text-xs font-semibold uppercase tracking-wide">{label}</p>
+            <p className="mt-1 text-xl font-bold tabular-nums">{value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-semibold text-gray-700">Overall completion</span>
+          <span className="font-bold tabular-nums text-brand-700">{completionPct}%</span>
+        </div>
+        <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+          <div className="h-2.5 rounded-full bg-brand-500 transition-all" style={{ width: `${completionPct}%` }} />
+        </div>
       </div>
 
       {showForm && (
@@ -183,9 +213,9 @@ export default function TaskMonitoring() {
                 <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
                   <span className="flex min-w-0 items-center gap-1.5">
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-bold text-brand-700">
-                      {task.assignee.split(' ').map((n) => n[0]).slice(0, 2).join('')}
+                      {(task.assignee || '?').split(' ').map((n) => n[0]).slice(0, 2).join('')}
                     </span>
-                    <span className="truncate" title={task.assignee}>{task.assignee}</span>
+                    <span className="truncate" title={task.assignee || 'Unassigned'}>{task.assignee || 'Unassigned'}</span>
                   </span>
                   <span className="shrink-0 tabular-nums">Due {task.due || '—'}</span>
                 </div>
@@ -221,12 +251,18 @@ export default function TaskMonitoring() {
               <th className="px-5 py-2">Company</th>
               <th className="px-5 py-2">Role</th>
               <th className="px-5 py-2">Status</th>
-              <th className="px-5 py-2">Assigned tasks</th>
+              <th className="px-5 py-2">Task progress</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {employees.map((emp) => {
-              const assigned = tasks.filter((t) => t.assignee.startsWith(`${emp.name} (${emp.companyName})`))
+              // Match by normalized assignee email when available (accurate),
+              // falling back to the "Name (Company)" display string.
+              const assigned = tasks.filter((t) =>
+                t.assigneeEmail ? t.assigneeEmail === emp.email : t.assignee && t.assignee.startsWith(`${emp.name} (${emp.companyName})`))
+              const done = assigned.filter((t) => t.status === 'completed').length
+              const active = assigned.filter((t) => t.status !== 'completed').length
+              const pct = assigned.length ? Math.round((done / assigned.length) * 100) : 0
               return (
                 <tr key={`${emp.companyId}-${emp.email}`} className="hover:bg-gray-50">
                   <td className="px-5 py-3">
@@ -243,7 +279,15 @@ export default function TaskMonitoring() {
                       {emp.active !== false ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td className="px-5 py-3 tabular-nums text-gray-600">{assigned.length}</td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-100">
+                        <div className="h-2 rounded-full bg-brand-500 transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="tabular-nums text-xs text-gray-600">{pct}%</span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-gray-500 tabular-nums">{done}/{assigned.length} completed · {active} open</p>
+                  </td>
                 </tr>
               )
             })}

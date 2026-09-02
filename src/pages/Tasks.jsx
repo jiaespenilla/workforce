@@ -55,7 +55,11 @@ function EmployeeTasks({ name }) {
   useEffect(() => {
     if (apiEnabled()) {
       api('/api/tasks')
-        .then((all) => setTasks(all.filter((t) => t.assignee && t.assignee.startsWith(`${name} (`))))
+        .then((res) => {
+          // /api/tasks returns a paginated envelope { data, total } — unwrap it.
+          const all = Array.isArray(res) ? res : (res.data || [])
+          setTasks(all.filter((t) => (t.assigneeEmail ? t.assigneeEmail === user?.email : t.assignee && t.assignee.startsWith(`${name} (`))))
+        })
         .catch(() => setTasks(loadLocalMyTasks(name)))
       api('/api/companies').then((cs)=>{
         const c = cs.find((co)=> (co.employees||[]).some((e)=> e.email.toLowerCase()=== (user?.email||'').toLowerCase()))
@@ -71,8 +75,8 @@ function EmployeeTasks({ name }) {
     const task = tasks.find((t)=> t.id===dragId)
     setTasks((t) => t.map((task) => (task.id === dragId ? { ...task, status } : task)))
     if (apiEnabled()) {
+      // Server notifies CEO/managers of the status change — no client call needed.
       await api(`/api/tasks/${dragId}`, { method: 'PUT', body: { status } }).catch(() => {})
-      if (status==='completed' && task) notifyCompleted(task)
     }
     setDragId(null)
     setOverCol(null)

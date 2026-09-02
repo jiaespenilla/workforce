@@ -2,7 +2,7 @@
 
 import { json, readJson } from '../lib/http.js'
 import { callerCompanyId } from '../lib/auth.js'
-import { mapTask } from '../lib/db.js'
+import { mapTask, queueNotification } from '../lib/db.js'
 import { parsePagination, paginate } from '../lib/pagination.js'
 
 // Resolve normalized assignee columns (email / company_id / employee id)
@@ -32,6 +32,34 @@ async function taskInCompany(env, taskId, companyId) {
   return (t.assignee || '').endsWith(`(${own?.name || ''})`)
 }
 
+// Notify the company's CEO and managers when a task is created or updated.
+// Never throws — notification failures must not break task writes.
+async function notifyTaskUpdate(env, task, actorEmail, verb) {
+  try {
+    const companyId = task.assignee_company_id
+    if (!companyId) return
+    const emps = await env.DB.prepare('SELECT name, email, role FROM employees WHERE company_id = ? AND active = 1')
+      .bind(companyId).all().then((r) => r.results)
+    const recipients = emps
+      .filter((e) => {
+        const r = (e.role || '').toLowerCase()
+        return r === 'ceo' || r.includes('manager') || r.includes('lead')
+      })
+      .filter((e) => e.email.toLowerCase() !== String(actorEmail || '').toLowerCase())
+    if (!recipients.length) return
+    const actorRow = await env.DB.prepare('SELECT name FROM users WHERE lower(email) = ?')
+      .bind(String(actorEmail || '').toLowerCase()).first()
+    const actorName = actorRow?.name || actorEmail || 'Someone'
+    for (const r of recipients) {
+      await queueNotification(env, {
+        to: r.email,
+        subject: `Task ${verb}: ${task.title}`,
+        body: `${actorName} ${verb} a task.\n\nTitle: ${task.title}\nAssignee: ${task.assignee || '—'}\nPriority: ${task.priority || 'Medium'}\nDue: ${task.due || '—'}\nStatus: ${task.status || 'pending'}\n\nOpen Task Monitoring to review progress.`,
+      })
+    }
+  } catch { /* ignore — notifications must never break task writes */ }
+}
+
 export async function handle({ request, env, url, path, method, claims, isAdmin }) {
   /* tasks */
   if (path === '/api/tasks' && method === 'GET') {
@@ -59,6 +87,7 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
     try {
       const result = await env.DB.prepare('INSERT INTO tasks (title, assignee, assignee_email, assignee_company_id, assignee_id, priority, due, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(t.title, t.assignee, assigneeEmail, assigneeCompanyId, assigneeId, t.priority || 'Medium', t.due || null, t.status || 'pending').run()
+      await notifyTaskUpdate(env, { title: t.title, assignee: t.assignee, assignee_company_id: assigneeCompanyId, priority: t.priority || 'Medium', due: t.due || null, status: t.status || 'pending' }, claims.sub, 'assigned')
       return json(mapTask({ id: result.meta.last_row_id, ...t, assignee_email: assigneeEmail, assignee_company_id: assigneeCompanyId, assignee_id: assigneeId, status: t.status || 'pending' }), 201)
     } catch {
       // Fallback for DBs without new columns (should not happen after migration, but keep compat)
@@ -83,6 +112,8 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
         try {
           await env.DB.prepare('UPDATE tasks SET title = COALESCE(?, title), assignee = COALESCE(?, assignee), assignee_email = COALESCE(?, assignee_email), assignee_company_id = COALESCE(?, assignee_company_id), assignee_id = COALESCE(?, assignee_id), priority = COALESCE(?, priority), due = COALESCE(?, due), status = COALESCE(?, status) WHERE id = ?')
             .bind(body.title ?? null, body.assignee ?? null, assigneeEmail, assigneeCompanyId, assigneeId, body.priority ?? null, body.due ?? null, body.status ?? null, Number(m[1])).run()
+          const row = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(Number(m[1])).first()
+          if (row) await notifyTaskUpdate(env, row, claims.sub, body.status === 'completed' ? 'completed' : 'updated')
           return json({ ok: true })
         } catch {
           // fallback without new columns
@@ -90,6 +121,8 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
       }
       await env.DB.prepare('UPDATE tasks SET title = COALESCE(?, title), assignee = COALESCE(?, assignee), priority = COALESCE(?, priority), due = COALESCE(?, due), status = COALESCE(?, status) WHERE id = ?')
         .bind(body.title ?? null, body.assignee ?? null, body.priority ?? null, body.due ?? null, body.status ?? null, Number(m[1])).run()
+      const row = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(Number(m[1])).first()
+      if (row) await notifyTaskUpdate(env, row, claims.sub, body.status === 'completed' ? 'completed' : 'updated')
       return json({ ok: true })
     }
     if (m && method === 'DELETE') {
