@@ -51,16 +51,20 @@ export function decideAction(punches, shift, now = new Date(), otGraceMinutes = 
 
   // Minutes actually worked in the session that this clock-out ends.
   const sessionMinutes = (startTime) => Math.max(0, Math.round((now.getTime() - new Date(startTime).getTime()) / 60000))
-  // Open shift: the first `regularWorkMinutes` (default 8h) are regular time;
-  // anything beyond the clock-in-to-clock-out duration is overtime.
-  const openShiftOvertimeMinutes = (startTime) => Math.max(0, sessionMinutes(startTime) - regularWorkMinutes)
+    // Open-shift end is derived as clock-in + regular work + grace (no fixed
+  // schedule end). Clocking out past it flags OVERTIME; the whole session
+  // then counts, matching the timed-shift branch below.
+  const openShiftEndMinutes = (startTime) => {
+    const graceM = Number.isFinite(otGraceMinutes) ? Number(otGraceMinutes) : 15
+    return (new Date(startTime).getTime() + (regularWorkMinutes + graceM) * 60000)
+  }
 
   // Open shift — flexible, no standard times: scans simply alternate.
   if (shift?.open) {
     if (!lastToday) return { action: 'in', overtime: false, overtimeMinutes: 0 }
     if (lastToday.type === 'in') {
-      const ot = openShiftOvertimeMinutes(lastToday.time)
-      return { action: 'out', overtime: ot > 0, overtimeMinutes: ot }
+      const ot = now.getTime() >= openShiftEndMinutes(lastToday.time)
+      return { action: 'out', overtime: ot, overtimeMinutes: ot ? sessionMinutes(lastToday.time) : 0 }
     }
     return { action: 'in', overtime: false, overtimeMinutes: 0 }
   }

@@ -75,17 +75,19 @@ export function hoursForDay(punchesForDay) {
   return total / 3600000
 }
 
-// Overtime hours for a day. New attendance rows carry exact overtime_minutes
-// (open shifts: minutes beyond 8h of work; timed shifts: the flagged session),
-// computed at punch time. Legacy rows without the column fall back to the
-// boolean clock-out flag (whole flagged session counts) so history holds.
+// Overtime hours for a day. The punch records whether a clock-out was an
+// overtime session (past the shift end + grace); the WHOLE clocked-out
+// session counts as OT — both for timed shifts and open shifts (whose
+// "end" is clock-in + 8h + grace). Legacy rows without the flag fall back
+// to the boolean clock-out flag (whole flagged session counts) so history
+// is preserved.
 export function overtimeForDay(punchesForDay) {
   const sorted = [...punchesForDay].sort((a, b) => new Date(a.time) - new Date(b.time))
   if (sorted.some((p) => p.overtime_minutes !== undefined)) {
     const minutes = sorted.reduce((s, p) => s + (Number(p.overtime_minutes) || 0), 0)
     if (minutes > 0) return minutes / 60
-    // all rows have overtime_minutes but zero — still fall through so any
-    // legacy-flagged (pre-column) punch keeps counting as before
+    // all rows have overtime_minutes but zero — fall through so a legacy
+    // boolean-flagged (pre-column) punch still counts as before
   }
   let total = 0
   let lastIn = null
