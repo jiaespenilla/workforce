@@ -1,110 +1,95 @@
-export const DEFAULT_TERMS = `Terms & Conditions — Unified Workforce by CelestSolutions
-Last updated: August 28, 2026
+export const DEFAULT_TERMS = `Terms & Conditions — CadensIQ by CelestSolutions
+Last updated: September 2, 2026
 
-1. Acceptance of Terms
-By creating an account, registering a company, or using the Unified Workforce platform (web, kiosk, API), you agree to these Terms and our Privacy Policy. If you register on behalf of a company, you represent that you have authority to bind that company.
+1. Agreeing to these terms
+By creating an account or using CadensIQ, you agree to these rules and to our Privacy Policy. If you sign up on behalf of a company, you confirm you are allowed to make that decision for your company.
 
-2. Accounts & Authentication
-• You must provide accurate name, email and company information. One person — one email.
-• You are responsible for safeguarding your password and for all activity under your account. Use at least 8 characters and change the default password on first sign-in.
-• We may suspend accounts that violate these Terms, share credentials, or attempt to bypass attendance/Kiosk controls.
-• Session timeout and maintenance mode are enforced as configured by the Administrator.
+2. Your account
+• Use your real name and a working email address. One account per person.
+• Keep your password private and change the temporary password you were given when you first sign in. You are responsible for everything done under your account.
+• We may pause or close accounts that break these rules, share logins, or try to cheat time keeping.
 
-3. Company Registration & Approval
-• Company name, industry, address and contact details must be truthful. Duplicate company names are rejected.
-• Submissions are pending until an Administrator approves. Approved companies become active; rejected applicants will receive a reason and may re-apply.
-• Owners/CEOs are responsible for keeping their team roster accurate (active/inactive, role, location).
+3. Registering a company
+• Provide true and accurate company details. Company names must be unique — duplicates are not accepted.
+• New companies are reviewed before they become active. If an application is declined, we will tell you why and you may apply again.
+• Company owners are responsible for keeping their team list accurate and up to date.
 
-4. Roles, Permissions & Access Control
-• System roles (Administrator, CEO, HR Manager, Team Lead, Employee, etc.) are defined in System Configuration → Roles & Permissions.
-• Permissions are granular per page (Dashboard, Time Keeping, Tasks, Payroll, People, Shift Schedules, Kiosk) and per action (Add / Edit / Delete). If a role lacks a permission, the UI is hidden and API calls are blocked.
-• Shift Schedules and Work Locations visibility is controlled via the Shifts permission and locations add/edit/delete actions.
+4. Roles and permissions
+• Every user has a role (such as Employee, Team Lead, HR Manager, or Administrator) that decides what they can see and do.
+• Administrators and company owners decide which role each person gets — please contact them if you believe you need different access.
 
-5. Time Keeping, Shifts & Kiosk
-• Attendance is recorded only via the Time Kiosk (PIN / QR badge / fingerprint/WebAuthn). Manual edits are not allowed.
-• Clock-in/out status is determined automatically from your last punch and assigned shift (including open shifts and overtime grace period). Ensure your shift is assigned correctly.
-• You must punch in/out on a paired kiosk device (X-Kiosk-Token). Unpaired devices cannot record attendance.
-• Falsifying punches (buddy punching, credential sharing, time manipulation) is a violation and may lead to account deactivation.
+5. Time keeping
+• Attendance is recorded at your company's time kiosk using your PIN, QR badge, or fingerprint. Time records cannot be manually edited.
+• The system automatically decides whether a scan is a clock-in or clock-out based on your assigned shift. If your shift looks wrong, tell your manager.
+• Clock in and out only for yourself. Having someone else punch for you, sharing your PIN or badge, or faking time records is a serious violation and can lead to your account being deactivated.
 
 6. Tasks
-• Tasks may be assigned to any active employee within the same company. Assignees are stored both as a display string and normalized email/company fields.
-• Any authenticated member whose role permits Tasks may create, update, or delete tasks. Administrators and CEOs have full oversight; other roles are gated by the Tasks add/delete actions in Roles & Permissions.
-• Completed tasks remain in history for reporting; deletion is soft-logged via audit on the server.
+• Tasks can be assigned to any active member of your company. Anyone whose role allows it can create, update, or remove tasks.
+• Finished tasks stay in the history for reporting.
 
-7. Payroll, People & Locations
-• Payroll views are read-only summaries derived from attendance; actual payroll processing is outside this system.
-• People lists are scoped to your company. Locations (Office, WFH, Field) are per-company and must be created before assignment; deletions are blocked while in use.
+7. Payroll and people records
+• Payroll pages show read-only summaries based on attendance. Actual salary processing happens outside CadensIQ.
+• People records are private to your company — no other company can see them.
 
-8. Acceptable Use
-You agree not to: (a) attempt to access another company's data; (b) upload malware or reverse-engineer the Worker; (c) scrape or overload the API (rate limits: login 8/15min per account, 24/IP; registration 5/hour/IP; kiosk 200/15min); (d) store illegal content; (e) impersonate another person.
+8. Fair use
+Please do not: try to access another company's information; hack, break, or overload the system; upload harmful or illegal files; or pretend to be someone else.
 
-9. Data & Intellectual Property
-• You retain ownership of your Company and Employee data. You grant CelestSolutions a license to host and process it to provide the service.
-• The platform, branding (CadensIQ), and all system code are owned by CelestSolutions. Do not copy or resell the service.
+9. Your data stays yours
+• Your company's and your employees' information belongs to you. We only store and process it to run the service for you.
+• The CadensIQ software, its name, and its design belong to CelestSolutions.
 
-10. Security, Availability & Support
-• We use PBKDF2 hashing (25k+ iterations, upgrade path to 600k), HMAC-signed 12-hour tokens, and per-IP/per-account brute-force protection. Tokens are stored as HttpOnly cookies where possible.
-• The service is hosted on Cloudflare Workers/D1/R2 with best-effort 99.9% uptime. Maintenance mode may temporarily restrict non-administrator access.
-• Support is provided via the Help & Guide panel and the notification channel.
+10. Service availability
+We work hard to keep CadensIQ running smoothly, but we cannot guarantee it will always be available or error-free. We may improve or change features from time to time.
 
-11. Limitation of Liability
-To the extent permitted by law, CelestSolutions is not liable for indirect, incidental, or consequential damages. Total liability is limited to fees paid in the prior 12 months (or PHP 10,000 if free tier).
+11. Ending your use
+A company can stop using CadensIQ at any time, and its data can be exported or deleted on request. We may suspend accounts that violate these terms.
 
-12. Termination & Data Retention
-• You may request deletion of your company and employee data. Administrators can reset tenant data (irreversible) via System Status → Danger Zone.
-• We retain attendance and audit logs as required by law, then anonymize or delete per our retention schedule.
+12. Contact
+Questions about these terms? CelestSolutions — jiaespenilla@gmail.com`
 
-13. Changes & Contact
-We may update these Terms and will post the new version with an updated date. Continued use after changes constitutes acceptance.
-Questions: CelestSolutions — jiaespenilla@gmail.com — via the platform or System Configuration.`
+export const DEFAULT_PRIVACY = `Privacy Policy — CadensIQ by CelestSolutions
+Last updated: September 2, 2026
 
-export const DEFAULT_PRIVACY = `Privacy Policy — Unified Workforce by CelestSolutions
-Last updated: August 28, 2026
+1. What we collect
+• Your name, email address, role, and company.
+• Your attendance records: when you clocked in or out, and which shift applies.
+• Your kiosk credentials: your PIN, your QR badge, and your fingerprint's digital signature. We never store an image of your fingerprint — only an encrypted signature that cannot be turned back into one.
+• Your tasks, notifications, and app settings. An optional profile photo if you choose to add one.
 
-1. Information We Collect
-• Company data: name, industry, address, city, contact phone/email, logo (Data URL), registration date, status.
-• Employee data: name, email (login identifier), role, location/work site, active status, manager, shift assignment.
-• Attendance data: email, company, clock in/out timestamps, overtime flag, kiosk device token (if paired), shift association.
-• Credentials: PIN (PBKDF2 hash + salt), QR code, fingerprint/WebAuthn credential ID + public key (never raw biometrics), password hash + salt.
-• Operational data: tasks, notifications, roles/permissions, system settings, and audit logs.
+2. How we use it
+• To confirm it is really you when you sign in or scan at the kiosk, and to record your attendance correctly.
+• To show you the right information for your company, and to send you important notifications.
+• To keep the system safe — for example, by slowing down repeated failed sign-in attempts.
 
-2. How We Use Information
-• To authenticate you, enforce role permissions, scope data to your company, record attendance, manage shifts/locations, and enable kiosk verification.
-• To send transactional notifications (approvals, welcomes) via the queue; email delivery requires your domain to be verified for Cloudflare Email Sending.
-• To improve security (rate limiting, anomaly detection) and to generate aggregated, non-identifying analytics.
+3. What we never do
+• We never sell your data.
+• We never share your information with other companies using CadensIQ.
+• We never store your actual fingerprint.
 
-3. Legal Basis (GDPR & PH DPA)
-We process data on the bases of: contract (providing the workforce platform), legitimate interest (security, product improvement), consent (optional photo/avatar upload), and legal obligation (retention for labor law).
+4. Where your data lives
+• Your data is stored securely in Cloudflare's global network, our hosting provider.
+• Passwords and PINs are scrambled so they cannot be read by anyone — not even by us.
 
-4. Data Sharing & Processors
-• We do not sell your data. We share it only with service processors: Cloudflare (Workers, D1, R2, Email Sending) and your own company's administrators/CEOs who manage the roster.
-• Cross-company data is never exposed; company-scoped APIs enforce tenant isolation.
+5. How long we keep it
+• While your company uses CadensIQ, plus a short grace period in case you return.
+• Attendance records are kept as long as labor law requires (usually 5 years), then made anonymous.
+• Any data can be deleted sooner on request.
 
-5. Data Storage & Location
-• Primary storage is Cloudflare D1 (SQLite) and R2 (if document storage is enabled) in Cloudflare's global network. Data may be replicated for availability.
-• Passwords, PINs and kiosk tokens are stored as salted hashes (PBKDF2) or opaque tokens, never in plain text. Seed credentials are stored only as hashes.
+6. How we protect it
+• All traffic is encrypted, passwords and PINs are never stored in plain text, and kiosk devices must be paired first before they can record anything.
 
-6. Data Retention
-• Company/employee records retained while the account is active plus a grace period for recovery, then deleted on request or via Admin Reset.
-• Attendance logs retained per statutory requirements (typically 5 years PH) then anonymized. Backups are rotated and purged on the same schedule.
-• Welcome/intro notifications are stored until cleared via the bell → Clear all.
+7. Your rights
+• You can view and edit your own profile at any time.
+• You can ask your company or us to export or delete your data. We respond within 30 days.
 
-7. Security Measures
-• Encryption in transit (TLS), at-rest encryption via Cloudflare, strong hashing, HMAC-signed tokens, per-account/per-IP rate limits, shift-aware clock logic, and kiosk device pairing.
-• You can enable idle session timeout (System Configuration) which is enforced client-side with a 1-minute warning.
+8. Tracking
+• We only store what is needed to keep you signed in and remember your preferences. No advertising or third-party trackers are used.
 
-8. Your Rights
-You may: access, correct, or delete your profile (My Profile) and request export/deletion of your company's data via the Administrator. For privacy requests, contact your Company Owner or CelestSolutions at jiaespenilla@gmail.com. We will respond within 30 days.
+9. Children
+CadensIQ is for workers aged 16 and older.
 
-9. Cookies & Local Storage
-We use localStorage for session tokens, welcome-seen flags, and cached settings/roles, and a 12-hour signed token (preferably HttpOnly cookie). No third-party tracking cookies are used. Clearing storage will sign you out and require re-login.
-
-10. Children's Privacy
-The platform is not intended for children under 16. Do not register minors.
-
-11. Changes & DPO Contact
-We will post material changes here and update the Last updated date. For questions or to exercise rights, contact: CelestSolutions — jiaespenilla@gmail.com — or your system Administrator via System Configuration → Email Notifications.`
-
+10. Changes and contact
+We will update this page and the date above when something changes. Questions, requests, or concerns? CelestSolutions — jiaespenilla@gmail.com`
 const DEFAULTS = { terms: DEFAULT_TERMS, privacy: DEFAULT_PRIVACY }
 
 // Terms & Privacy are editable by the administrator (System Configuration → Terms & Policies).
