@@ -80,6 +80,39 @@ export async function migrateTaskColumns(env) {
   taskColumnsMigrated = true
 }
 
+let taskAssigneeIdMigrated = false
+// Normalize tasks.assignee to a stable employee id (employees.id). The
+// display string ("Name (Company)") stays as-is for the UI, but every task
+// also gets assignee_id so reports/scoping don't break on renames.
+export async function migrateTaskAssigneeId(env) {
+  if (taskAssigneeIdMigrated) return
+  try {
+    await env.DB.prepare('SELECT assignee_id FROM tasks LIMIT 1').first()
+    taskAssigneeIdMigrated = true
+    return
+  } catch {
+    // column missing — add it
+  }
+  const stmts = []
+  try {
+    stmts.push(env.DB.prepare('ALTER TABLE tasks ADD COLUMN assignee_id INTEGER'))
+  } catch {}
+  try {
+    stmts.push(env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_tasks_assignee_id ON tasks (assignee_id)'))
+  } catch {}
+  if (stmts.length) {
+    try { await env.DB.batch(stmts) } catch {}
+  }
+  // Best-effort backfill: resolve assignee_id from the normalized email.
+  try {
+    await env.DB.prepare(
+      'UPDATE tasks SET assignee_id = (SELECT e.id FROM employees e WHERE lower(e.email) = lower(tasks.assignee_email) LIMIT 1) WHERE assignee_id IS NULL AND assignee_email IS NOT NULL'
+    ).run()
+  } catch {}
+  taskAssigneeIdMigrated = true
+}
+
+
 let companySettingsMigrated = false
 export async function migrateCompanySettings(env) {
   if (companySettingsMigrated) return

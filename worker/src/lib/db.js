@@ -26,6 +26,7 @@ export function mapTask(row) {
     id: row.id,
     title: row.title,
     assignee: row.assignee,
+    assigneeId: row.assignee_id ?? null,
     assigneeEmail: row.assignee_email || null,
     assigneeCompanyId: row.assignee_company_id || null,
     priority: row.priority,

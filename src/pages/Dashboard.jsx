@@ -397,15 +397,21 @@ function CeoDashboard({ user }) {
             <p className="text-xs text-gray-500">{allTasks.filter((t)=>t.due===genDate).length} task(s) on {genDate} will be duplicated to {genTargetDate}.</p>
             {(() => {
               const punches = allAttendance.filter((p)=> (p.time||'').slice(0,10) === genDate)
-              const byEmail = new Map()
-              punches.forEach((p)=> byEmail.set(p.email.toLowerCase(), p))
-              const presentSet = new Set(punches.map((p)=>p.email.toLowerCase()))
+              // Pre-classify punches per email in one pass (O(n)) instead of
+              // re-scanning the punch list for every employee (O(n*m)).
+              const lastPunchByEmail = new Map()
+              for (const p of punches) {
+                const key = (p.email || '').toLowerCase()
+                const prev = lastPunchByEmail.get(key)
+                if (!prev || (p.time || '') > (prev.time || '')) lastPunchByEmail.set(key, p)
+              }
+              const presentSet = new Set(lastPunchByEmail.keys())
               const present = employees.filter((e)=> presentSet.has(e.email.toLowerCase()))
               const absent = employees.filter((e)=> !presentSet.has(e.email.toLowerCase()))
               const clockedIn = []
               const clockedOut = []
               present.forEach((e)=>{
-                const last = [...punches].reverse().find((p)=>p.email.toLowerCase()===e.email.toLowerCase())
+                const last = lastPunchByEmail.get(e.email.toLowerCase())
                 if (last?.type==='in') clockedIn.push(e); else clockedOut.push(e)
               })
               return (

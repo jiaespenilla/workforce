@@ -329,9 +329,18 @@ export default function TimeKeeping() {
   const todayPunches = myPunches.filter((p) => systemDateKey(p.time) === systemTodayKey())
 
   const timesheetRows = (() => {
+    // Group punches by date once (O(n)) so each day row is an O(1) lookup
+    // instead of re-scanning the whole punch history per day (O(days*n)).
+    const byDate = new Map()
+    for (const p of myPunches) {
+      const key = systemDateKey(p.time)
+      if (!byDate.has(key)) byDate.set(key, [])
+      byDate.get(key).push(p)
+    }
+    const punchesFor = (d) => byDate.get(systemDateKey(d)) || []
     if (view === 'day') {
       const d = new Date()
-      const punches = myPunches.filter((p) => systemDateKey(p.time) === systemDateKey(d)).sort((a,b)=> new Date(a.time)-new Date(b.time))
+      const punches = punchesFor(d).slice().sort((a,b)=> new Date(a.time)-new Date(b.time))
       const firstIn = punches.find((p)=>p.type==='in')
       const lastOut = [...punches].reverse().find((p)=>p.type==='out')
       return [{
@@ -348,7 +357,7 @@ export default function TimeKeeping() {
       const monday = startOfWeek(new Date())
       return Array.from({ length: 5 }, (_, i) => {
         const d = new Date(monday); d.setDate(monday.getDate()+i)
-        const punches = myPunches.filter((p)=> systemDateKey(p.time)===systemDateKey(d))
+        const punches = punchesFor(d)
         const firstIn = punches.find((p)=>p.type==='in')
         const lastOut = [...punches].reverse().find((p)=>p.type==='out')
         const isToday = d.toDateString()===new Date().toDateString()
@@ -366,7 +375,7 @@ export default function TimeKeeping() {
     // month: last 30 days
     return Array.from({ length: 30 }, (_, i) => {
       const d = new Date(); d.setDate(d.getDate() - (29 - i)); d.setHours(0,0,0,0)
-      const punches = myPunches.filter((p)=> systemDateKey(p.time)===systemDateKey(d))
+      const punches = punchesFor(d)
       const firstIn = punches.find((p)=>p.type==='in')
       const lastOut = [...punches].reverse().find((p)=>p.type==='out')
       return {
@@ -499,22 +508,32 @@ export default function TimeKeeping() {
             </div>
             <div className="mt-1 grid grid-cols-7 gap-1">
               {(() => {
+                // Group punches by date once (O(n)) — each calendar cell then
+                // does an O(1) lookup instead of scanning the full history.
+                const byDate = new Map()
+                for (const p of myPunches) {
+                  const key = systemDateKey(p.time)
+                  if (!byDate.has(key)) byDate.set(key, [])
+                  byDate.get(key).push(p)
+                }
                 const first = startOfMonth(new Date())
                 const startDay = first.getDay()
                 const blanks = Array.from({length: startDay}, (_,i)=><div key={`b-${i}`} />)
                 const days = Array.from({length: new Date(new Date().getFullYear(), new Date().getMonth()+1,0).getDate()}, (_,i)=>{
                   const d = new Date(new Date().getFullYear(), new Date().getMonth(), 1); d.setDate(i+1)
                   const key = d.toDateString()
-                  const punches = myPunches.filter((p)=> systemDateKey(p.time)===systemDateKey(key))
+                  const punches = byDate.get(systemDateKey(key)) || []
                   const hrs = hoursForDay(punches)
                   const hasPunch = punches.length>0
                   const isToday = systemDateKey(key)===systemTodayKey()
+                  const firstIn = punches.find((p)=>p.type==='in')
+                  const lastOut = [...punches].reverse().find((p)=>p.type==='out')
                   return (
                     <div key={key} className={`rounded-lg border p-2 text-left ${hasPunch ? 'bg-brand-50 border-brand-200' : 'bg-gray-50 border-gray-100'} ${isToday ? 'ring-2 ring-brand-400' : ''}`}>
                       <p className="text-xs font-bold text-gray-900">{i+1}</p>
                       {hasPunch ? (
                         <>
-                          <p className="mt-1 text-[10px] leading-tight text-gray-600">{punches.find((p)=>p.type==='in') ? new Date(punches.find((p)=>p.type==='in').time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—'} → {[...punches].reverse().find((p)=>p.type==='out') ? new Date([...punches].reverse().find((p)=>p.type==='out').time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—'}</p>
+                          <p className="mt-1 text-[10px] leading-tight text-gray-600">{firstIn ? new Date(firstIn.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—'} → {lastOut ? new Date(lastOut.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—'}</p>
                           <p className="text-[11px] font-semibold text-brand-700">{hrs.toFixed(1)}h</p>
                         </>
                       ) : <p className="mt-1 text-[10px] text-gray-400">—</p>}
