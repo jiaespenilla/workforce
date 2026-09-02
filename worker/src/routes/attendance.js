@@ -27,7 +27,7 @@ export async function handle({ request, env, url, path, method, claims }) {
     return json(result)
   }
   if (path === '/api/attendance' && method === 'POST') {
-    const { email, company_id, type, time, overtime } = await readJson(request)
+    const { email, company_id, type, time, overtime, overtimeMinutes } = await readJson(request)
     if (!email || !type) return json({ error: 'email and type are required.' }, 400)
     // Tenant scoping: company accounts may only punch for employees of their
     // own company (prevents punching for arbitrary people/companies).
@@ -40,9 +40,9 @@ export async function handle({ request, env, url, path, method, claims }) {
       if (!emp) return json({ error: 'Employee does not belong to your company.' }, 403)
     }
     const result = await env.DB.prepare(
-      'INSERT INTO attendance (email, company_id, type, time, overtime) VALUES (?, ?, ?, ?, ?)'
-    ).bind(email.toLowerCase(), companyId, type, time || new Date().toISOString(), overtime ? 1 : 0).run()
-    return json({ id: result.meta.last_row_id, email: email.toLowerCase(), type, time: time || new Date().toISOString() }, 201)
+      'INSERT INTO attendance (email, company_id, type, time, overtime, overtime_minutes) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(email.toLowerCase(), companyId, type, time || new Date().toISOString(), overtime ? 1 : 0, Number.isFinite(overtimeMinutes) ? Math.round(overtimeMinutes) : 0).run()
+    return json({ id: result.meta.last_row_id, email: email.toLowerCase(), type, time: time || new Date().toISOString(), overtimeMinutes: Number.isFinite(overtimeMinutes) ? Math.round(overtimeMinutes) : 0 }, 201)
   }
 
   return null

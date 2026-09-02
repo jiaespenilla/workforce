@@ -143,4 +143,22 @@ export async function migrateCompanySettings(env) {
   companySettingsMigrated = true
 }
 
+let attendanceOvertimeMigrated = false
+// Store overtime as exact minutes (open shifts: beyond 8h; timed shifts: the
+// flagged session). Back-fills the column for databases created before it.
+export async function migrateAttendanceOvertime(env) {
+  if (attendanceOvertimeMigrated) return
+  try {
+    await env.DB.prepare('SELECT overtime_minutes FROM attendance LIMIT 1').first()
+    attendanceOvertimeMigrated = true
+    return
+  } catch {
+    // column missing — add it below
+  }
+  try {
+    await env.DB.prepare('ALTER TABLE attendance ADD COLUMN overtime_minutes INTEGER NOT NULL DEFAULT 0').run()
+  } catch {}
+  attendanceOvertimeMigrated = true
+}
+
 export { COMPANY_SETTING_KEYS, GLOBAL_SETTINGS_SQL }

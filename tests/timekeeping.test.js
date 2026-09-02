@@ -115,6 +115,15 @@ describe('TimeKeeping hours helpers', () => {
     expect(overtimeForDay(punches)).toBeCloseTo(9)
     expect(overtimeForDay(punches.map((p) => ({ ...p, overtime: false })))).toBe(0)
   })
+
+  it('uses overtime_minutes when present (open shift: minutes beyond 8h)', () => {
+    // 10h session on an open shift → 8h regular, 2h (120 min) overtime
+    const punches = [
+      { type: 'in', time: '2026-09-01T00:00:00.000Z' },
+      { type: 'out', time: '2026-09-01T10:00:00.000Z', overtime: true, overtime_minutes: 120 },
+    ]
+    expect(overtimeForDay(punches)).toBeCloseTo(2)
+  })
 })
 
 describe('TimeKeeping shiftForEmployee', () => {

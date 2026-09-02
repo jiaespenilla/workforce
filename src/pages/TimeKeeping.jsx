@@ -75,9 +75,18 @@ export function hoursForDay(punchesForDay) {
   return total / 3600000
 }
 
-// Overtime hours — only clock-outs the kiosk flagged as overtime count.
+// Overtime hours for a day. New attendance rows carry exact overtime_minutes
+// (open shifts: minutes beyond 8h of work; timed shifts: the flagged session),
+// computed at punch time. Legacy rows without the column fall back to the
+// boolean clock-out flag (whole flagged session counts) so history holds.
 export function overtimeForDay(punchesForDay) {
   const sorted = [...punchesForDay].sort((a, b) => new Date(a.time) - new Date(b.time))
+  if (sorted.some((p) => p.overtime_minutes !== undefined)) {
+    const minutes = sorted.reduce((s, p) => s + (Number(p.overtime_minutes) || 0), 0)
+    if (minutes > 0) return minutes / 60
+    // all rows have overtime_minutes but zero — still fall through so any
+    // legacy-flagged (pre-column) punch keeps counting as before
+  }
   let total = 0
   let lastIn = null
   for (const p of sorted) {
@@ -757,7 +766,7 @@ return (
           <span className="text-gray-500">
             {view === 'day' ? 'Daily' : view === 'week' ? 'Weekly' : 'Monthly'} total · {shift ? (shift.open ? 'Open shift' : `${shift.start}–${shift.end}`) : 'No shift assigned'}
           </span>
-          <span className="font-semibold text-gray-900">{totalHours.toFixed(1)}h regular · {totalOT.toFixed(1)}h overtime</span>
+          <span className="font-semibold text-gray-900">{Math.max(0, totalHours - totalOT).toFixed(1)}h regular · {totalOT.toFixed(1)}h overtime</span>
         </div>
       </div>
     </div>

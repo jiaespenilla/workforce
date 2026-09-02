@@ -5,7 +5,7 @@
 
 import { json, cors } from './lib/http.js'
 import { requireAuth } from './lib/auth.js'
-import { ensureSeed, migrateCompanySettings, migrateTaskColumns, migrateTaskAssigneeId } from './lib/seed.js'
+import { ensureSeed, migrateCompanySettings, migrateTaskColumns, migrateTaskAssigneeId, migrateAttendanceOvertime } from './lib/seed.js'
 import * as publicRoutes from './routes/public.js'
 import * as authRoutes from './routes/auth.js'
 import * as settingsRoutes from './routes/settings.js'
@@ -54,6 +54,7 @@ export default {
         await migrateCompanySettings(env)
         await migrateTaskColumns(env)
         await migrateTaskAssigneeId(env)
+        await migrateAttendanceOvertime(env)
         return await route(request, env)
       }
 

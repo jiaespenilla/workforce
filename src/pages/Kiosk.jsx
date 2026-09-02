@@ -239,7 +239,7 @@ export default function Kiosk() {
     } else {
       try { punches = (JSON.parse(localStorage.getItem('uw_punches')) || []).filter((p) => (p.email || '').toLowerCase() === match.email.toLowerCase()) } catch { punches = [] }
     }
-    const { action, overtime } = decideAction(punches, shift, nowDate)
+    const { action, overtime, overtimeMinutes = 0 } = decideAction(punches, shift, nowDate)
 
     const punchRecord = {
       email: match.email,
@@ -252,22 +252,23 @@ export default function Kiosk() {
     if (apiEnabled()) {
       await api('/api/attendance', {
         method: 'POST',
-        body: { email: match.email, company_id: match.companyId || company_id_by_name(match), type: action, time: nowDate.toISOString(), overtime: !!overtime },
+        body: { email: match.email, company_id: match.companyId || company_id_by_name(match), type: action, time: nowDate.toISOString(), overtime: !!overtime, overtimeMinutes },
         headers: deviceToken ? { 'X-Kiosk-Token': deviceToken } : {},
       }).catch(() => {})
     } else {
       // merge back to global uw_punches
       try {
         const all = JSON.parse(localStorage.getItem('uw_punches')) || []
-        all.push({ ...punchRecord, overtime: !!overtime })
+        all.push({ ...punchRecord, overtime: !!overtime, overtimeMinutes })
         localStorage.setItem('uw_punches', JSON.stringify(all))
-      } catch { localStorage.setItem('uw_punches', JSON.stringify([{ ...punchRecord, overtime: !!overtime }])) }
+      } catch { localStorage.setItem('uw_punches', JSON.stringify([{ ...punchRecord, overtime: !!overtime, overtimeMinutes }])) }
     }
 
     setResult({
       name: match.name,
       action, // 'in' | 'out'
       overtime: !!overtime,
+      overtimeMinutes: Number(overtimeMinutes) || 0,
       time: nowDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       shiftName: shift?.name || null,
     })
@@ -432,7 +433,7 @@ export default function Kiosk() {
           </p>
           {result.action === 'out' && result.overtime && (
             <span className="rounded-full bg-amber-400 px-4 py-1 text-sm font-extrabold uppercase tracking-widest text-gray-900">
-              Overtime
+              Overtime{result.overtimeMinutes ? ` · +${Math.floor(result.overtimeMinutes / 60)}h${result.overtimeMinutes % 60 ? ` ${result.overtimeMinutes % 60}m` : ''}` : ''}
             </span>
           )}
           <p className="text-lg font-semibold text-emerald-50">{result.name}</p>

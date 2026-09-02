@@ -130,6 +130,7 @@ CREATE TABLE IF NOT EXISTS attendance (
   type TEXT NOT NULL,                -- in | out
   time TEXT NOT NULL,
   overtime INTEGER DEFAULT 0,
+  overtime_minutes INTEGER DEFAULT 0, -- minutes of overtime for the worked session (open shifts: beyond 8h; timed: flagged session)
   created_at TEXT DEFAULT (datetime('now'))
 );
 

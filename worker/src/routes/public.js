@@ -242,9 +242,9 @@ export async function handle({ request, env, url, path, method }) {
       const emp = await env.DB.prepare('SELECT id FROM employees WHERE lower(email) = ? AND company_id = ?').bind(email, tokenCompany).first()
       if (!emp) return json({ error: 'Employee does not belong to this kiosk company.' }, 403)
       const result = await env.DB.prepare(
-        'INSERT INTO attendance (email, company_id, type, time, overtime) VALUES (?, ?, ?, ?, ?)'
-      ).bind(email, tokenCompany, body.type, body.time || new Date().toISOString(), body.overtime ? 1 : 0).run()
-      return json({ id: result.meta.last_row_id, email, type: body.type, time: body.time || new Date().toISOString() }, 201)
+        'INSERT INTO attendance (email, company_id, type, time, overtime, overtime_minutes) VALUES (?, ?, ?, ?, ?, ?)'
+      ).bind(email, tokenCompany, body.type, body.time || new Date().toISOString(), body.overtime ? 1 : 0, Number.isFinite(body.overtimeMinutes) ? Math.round(body.overtimeMinutes) : 0).run()
+      return json({ id: result.meta.last_row_id, email, type: body.type, time: body.time || new Date().toISOString(), overtimeMinutes: Number.isFinite(body.overtimeMinutes) ? Math.round(body.overtimeMinutes) : 0 }, 201)
     }
     // No kiosk token present — authenticated users fall through to the routes below.
   }

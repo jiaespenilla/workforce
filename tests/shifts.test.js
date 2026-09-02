@@ -18,6 +18,26 @@ describe('decideAction', () => {
     expect(decideAction([{ time: '2026-08-28T08:00:00', type: 'in' }], openShift, noon).overtime).toBe(false)
   })
 
+  it('open shift: overtime applies after 8 hours from clock-in to clock-out', () => {
+    const openShift = { open: true }
+    const inAt = '2026-08-28T08:00:00'
+    // 10 hours later → 2h OT (beyond the first 8h) and 8h regular
+    const r = decideAction([{ time: inAt, type: 'in' }], openShift, new Date('2026-08-28T18:00:00'))
+    expect(r.action).toBe('out')
+    expect(r.overtime).toBe(true)
+    expect(r.overtimeMinutes).toBe(120)
+    // Exactly 8 hours → no overtime, 0 minutes
+    const exact = decideAction([{ time: inAt, type: 'in' }], openShift, new Date('2026-08-28T16:00:00'))
+    expect(exact.overtime).toBe(false)
+    expect(exact.overtimeMinutes).toBe(0)
+    // 8.5 hours → 30 minutes of overtime
+    const half = decideAction([{ time: inAt, type: 'in' }], openShift, new Date('2026-08-28T16:30:00'))
+    expect(half.overtime).toBe(true)
+    expect(half.overtimeMinutes).toBe(30)
+    // Clock-in scans never carry overtime
+    expect(decideAction([], openShift, noon).overtimeMinutes).toBe(0)
+  })
+
   it('timed shift: first scan is in, second is out', () => {
     const shift = { start: '09:00', end: '18:00' }
     expect(decideAction([], shift, new Date('2026-08-28T08:55:00')).action).toBe('in')
