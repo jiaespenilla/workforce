@@ -76,8 +76,8 @@ export async function handle({ request, env, url, path, method }) {
     const m = path.match(/^\/api\/company-settings\/([^/]+)$/)
     if (m && method === 'GET') {
       const companyId = decodeURIComponent(m[1])
-      const rows = await env.DB.prepare('SELECT key, value FROM settings WHERE key IN (?, ?, ?)').bind(
-        `shift_schedules:${companyId}`, `company_locations:${companyId}`, `kiosk_configs:${companyId}`
+      const rows = await env.DB.prepare('SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?)').bind(
+        `shift_schedules:${companyId}`, `company_locations:${companyId}`, `kiosk_configs:${companyId}`, `attachment_storage:${companyId}`
       ).all().then((r) => r.results)
       const out = {}
       for (const row of rows) {

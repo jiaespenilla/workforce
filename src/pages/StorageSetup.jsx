@@ -55,6 +55,30 @@ export default function StorageSetup() {
     }
   }
 
+  // Step-by-step guide — adapts to the selected provider.
+  const guideSteps = {
+    d1: [
+      <>Select <strong>Built-in (D1 Data URL)</strong> as the provider above.</>,
+      <>Click <strong>Save Storage</strong> — task attachments will be stored directly in Cloudflare D1.</>,
+      <>No extra configuration is needed. Note: each file is capped at <strong>5 MB</strong> (stored as a Data URL).</>,
+    ],
+    r2: [
+      <>In the Cloudflare Dashboard go to <strong>R2 → Create bucket</strong> and name it <span className="font-mono">workforce-documents</span>.</>,
+      <>Bind the bucket to the Worker as <span className="font-mono">R2</span> (see <span className="font-mono">worker/wrangler.jsonc</span>) and redeploy the worker.</>,
+      <>Select <strong>Cloudflare R2 (workforce-documents)</strong> above and click <strong>Save Storage</strong>.</>,
+      <>Verify: attach a file to any task, then open the bucket in the Cloudflare Dashboard — the object should appear.</>,
+    ],
+    gdrive: [
+      <>In Google Cloud Console, create a project, enable the <strong>Google Drive API</strong>, and create a <strong>Service Account</strong>.</>,
+      <>Create a JSON key for the service account and hand it to your admin to run <span className="font-mono">npx wrangler secret put GDRIVE_SERVICE_KEY</span> (inside <span className="font-mono">worker/</span>).</>,
+      <>In Google Drive, create (or pick) a folder for attachments and <strong>share it with the service account e-mail as Editor</strong>.</>,
+      <>Copy the Folder ID from the address bar: <span className="font-mono break-all">https://drive.google.com/drive/folders/&lt;FOLDER_ID&gt;</span></>,
+      <>Select <strong>Google Drive</strong>, paste the Folder ID above, and click <strong>Save Storage</strong>.</>,
+      <>Verify: attach a file to any task — the file should appear in the shared Drive folder.</>,
+    ],
+  }
+  const steps = [...(guideSteps[storageProvider] || []), <>After saving, reload this page — the selected provider (and Folder ID) must persist.</>]
+
   return (
     <div className="space-y-6">
       <div>
@@ -76,7 +100,7 @@ export default function StorageSetup() {
             >
               <option value="d1">Built-in (D1 Data URL)</option>
               <option value="r2">Cloudflare R2 (workforce-documents)</option>
-              <option value="gdrive">Google Drive (2TB client)</option>
+              <option value="gdrive">Google Drive</option>
             </select>
           </label>
 
@@ -104,6 +128,17 @@ export default function StorageSetup() {
         )}
 
         <p className="mt-2 text-[11px] text-gray-400">Built-in stores as Data URL in D1 (5 MB limit). R2 requires Dashboard &gt; R2 enable. GDrive requires service account JSON stored as secret <span className="font-mono">GDRIVE_SERVICE_KEY</span> (ask admin).</p>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h3 className="text-sm font-bold text-gray-900">Step-by-step Setup Guide</h3>
+        <p className="mt-1 text-xs text-gray-500">
+          Follow the steps for the currently selected provider:
+          {' '}<strong>{storageProvider === 'd1' ? 'Built-in (D1)' : storageProvider === 'r2' ? 'Cloudflare R2' : 'Google Drive'}</strong>.
+        </p>
+        <ol className="mt-4 list-decimal space-y-2 pl-5 text-xs leading-relaxed text-gray-600">
+          {steps.map((step, i) => <li key={i}>{step}</li>)}
+        </ol>
       </div>
     </div>
   )
