@@ -250,7 +250,7 @@ function CeoTimeKeeping() {
     Promise.all(companyIds.map(async (id) => [id, await getCompanyShifts(id)]))
       .then((entries) => { if (!cancelled) setShiftsByCompany(Object.fromEntries(entries)) })
     return () => { cancelled = true }
-  }, [allEmployees.length])
+  }, [allEmployees])
 
   const employees = allEmployees.filter((e) => e.active !== false)
 
@@ -481,6 +481,7 @@ return (
               <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-3">
                 <button onClick={() => setSelectedDate(null)} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
                 <button onClick={() => {
+                  const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')
                   const dayRows = attendance.filter((p) => systemDateKey(p.time) === selectedDate)
                   const rows = employees.map((emp) => {
                     const ps = dayRows.filter((p) => p.email === emp.email).sort((a, b) => new Date(a.time) - new Date(b.time))
@@ -488,9 +489,9 @@ return (
                     const firstIn = ps.find((p) => p.type === 'in')
                     const shift = shiftForEmployee(shiftsByCompany[emp.companyId], emp.email)
                     const st = dayStatus(ps, shift, { isToday: false, isPast: true })
-                    return `<tr><td>${emp.name}</td><td>${emp.companyName}</td><td>${firstIn ? fmtClock(firstIn.time) : '—'}</td><td>${hoursForDay(ps).toFixed(1)}h</td><td>${st.label}</td></tr>`
+                    return `<tr><td>${esc(emp.name)}</td><td>${esc(emp.companyName)}</td><td>${firstIn ? esc(fmtClock(firstIn.time)) : '—'}</td><td>${esc(hoursForDay(ps).toFixed(1))}h</td><td>${esc(st.label)}</td></tr>`
                   }).filter(Boolean).join('')
-                  const html = `<html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;font-size:12px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#ecfdf5}</style></head><body><h2>Attendance — ${selectedDate}</h2><p>${dayRows.length} punches, ${new Set(dayRows.map((p) => p.email)).size} employees</p><table><thead><tr><th>Employee</th><th>Company</th><th>Clock In</th><th>Hours</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan=5>No records</td></tr>'}</tbody></table></body></html>`
+                  const html = `<html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;font-size:12px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#ecfdf5}</style></head><body><h2>Attendance — ${esc(selectedDate)}</h2><p>${dayRows.length} punches, ${new Set(dayRows.map((p) => p.email)).size} employees</p><table><thead><tr><th>Employee</th><th>Company</th><th>Clock In</th><th>Hours</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan=5>No records</td></tr>'}</tbody></table></body></html>`
                   const win = window.open('', '_blank'); if (win) { win.document.write(html); win.document.close(); win.focus(); win.print() }
                 }} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Export PDF</button>
               </div>

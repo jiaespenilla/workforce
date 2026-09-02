@@ -48,7 +48,8 @@ export function AuthProvider({ children }) {
     const hydrate = async () => {
       try {
         if (apiEnabled()) {
-          const companies = await api('/api/companies').catch(() => [])
+          const res = await api('/api/companies').catch(() => [])
+          const companies = Array.isArray(res) ? res : (res.data || [])
           const emp = companies.flatMap((c) => c.employees).find((e) => e.email.toLowerCase() === user.email.toLowerCase())
           const actualRole = emp?.role || user.roleLabel || user.role
           const perms = resolvePermsForRoleName(actualRole)
@@ -119,7 +120,8 @@ export function AuthProvider({ children }) {
     // Try to resolve perms + actual role name from employee record (e.g., HR Manager)
     try {
       if (ru.role !== 'administrator' && apiEnabled()) {
-        const companies = await api('/api/companies').catch(() => [])
+        const res = await api('/api/companies').catch(() => [])
+        const companies = Array.isArray(res) ? res : (res.data || [])
         const emp = companies.flatMap((c) => c.employees).find((e) => (e.email || '').toLowerCase() === (ru.email || identifier).toLowerCase())
         const roleName = emp?.role || ru.role
         if (emp?.role) actualRoleLabel = emp.role

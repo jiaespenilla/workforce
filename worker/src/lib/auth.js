@@ -3,6 +3,7 @@ import { verifyToken } from './crypto.js'
 import { HttpError } from './http.js'
 
 export async function requireAuth(request, env) {
+  if (!env.AUTH_SECRET) throw HttpError(500, 'Server misconfigured: AUTH_SECRET missing. Set via wrangler secret put AUTH_SECRET')
   const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '')
   const claims = await verifyToken(token, env.AUTH_SECRET)
   if (!claims) throw HttpError(401, 'Unauthorized')

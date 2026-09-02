@@ -108,7 +108,6 @@ export default function Kiosk() {
   const [scanning, setScanning] = useState(false)
   const [pin, setPin] = useState('')
   const [pinMode, setPinMode] = useState(false)
-  const [message, setMessage] = useState(null)
   const idleTimer = useRef(null)
 
   useEffect(() => {
@@ -124,7 +123,6 @@ export default function Kiosk() {
         setResult(null)
         setPin('')
         setPinMode(false)
-        setMessage(null)
         setAuthError(null)
       }, Math.max(config.idleTimeout, 10) * 1000)
     }
@@ -275,7 +273,7 @@ export default function Kiosk() {
     setTimeout(() => setResult(null), 6000) // auto-return to auth screen
   }
 
-  function company_id_by_name(companyName) {
+  function company_id_by_name(_companyName) {
     // Company ids come from the identify response; no local company list exists.
     return undefined
   }

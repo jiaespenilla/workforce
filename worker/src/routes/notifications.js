@@ -17,9 +17,12 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
   }
   if (path === '/api/notifications' && method === 'POST') {
     const n = await readJson(request)
-    const isTaskCompleted = (n.subject||'').toLowerCase().includes('completed') && (n.subject||'').toLowerCase().includes('task')
-    // Allow any authenticated user to notify managers/CEO on task completion; otherwise admin only.
-    if (!isAdmin && !isTaskCompleted) return json({ error: 'Administrator only.' }, 403)
+    // Strict: only admins may create notifications. Task-completed notifications
+    // are auto-generated server-side via tasks route; client-initiated 'completed'
+    // subjects are not trusted.
+    if (!isAdmin) return json({ error: 'Administrator only.' }, 403)
+    // Validate payload
+    if (!n.to || !n.subject) return json({ error: 'to and subject are required.' }, 400)
     await queueNotification(env, n)
     return json({ ok: true }, 201)
   }

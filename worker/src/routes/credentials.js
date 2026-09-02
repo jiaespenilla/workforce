@@ -3,7 +3,7 @@
 import { sha256, hashPassword } from '../lib/crypto.js'
 import { json, readJson } from '../lib/http.js'
 
-export async function handle({ request, env, url, path, method, claims, isAdmin }) {
+export async function handle({ request, env, _url, path, method, claims, isAdmin }) {
   /* credentials management — admins manage anyone; users manage their own */
   if (path === '/api/credentials/qr' && method === 'POST') {
     const { email } = await readJson(request)

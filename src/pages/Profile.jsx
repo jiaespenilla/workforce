@@ -37,7 +37,7 @@ export default function Profile() {
     setTimeout(() => setProfileSaved(false), 3000)
   }
 
-  const pickAvatar = (file) => {
+  const _pickAvatar = (file) => {
     if (!file) return
     if (file.size > 500 * 1024) { alert('Please choose an image under 500KB.'); return }
     if (!file.type.startsWith('image/')) { alert('Please choose an image file.'); return }

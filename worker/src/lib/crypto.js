@@ -29,9 +29,15 @@ export async function hashPassword(password, salt, iterations = PBKDF2_ITERATION
 }
 
 export function timingSafeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false
-  let result = 0
-  for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  if (typeof a !== 'string' || typeof b !== 'string') return false
+  // Constant-time compare: always iterate over max length to avoid length oracle
+  const len = Math.max(a.length, b.length)
+  let result = a.length === b.length ? 0 : 1
+  for (let i = 0; i < len; i++) {
+    const ca = i < a.length ? a.charCodeAt(i) : 0
+    const cb = i < b.length ? b.charCodeAt(i) : 0
+    result |= ca ^ cb
+  }
   return result === 0
 }
 
@@ -56,12 +62,14 @@ export function b64url(text) {
 }
 
 export async function createToken(user, secret) {
+  if (!secret || secret === '___REPLACE_VIA_ENV_ADMIN_PASSWORD___' || secret === 'undefined') throw new Error('AUTH_SECRET is not configured')
   const payload = b64url(JSON.stringify({ sub: user.email, role: user.role, name: user.name, exp: Date.now() + 1000 * 60 * 60 * 12 }))
   const sig = await hmac(payload, secret)
   return `${payload}.${sig}`
 }
 
 export async function verifyToken(token, secret) {
+  if (!secret || secret === 'undefined') return null
   if (!token || !token.includes('.')) return null
   const [payload, sig] = token.split('.')
   if (!timingSafeEqual(await hmac(payload, secret), sig)) return null

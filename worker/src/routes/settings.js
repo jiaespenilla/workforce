@@ -5,7 +5,7 @@ import { json, readJson } from '../lib/http.js'
 import { callerCompanyId } from '../lib/auth.js'
 import { safeParse } from '../lib/db.js'
 
-export async function handle({ request, env, url, path, method, claims, isAdmin }) {
+export async function handle({ request, env, _url, path, method, claims, isAdmin }) {
   /* settings */
   if (path === '/api/settings' && method === 'GET') {
     const rows = await env.DB.prepare(GLOBAL_SETTINGS_SQL).all().then((r) => r.results)

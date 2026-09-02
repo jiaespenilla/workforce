@@ -1,23 +1,22 @@
 import { useEffect, useState } from 'react'
-import { useAuth } from '../context/AuthContext'
 import { usePageTitle } from '../lib/documentMeta'
 import { getCompanyShifts, saveCompanyShiftData } from '../lib/shifts'
-import { api, apiEnabled } from '../lib/api'
+import { api } from '../lib/api'
 
 // Shift Schedules — define shifts per company and assign them to employees.
 export default function ShiftSchedules() {
   usePageTitle('Shift Schedules')
-  const { user } = useAuth()
   const [companies, setCompanies] = useState([])
 
   const [companyId, setCompanyId] = useState('')
   const [data, setData] = useState({ shifts: [], assignments: {} })
-  const [loading, setLoading] = useState(true)
+  const [_loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(false)
   const [newShift, setNewShift] = useState({ name: '', start: '08:00', end: '17:00', open: false })
 
   useEffect(() => {
-    api('/api/companies').then((all) => {
+    api('/api/companies').then((res) => {
+      const all = Array.isArray(res) ? res : (res.data || [])
       const active = all.filter((c) => c.active !== false)
       setCompanies(active)
       if (active.length > 0) setCompanyId(active[0].id)
@@ -33,7 +32,7 @@ export default function ShiftSchedules() {
     })
   }, [companyId])
 
-  const company = companies.find((c) => c.id === companyId)
+  const _company = companies.find((c) => c.id === companyId)
 
   const addShift = () => {
     if (!newShift.name.trim()) return
@@ -51,7 +50,7 @@ export default function ShiftSchedules() {
     })
   }
 
-  const assign = (email, shiftId) => {
+  const _assign = (email, shiftId) => {
     setData((d) => ({ ...d, assignments: { ...d.assignments, [email]: shiftId || undefined } }))
   }
 

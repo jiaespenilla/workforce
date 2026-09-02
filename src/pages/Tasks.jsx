@@ -72,7 +72,7 @@ function EmployeeTasks({ name }) {
 
   const drop = async (status) => {
     if (dragId == null) return
-    const task = tasks.find((t)=> t.id===dragId)
+    const _task = tasks.find((t)=> t.id===dragId)
     setTasks((t) => t.map((task) => (task.id === dragId ? { ...task, status } : task)))
     if (apiEnabled()) {
       // Server notifies CEO/managers of the status change — no client call needed.
@@ -82,7 +82,7 @@ function EmployeeTasks({ name }) {
     setOverCol(null)
   }
 
-  const notifyCompleted = async (task) => {
+  const _notifyCompleted = async (task) => {
     try {
       const cs = await api('/api/companies').catch(()=>[])
       const comp = cs.find((c)=> c.id===companyId) || cs.find((c)=> (c.employees||[]).some((e)=> e.email.toLowerCase()===user?.email?.toLowerCase()))
@@ -98,7 +98,7 @@ function EmployeeTasks({ name }) {
   }
 
   const acceptTask = async (id) => {
-    const task = tasks.find((t)=>t.id===id)
+    const _task = tasks.find((t)=>t.id===id)
     setTasks((t)=> t.map((x)=> x.id===id ? {...x, status:'inprogress'} : x))
     if (apiEnabled()) await api(`/api/tasks/${id}`, {method:'PUT', body:{status:'inprogress'}}).catch(()=>{})
   }

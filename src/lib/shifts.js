@@ -2,8 +2,13 @@
 // Cloud persists via per-company settings API (one key per company).
 
 import { api } from './api'
+import { getSystemTimeZone } from './systemSettings.js'
 
 const EMPTY = { shifts: [], assignments: {} }
+
+function systemDateKey(timeStr) {
+  try { return new Date(timeStr).toLocaleDateString('en-CA', { timeZone: getSystemTimeZone() }) } catch { return new Date(timeStr).toDateString() }
+}
 
 export async function getCompanyShifts(companyId) {
   if (!companyId) return { ...EMPTY }
@@ -37,9 +42,9 @@ export async function saveCompanyShiftData(companyId, updater) {
  * - Without any shift: simple alternation based on their last punch.
  */
 export function decideAction(punches, shift, now = new Date(), otGraceMinutes = 15, regularWorkMinutes = 480) {
-  const todayStr = now.toDateString()
+  const todayKey = systemDateKey(now.toISOString())
   const todays = punches
-    .filter((p) => new Date(p.time).toDateString() === todayStr)
+    .filter((p) => systemDateKey(p.time) === todayKey)
     .sort((a, b) => new Date(a.time) - new Date(b.time))
 
   const lastToday = todays[todays.length - 1]

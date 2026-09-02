@@ -63,21 +63,40 @@ export async function ensureUser(env, email, name, role, password) {
   const existing = await env.DB.prepare('SELECT id FROM users WHERE lower(email) = ?').bind(email.toLowerCase()).first()
   if (existing) return
   const salt = crypto.randomUUID()
-  await env.DB.prepare('INSERT INTO users (email, name, role, password_salt, password_hash, must_change_password) VALUES (?, ?, ?, ?, ?, 1)')
-    .bind(email.toLowerCase(), name || email, role, salt, await hashPassword(password, salt)).run()
+  try {
+    await env.DB.prepare('INSERT INTO users (email, name, role, password_salt, password_hash, must_change_password) VALUES (?, ?, ?, ?, ?, 1)')
+      .bind(email.toLowerCase(), name || email, role, salt, await hashPassword(password, salt)).run()
+  } catch (e) {
+    // Race: another request inserted same email concurrently — ignore UNIQUE violation
+    if (!String(e.message || '').includes('UNIQUE') && !String(e.message || '').includes('unique')) throw e
+  }
+}
+
+function escapeHtml(text) {
+  return String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 export async function queueNotification(env, { to, subject, body }) {
   if (!to) return
-  await env.DB.prepare('INSERT INTO notifications (to_email, subject, body) VALUES (?, ?, ?)').bind(to.toLowerCase(), subject, body || '').run()
+  // Basic email validation to prevent open relay
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(to).trim())
+  if (!emailOk) return
+  const safeSubject = String(subject || '').slice(0, 200)
+  const safeBody = String(body || '').slice(0, 5000)
+  await env.DB.prepare('INSERT INTO notifications (to_email, subject, body) VALUES (?, ?, ?)').bind(to.toLowerCase(), safeSubject, safeBody).run()
   if (env.EMAIL) {
     try {
       await env.EMAIL.send({
         from: { email: 'noreply@celestsolutions.workers.dev', name: 'CadensIQ' },
         to,
-        subject,
-        text: body || '',
-        html: `<div style="font-family:sans-serif;white-space:pre-line">${(body || '').replace(/</g, '&lt;')}</div>`,
+        subject: safeSubject,
+        text: safeBody,
+        html: `<div style="font-family:sans-serif;white-space:pre-line">${escapeHtml(safeBody)}</div>`,
       })
     } catch (e) {
       console.error('EMAIL send failed (check wrangler email sending enable + verified domain):', e.message)

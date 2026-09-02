@@ -6,7 +6,6 @@ import {
   loadNotifications,
   fetchNotifications,
   markNotificationsRead,
-  clearNotifications,
   clearNotificationsRemote,
   getNotificationsReadAt,
   ADMIN_RECIPIENT,

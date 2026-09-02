@@ -11,10 +11,10 @@ import {
   KIOSK_WINDOW_MS,
   KIOSK_MAX_ATTEMPTS,
   NOTIFICATION_RECIPIENT,
-  DEFAULT_EMPLOYEE_PASSWORD,
   GLOBAL_SETTINGS_SQL,
 } from '../lib/constants.js'
-import { verifyPassword, upgradeUserPassword, createToken, verifySecret } from '../lib/crypto.js'
+import { getDefaultEmployeePassword } from '../lib/constants.js'
+import { verifyPassword, upgradeUserPassword, createToken, verifySecret, pbkdf2 } from '../lib/crypto.js'
 import { json, readJson, clientIp } from '../lib/http.js'
 import { recentAttempts, recordAttempts, clearAttempts } from '../lib/rateLimit.js'
 import { kioskTokenFrom, kioskTokenCompanyId } from '../lib/kiosk.js'
@@ -40,7 +40,11 @@ export async function handle({ request, env, url, path, method }) {
       return json({ error: 'Invalid credentials.' }, 401)
     }
     const user = await env.DB.prepare('SELECT * FROM users WHERE lower(email) = ?').bind(id).first()
-    if (!user) return fail()
+    if (!user) {
+      // Dummy hash to prevent timing-based user enumeration
+      await pbkdf2(password || 'dummy', 'dummy-salt').catch(() => {})
+      return fail()
+    }
     const { ok: passwordOk, legacy } = await verifyPassword(password || '', user)
     if (!passwordOk) return fail()
     // Transparently upgrade legacy single-pass SHA-256 hashes to PBKDF2.
@@ -104,20 +108,27 @@ export async function handle({ request, env, url, path, method }) {
       if (dup) return json({ error: `Company name "${dup.name}" is already registered. Please choose a different name.` }, 409)
     }
     const id = body.id || `reg-${Date.now()}`
-    await env.DB.prepare(
-      `INSERT INTO companies (id, name, industry, address, city, contact_phone, contact_email, logo_name, status, active, owner_name, owner_title, owner_email, registered)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      id, trimmedName || 'Unnamed Company', body.industry || null, body.address || null, body.city || null,
-      body.contactPhone || null, body.contactEmail || null, body.logoName || null,
-      body.status || 'pending', body.active === false ? 0 : 1,
-      body.owner?.name || null, body.owner?.title || null, body.owner?.email || null,
-      body.registered || new Date().toISOString().slice(0, 10)
-    ).run()
+    try {
+      await env.DB.prepare(
+        `INSERT INTO companies (id, name, industry, address, city, contact_phone, contact_email, logo_name, status, active, owner_name, owner_title, owner_email, registered)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        id, trimmedName || 'Unnamed Company', body.industry || null, body.address || null, body.city || null,
+        body.contactPhone || null, body.contactEmail || null, body.logoName || null,
+        body.status || 'pending', body.active === false ? 0 : 1,
+        body.owner?.name || null, body.owner?.title || null, body.owner?.email || null,
+        body.registered || new Date().toISOString().slice(0, 10)
+      ).run()
+    } catch (e) {
+      if (String(e.message || '').toLowerCase().includes('unique') || String(e.message || '').includes('PRIMARY')) {
+        return json({ error: `Company name "${trimmedName}" is already registered. Please choose a different name.` }, 409)
+      }
+      throw e
+    }
     for (const emp of body.employees || []) {
       await insertEmployee(env, id, emp)
       const roleForUser = (emp.role || '').trim().toLowerCase() === 'ceo' ? 'ceo' : 'employee'
-      await ensureUser(env, emp.email, emp.name, roleForUser, DEFAULT_EMPLOYEE_PASSWORD)
+      await ensureUser(env, emp.email, emp.name, roleForUser, getDefaultEmployeePassword(env))
     }
     await queueNotification(env, {
       to: NOTIFICATION_RECIPIENT,
@@ -186,22 +197,32 @@ export async function handle({ request, env, url, path, method }) {
     const { method: credMethod, value } = await readJson(request)
     const v = (value || '').trim()
     if (!v) return json({ error: 'Credential is required.' }, 400)
-    const rows = await env.DB.prepare(
-      `SELECT ec.*, e.name AS emp_name, e.company_id, e.active as emp_active, c.active as company_active
-       FROM employee_credentials ec JOIN employees e ON e.email = ec.email JOIN companies c ON c.id = e.company_id WHERE e.active = 1 AND c.active = 1`
-    ).all().then((r) => r.results)
     let match = null
-    for (const row of rows) {
-      if (credMethod === 'fingerprint' && row.fp_token && row.fp_token === v) match = row
-      if (credMethod === 'qr' && row.qr_code && row.qr_code === v) match = row
-      if (credMethod === 'pin' && row.pin_hash && (await verifySecret(v, row.pin_salt, row.pin_hash))) match = row
-      if (match) break
-    }
-    // Simulated hardware: touching the sensor with no scanner present matches
-    // the only registered fingerprint (if exactly one exists).
-    if (!match && credMethod === 'fingerprint' && v === 'SIM_FP') {
-      const fpRows = rows.filter((r) => r.fp_token)
-      if (fpRows.length === 1) match = fpRows[0]
+    if (credMethod === 'qr') {
+      match = await env.DB.prepare(
+        `SELECT ec.*, e.name AS emp_name, e.company_id FROM employee_credentials ec JOIN employees e ON e.email = ec.email JOIN companies c ON c.id = e.company_id WHERE ec.qr_code = ? AND e.active = 1 AND c.active = 1 LIMIT 1`
+      ).bind(v).first()
+    } else if (credMethod === 'fingerprint') {
+      if (v === 'SIM_FP') {
+        const fpRows = await env.DB.prepare(
+          `SELECT ec.*, e.name AS emp_name, e.company_id FROM employee_credentials ec JOIN employees e ON e.email = ec.email JOIN companies c ON c.id = e.company_id WHERE ec.fp_token IS NOT NULL AND e.active = 1 AND c.active = 1`
+        ).all().then((r) => r.results)
+        if (fpRows.length === 1) match = fpRows[0]
+      } else {
+        match = await env.DB.prepare(
+          `SELECT ec.*, e.name AS emp_name, e.company_id FROM employee_credentials ec JOIN employees e ON e.email = ec.email JOIN companies c ON c.id = e.company_id WHERE ec.fp_token = ? AND e.active = 1 AND c.active = 1 LIMIT 1`
+        ).bind(v).first()
+      }
+    } else if (credMethod === 'pin') {
+      // PIN requires PBKDF2 verification — limit scan to rows with pin_hash
+      const pinRows = await env.DB.prepare(
+        `SELECT ec.*, e.name AS emp_name, e.company_id FROM employee_credentials ec JOIN employees e ON e.email = ec.email JOIN companies c ON c.id = e.company_id WHERE ec.pin_hash IS NOT NULL AND e.active = 1 AND c.active = 1`
+      ).all().then((r) => r.results)
+      for (const row of pinRows) {
+        if (await verifySecret(v, row.pin_salt, row.pin_hash)) { match = row; break }
+      }
+    } else {
+      return json({ error: 'Invalid credential method.' }, 400)
     }
     if (!match) return json({ error: 'Not recognized. Please register your credential first.' }, 404)
     const emp = await env.DB.prepare('SELECT name, company_id FROM employees WHERE email = ?').bind(match.email).first()
@@ -238,6 +259,7 @@ export async function handle({ request, env, url, path, method }) {
       const body = await readJson(request)
       const email = String(body.email || '').trim().toLowerCase()
       if (!email || !body.type) return json({ error: 'email and type are required.' }, 400)
+      if (!['in','out'].includes(String(body.type).toLowerCase())) return json({ error: 'type must be in or out.' }, 400)
       // The punched employee must belong to the company this kiosk is paired with.
       const emp = await env.DB.prepare('SELECT id FROM employees WHERE lower(email) = ? AND company_id = ?').bind(email, tokenCompany).first()
       if (!emp) return json({ error: 'Employee does not belong to this kiosk company.' }, 403)

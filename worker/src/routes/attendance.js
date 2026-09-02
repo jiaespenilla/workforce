@@ -29,6 +29,7 @@ export async function handle({ request, env, url, path, method, claims }) {
   if (path === '/api/attendance' && method === 'POST') {
     const { email, company_id, type, time, overtime, overtimeMinutes } = await readJson(request)
     if (!email || !type) return json({ error: 'email and type are required.' }, 400)
+    if (!['in','out'].includes(String(type).toLowerCase())) return json({ error: 'type must be in or out.' }, 400)
     // Tenant scoping: company accounts may only punch for employees of their
     // own company (prevents punching for arbitrary people/companies).
     let companyId = company_id || null

@@ -12,7 +12,7 @@ export default function Login() {
   const { serverLogin } = useAuth()
   const [error, setError] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
-  const [sessionExpired, setSessionExpired] = useState(() => sessionStorage.getItem('uw_session_expired') === '1')
+  const [sessionExpired, _setSessionExpired] = useState(() => sessionStorage.getItem('uw_session_expired') === '1')
   const settings = getActiveSettings()
 
   if (sessionExpired) sessionStorage.removeItem('uw_session_expired')

@@ -4,8 +4,8 @@ import QRCode from 'qrcode'
 import { startRegistration } from '@simplewebauthn/browser'
 import { getActiveSettings } from '../lib/systemSettings'
 import { api, apiEnabled } from '../lib/api'
-import { getCredential, setFingerprint, setPin, ensureQrCode } from '../lib/credentials'
-import { getDefaultKioskConfig, getCompanyKioskConfig, saveCompanyKioskConfig, loadKioskConfig as loadKioskConfigPerCompany } from '../lib/kioskConfig'
+import { getCredential, setPin, ensureQrCode } from '../lib/credentials'
+import { getDefaultKioskConfig, saveCompanyKioskConfig, loadKioskConfig as loadKioskConfigPerCompany } from '../lib/kioskConfig'
 
 // Keep legacy export for Kiosk.jsx fallback (no companyId)
 export function loadKioskConfig(companyId) {
@@ -59,7 +59,8 @@ export default function KioskSetup() {
 
   useEffect(() => {
     if (!apiEnabled()) return
-    api('/api/companies').then((all)=>{
+    api('/api/companies').then((res)=>{
+      const all = Array.isArray(res) ? res : (res.data || [])
       const active = all.filter((c)=>c.active!==false)
       setCompanies(active)
       if (active.length && !active.find((c)=>c.id===configCompanyId)) setConfigCompanyId(active[0].id)
@@ -102,7 +103,7 @@ export default function KioskSetup() {
   const [pinStatus, setPinStatus] = useState(null) // {ok, msg}
   const [qrImg, setQrImg] = useState(null)
   const [qrCodeStr, setQrCodeStr] = useState(null)
-  const [credError, setCredError] = useState(null)
+  const [_credError, setCredError] = useState(null)
 
   // Keep credential company in sync when active list refreshes (cloud mode)
   useEffect(() => {

@@ -13,9 +13,12 @@ const env = (typeof import.meta !== 'undefined' && import.meta.env) || {}
 // The Worker API is the only data source. In production the app and API are
 // served from the same Worker, so fall back to same-origin; VITE_API_URL
 // overrides (used in local dev via .env).
-const API_URL = env.VITE_API_URL || (typeof location !== 'undefined' ? location.origin : '')
+const isDev = Boolean(env.DEV)
+const API_URL = env.VITE_API_URL || (isDev ? '' : (typeof location !== 'undefined' ? location.origin : ''))
 
 export function apiEnabled() {
+  // In dev, only enable when VITE_API_URL is explicitly set; otherwise use localStorage fallback.
+  // In production, same-origin Worker serves API so location.origin is correct.
   return Boolean(API_URL)
 }
 

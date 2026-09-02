@@ -53,42 +53,22 @@ function getLocalClockInState() {
   return latest
 }
 
-const weekData = [
-  { day: 'Mon', hours: 0 },
-  { day: 'Tue', hours: 0 },
-  { day: 'Wed', hours: 0 },
-  { day: 'Thu', hours: 0 },
-  { day: 'Fri', hours: 0 },
-]
 
-function Chart() {
-  const max = Math.max(...weekData.map((d) => d.hours), 1)
-  return (
-    <div className="flex h-44 items-end justify-between gap-3">
-      {weekData.map((d) => (
-        <div key={d.day} className="flex flex-1 flex-col items-center gap-2">
-          <span className="text-xs font-medium text-gray-500">{d.hours}h</span>
-          <div
-            className="w-full rounded-t-lg bg-gradient-to-t from-brand-500 to-emerald-400 transition-all"
-            style={{ height: `${Math.max((d.hours / max) * 100, 2)}%` }}
-          />
-          <span className="text-xs text-gray-500">{d.day}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
+
 
 /* ---------- Task export helpers (PDF via print, Word via .doc, plain copy) ---------- */
 
+function escapeHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')
+}
 function buildReportHtml(tasks) {
   const rows = tasks
     .map((t) => `<tr>
-      <td>${t.title}</td>
-      <td>${t.assignee}</td>
-      <td>${STATUS_LABELS[t.status] || t.status}</td>
-      <td>${t.priority}</td>
-      <td>${t.due || '—'}</td>
+      <td>${escapeHtml(t.title)}</td>
+      <td>${escapeHtml(t.assignee)}</td>
+      <td>${escapeHtml(STATUS_LABELS[t.status] || t.status)}</td>
+      <td>${escapeHtml(t.priority)}</td>
+      <td>${escapeHtml(t.due || '—')}</td>
     </tr>`)
     .join('')
   return `<html xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8">
@@ -279,7 +259,10 @@ function CeoDashboard({ user }) {
 
   useEffect(() => {
     api('/api/companies')
-      .then((cs) => setAllEmployees(cs.flatMap((c) => c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id })))))
+      .then((cs) => {
+        const list = Array.isArray(cs) ? cs : (cs.data || [])
+        setAllEmployees(list.flatMap((c) => c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id }))))
+      })
       .catch(() => setAllEmployees([]))
     }, [])
 
@@ -288,8 +271,9 @@ function CeoDashboard({ user }) {
 
   useEffect(() => {
     if (apiEnabled()) {
-      api('/api/tasks').then(setAllTasks).catch(() => setAllTasks(loadLocalAllTasks()))
-      api('/api/attendance').then((records) => {
+      api('/api/tasks').then((res) => setAllTasks(Array.isArray(res) ? res : (res.data || []))).catch(() => setAllTasks(loadLocalAllTasks()))
+      api('/api/attendance').then((res) => {
+        const records = Array.isArray(res) ? res : (res.data || [])
         setAllAttendance(records)
         const latest = {}
         for (const p of records) {
@@ -610,7 +594,7 @@ export default function Dashboard() {
   const [now, setNow] = useState(new Date())
   const { user } = useAuth()
   const [allTasks, setAllTasks] = useState([])
-  const [clockState, setClockState] = useState({})
+  const [_clockState, setClockState] = useState({})
   const [allEmployees, setAllEmployees] = useState([])
   const [myPunches, setMyPunches] = useState([])
 
@@ -622,9 +606,13 @@ export default function Dashboard() {
   useEffect(() => {
     if (apiEnabled()) {
       api('/api/tasks')
-        .then((all) => setAllTasks(all.filter((t) => t.assignee && t.assignee.startsWith(`${user?.name || ''} (`) && t.status !== 'completed')))
+        .then((res) => {
+          const all = Array.isArray(res) ? res : (res.data || [])
+          setAllTasks(all.filter((t) => t.assignee && t.assignee.startsWith(`${user?.name || ''} (`) && t.status !== 'completed'))
+        })
         .catch(() => setAllTasks(loadLocalMyTasks(user?.name || '')))
-      api('/api/attendance').then((records) => {
+      api('/api/attendance').then((res) => {
+        const records = Array.isArray(res) ? res : (res.data || [])
         const latest = {}
         for (const p of records) {
           const prev = latest[p.email]
@@ -633,7 +621,7 @@ export default function Dashboard() {
         setClockState(latest)
       }).catch(() => setClockState(getLocalClockInState()))
       if (user?.email) {
-        api(`/api/attendance?email=${encodeURIComponent(user.email)}`).then(setMyPunches).catch(()=>{})
+        api(`/api/attendance?email=${encodeURIComponent(user.email)}`).then((res) => setMyPunches(Array.isArray(res) ? res : (res.data || []))).catch(()=>{})
       }
     } else {
       setAllTasks(loadLocalMyTasks(user?.name || ''))
@@ -644,7 +632,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     api('/api/companies')
-      .then((cs) => setAllEmployees(cs.flatMap((c) => c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id })))))
+      .then((cs) => {
+        const list = Array.isArray(cs) ? cs : (cs.data || [])
+        setAllEmployees(list.flatMap((c) => c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id }))))
+      })
       .catch(() => setAllEmployees([]))
   }, [])
 

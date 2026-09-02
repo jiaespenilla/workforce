@@ -87,7 +87,6 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
   const [empSaveMsg, setEmpSaveMsg] = useState('')
   const baseRoles = getConfiguredRoles().filter((r)=>!r.perms.settings).map((r)=>r.name)
   const roleOptions = baseRoles.length ? baseRoles : ['CEO','HR Manager','Team Lead','Employee']
-  const [locsLoaded, setLocsLoaded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -551,7 +550,7 @@ export default function Companies() {
   // Cloud mode: companies come from the database.
   useEffect(() => {
     if (!apiEnabled()) return
-    api('/api/companies').then(setCompanies).catch(() => {})
+    api('/api/companies').then((res) => setCompanies(Array.isArray(res) ? res : (res.data || []))).catch(() => {})
   }, [])
 
   const mutateCompanies = (updater, apiCall) => {

@@ -7,7 +7,7 @@ import { api, apiEnabled } from '../lib/api'
 
 const industries = ['Technology', 'Healthcare', 'Retail', 'Manufacturing', 'Finance', 'Education', 'Construction', 'Hospitality', 'Other']
 
-const NOTIFICATION_RECIPIENT = 'jiaespenilla@gmail.com'
+const _NOTIFICATION_RECIPIENT = 'jiaespenilla@gmail.com'
 
 function LegalModal({ title, content, onConfirm, onClose }) {
   return (

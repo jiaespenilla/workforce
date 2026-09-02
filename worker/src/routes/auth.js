@@ -6,7 +6,7 @@ import { json, readJson } from '../lib/http.js'
 import { callerCompanyId } from '../lib/auth.js'
 import { mapCompany, mapTask, mapNotification, safeParse } from '../lib/db.js'
 
-export async function handle({ request, env, url, path, method, claims }) {
+export async function handle({ request, env, _url, path, method, claims }) {
   /* me */
   if (path === '/api/me' && method === 'GET') return json({ email: claims.sub, name: claims.name, role: claims.role })
 

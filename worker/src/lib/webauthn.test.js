@@ -33,18 +33,18 @@ function mockEnv({ credRow } = {}) {
   return {
     runs,
     DB: {
-      prepare(sql) {
+      prepare(_sql) {
         return {
           bind(...args) {
             return {
               first: async () => {
-                if (sql.includes('webauthn_credentials WHERE credential_id')) return credRow === undefined
+                if (_sql.includes('webauthn_credentials WHERE credential_id')) return credRow === undefined
                   ? { credential_id: 'cred-1', public_key: b64urlFromInput('fake-key'), counter: 0, transports: '["internal"]', email: 'emp@acme.com' }
                   : credRow
-                if (sql.includes('webauthn_challenges')) return { ...challengeRow, challenge: args[0], kind: args[1] }
+                if (_sql.includes('webauthn_challenges')) return { ...challengeRow, challenge: args[0], kind: args[1] }
                 return null
               },
-              run: async () => { runs.push({ sql, args }) },
+              run: async () => { runs.push({ sql: _sql, args }) },
               all: async () => ({ results: [] }),
             }
           },
@@ -111,7 +111,7 @@ describe('webauthn: single shared kiosk device for ALL employees', () => {
 
   it('rejects an expired/unknown challenge with 400', async () => {
     const env = mockEnv()
-    env.DB.prepare = (sql) => ({
+    env.DB.prepare = (_sql) => ({
       bind: () => ({ first: async () => null, run: async () => {}, all: async () => ({ results: [] }) }),
       first: async () => null, run: async () => {}, all: async () => ({ results: [] }),
     })

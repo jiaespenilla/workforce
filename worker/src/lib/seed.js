@@ -1,5 +1,5 @@
 // Seed and migration helpers
-import { ADMIN, CEO_EMAIL, CEO_NAME, CEO_PASSWORD, COMPANY_SETTING_KEYS, GLOBAL_SETTINGS_SQL } from './constants.js'
+import { getAdminCredentials, getCeoCredentials, COMPANY_SETTING_KEYS, GLOBAL_SETTINGS_SQL } from './constants.js'
 import { hashPassword } from './crypto.js'
 
 let seedVerified = false
@@ -19,8 +19,10 @@ export async function ensureSeed(env) {
     ).bind(email, name, role, salt, await hashPassword(password, salt)).run()
   }
 
-  await addUser(ADMIN.username, ADMIN.name, 'administrator', ADMIN.password)
-  await addUser(CEO_EMAIL, CEO_NAME, 'ceo', CEO_PASSWORD)
+  const adminCreds = getAdminCredentials(env)
+  const ceoCreds = getCeoCredentials(env)
+  await addUser(adminCreds.username, adminCreds.name, 'administrator', adminCreds.password)
+  await addUser(ceoCreds.email, ceoCreds.name, 'ceo', ceoCreds.password)
 
   const defaults = [
     ['CEO', { dashboard: true, timekeeping: true, tasks: true, payroll: true, employees: true, shifts: true, kiosk: false, settings: false }],

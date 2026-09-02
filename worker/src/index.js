@@ -43,6 +43,22 @@ async function firstMatch(handlers, ctx) {
   return null
 }
 
+let migrationsPromise = null
+async function ensureMigrations(env) {
+  if (!migrationsPromise) {
+    migrationsPromise = (async () => {
+      await ensureSeed(env)
+      await Promise.all([
+        migrateCompanySettings(env),
+        migrateTaskColumns(env),
+        migrateTaskAssigneeId(env),
+        migrateAttendanceOvertime(env),
+      ])
+    })().catch((e) => { migrationsPromise = null; throw e })
+  }
+  await migrationsPromise
+}
+
 export default {
   async fetch(request, env) {
     try {
@@ -50,16 +66,13 @@ export default {
 
       // API requests → router (seeds the database on first use)
       if (url.pathname.startsWith('/api/')) {
-        await ensureSeed(env)
-        await migrateCompanySettings(env)
-        await migrateTaskColumns(env)
-        await migrateTaskAssigneeId(env)
-        await migrateAttendanceOvertime(env)
+        await ensureMigrations(env)
         return await route(request, env)
       }
 
       // Static assets (JS/CSS/images) → let Cloudflare cache them (fingerprinted filenames)
-      if (url.pathname.match(/\.\w{2,5}$/)) {
+      // Only treat known static extensions as assets; SPA fallback handles everything else.
+      if (url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|map|json)$/i)) {
         return env.ASSETS.fetch(request)
       }
 
@@ -79,7 +92,7 @@ export default {
         },
       })
     } catch (err) {
-      return json({ error: err.message || 'Server error' }, err.status || 500)
+      return json({ error: err.message || 'Server error' }, err.status || 500, request)
     }
   },
 }
@@ -89,7 +102,7 @@ async function route(request, env) {
   const path = url.pathname.replace(/\/+$/, '') || '/'
   const method = request.method
 
-  if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors() })
+  if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(request) })
 
   /* ---- public ---- */
   const publicRes = await firstMatch(PUBLIC_HANDLERS, { request, env, url, path, method })
@@ -101,5 +114,5 @@ async function route(request, env) {
   const apiRes = await firstMatch(API_HANDLERS, ctx)
   if (apiRes) return apiRes
 
-  return json({ error: 'Not found' }, 404)
+  return json({ error: 'Not found' }, 404, request)
 }
