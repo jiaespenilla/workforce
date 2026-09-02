@@ -22,8 +22,11 @@ export async function handle({ request, env, path, method, isAdmin }) {
       env.DB.prepare(
         "DELETE FROM users WHERE role <> 'administrator' AND lower(email) <> lower(?)"
       ).bind(CEO_EMAIL),
-      // Clear per-company settings (shifts, locations, kiosk configs)
+      // Clear per-company settings (shifts, locations, kiosk configs) and
+      // orphaned biometric data from the wiped employees.
       env.DB.prepare("DELETE FROM settings WHERE key LIKE 'shift_schedules:%' OR key LIKE 'company_locations:%' OR key LIKE 'kiosk_configs:%' OR key LIKE 'kiosk_device_token:%'"),
+      env.DB.prepare('DELETE FROM webauthn_credentials'),
+      env.DB.prepare('DELETE FROM webauthn_challenges'),
     ])
     return json({ ok: true, message: 'All tenant data reset.' })
   }

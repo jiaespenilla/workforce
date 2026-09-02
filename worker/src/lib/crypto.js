@@ -66,7 +66,9 @@ export async function verifyToken(token, secret) {
   const [payload, sig] = token.split('.')
   if (!timingSafeEqual(await hmac(payload, secret), sig)) return null
   try {
-    const data = JSON.parse(atob(payload))
+    // createToken encodes with the URL-safe base64 alphabet (+/→-_);
+    // atob only understands the standard alphabet, so convert back first.
+    const data = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
     if (!data.exp || data.exp < Date.now()) return null
     return data
   } catch {
