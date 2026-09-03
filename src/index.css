@@ -73,3 +73,8 @@ input[type='date']:disabled {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
 }
+
+@keyframes shrink-bar {
+  from { width: 100%; }
+  to { width: 0%; }
+}
