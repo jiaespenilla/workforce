@@ -35,12 +35,23 @@ export default function TaskMonitoring() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ title: '', assignee: '', priority: 'Medium', due: '' })
   const [employees, setEmployees] = useState([])
+  const [taskQuery, setTaskQuery] = useState('')
   useEffect(() => {
     api('/api/companies')
-      .then((cs) => setEmployees(cs.flatMap((c) => c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id })))))
+      .then((res) => {
+        const cs = Array.isArray(res) ? res : (res.data || [])
+        setEmployees(cs.flatMap((c) => (c.employees || []).map((e) => ({ ...e, companyName: c.name, companyId: c.id }))))
+      })
       .catch(() => setEmployees([]))
   }, [])
-  const activeEmployees = employees.filter((e) => e.active !== false && !['ceo','administrator'].includes((e.role || '').trim().toLowerCase()))
+  const isLeadership = (e) => ['ceo', 'administrator', 'admin'].includes(String(e.role || e.roleLabel || '').trim().toLowerCase())
+  // Assignee dropdown + staff table exclude CEO/administrators — they have no tasks to finish.
+  const activeEmployees = employees.filter((e) => e.active !== false && !isLeadership(e))
+  const staffList = employees.filter((e) => !isLeadership(e))
+  const tq = taskQuery.trim().toLowerCase()
+  const visibleTasks = tq
+    ? tasks.filter((t) => [t.title, t.assignee, t.priority, t.due, t.status].filter(Boolean).some((v) => String(v).toLowerCase().includes(tq)))
+    : tasks
 
   useEffect(() => {
     if (apiEnabled()) {
@@ -111,6 +122,26 @@ export default function TaskMonitoring() {
         </button>
       </div>
 
+      {/* Search tasks */}
+      <div className="relative w-full sm:max-w-xs">
+        <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        <input
+          value={taskQuery}
+          onChange={(e) => setTaskQuery(e.target.value)}
+          placeholder="Search tasks, assignee…"
+          aria-label="Search tasks"
+          className="w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-10 pr-9 text-sm transition placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
+        />
+        {taskQuery && (
+          <button type="button" onClick={() => setTaskQuery('')} aria-label="Clear task search" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        )}
+      </div>
+      {tq && (
+        <p className="text-xs text-gray-500">{visibleTasks.length} of {tasks.length} tasks match “{taskQuery.trim()}”.</p>
+      )}
+
       {/* Task progress summary — accurate, computed from the live task list */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {[
@@ -178,7 +209,7 @@ export default function TaskMonitoring() {
         </form>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {columns.map((col) => (
           <div
             key={col.id}
@@ -194,21 +225,28 @@ export default function TaskMonitoring() {
               <span className="rounded-full border border-gray-200 bg-white px-2.5 py-0.5 text-xs font-bold text-gray-600">{counts[col.id]}</span>
             </div>
 
-            {tasks.filter((t) => t.status === col.id).map((task) => (
+            {visibleTasks.filter((t) => t.status === col.id).map((task) => {
+              const dueKey = String(task.due || '').slice(0, 10)
+              const todayKey = new Date().toISOString().slice(0, 10)
+              const overdue = !!dueKey && dueKey < todayKey && task.status !== 'completed'
+              return (
               <div
                 key={task.id}
                 draggable
                 onDragStart={() => setDragId(task.id)}
                 onDragEnd={() => { setDragId(null); setOverCol(null) }}
-                className={`group cursor-grab rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition active:cursor-grabbing hover:shadow-md ${
+                className={`group cursor-grab rounded-xl border bg-white p-4 shadow-sm transition active:cursor-grabbing hover:shadow-md ${
                   dragId === task.id ? 'opacity-40' : ''
-                }`}
+                } ${overdue ? 'border-red-300 bg-red-50/40' : 'border-gray-200'}`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className={`text-sm font-medium ${task.status === 'completed' ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+                  <h3 className={`text-sm font-medium ${task.status === 'completed' ? 'text-gray-500 line-through' : overdue ? 'text-red-800' : 'text-gray-900'}`}>
                     {task.title}
                   </h3>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${priorityStyles[task.priority]}`}>{task.priority}</span>
+                  <span className="flex shrink-0 items-center gap-1">
+                    {overdue && <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">Overdue</span>}
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${priorityStyles[task.priority]}`}>{task.priority}</span>
+                  </span>
                 </div>
                 <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
                   <span className="flex min-w-0 items-center gap-1.5">
@@ -217,7 +255,7 @@ export default function TaskMonitoring() {
                     </span>
                     <span className="truncate" title={task.assignee || 'Unassigned'}>{task.assignee || 'Unassigned'}</span>
                   </span>
-                  <span className="shrink-0 tabular-nums">Due {task.due || '—'}</span>
+                  <span className={`shrink-0 tabular-nums ${overdue ? 'font-semibold text-red-700' : ''}`}>Due {task.due || '—'}</span>
                 </div>
                 {canAction(user?.perms, 'tasks', 'delete') && (
                   <button
@@ -229,33 +267,36 @@ export default function TaskMonitoring() {
                   </button>
                 )}
               </div>
-            ))}
+              )
+            })}
 
-            {tasks.filter((t) => t.status === col.id).length === 0 && (
-              <div className="flex flex-1 items-center justify-center rounded-xl border-2 border-dashed border-gray-200 text-sm text-gray-500">
-                Drop tasks here
+            {visibleTasks.filter((t) => t.status === col.id).length === 0 && (
+              <div className="flex flex-1 items-center justify-center rounded-xl border-2 border-dashed border-gray-200 p-6 text-center text-sm text-gray-500">
+                {tq ? 'No matching tasks — clear the search.' : 'Drop tasks here'}
               </div>
             )}
           </div>
         ))}
       </div>
 
-      <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 px-5 py-3">
-          <h2 className="text-sm font-semibold text-gray-900">Employees ({activeEmployees.length} active / {employees.length} total)</h2>
+          <h2 className="text-sm font-semibold text-gray-900">Staff task progress ({staffList.filter((e) => e.active !== false).length} active staff)</h2>
+          <p className="mt-0.5 text-xs text-gray-500">CEO and administrators are excluded — they have no tasks to finish.</p>
         </div>
-        <table className="w-full text-left text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[680px] text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
             <tr>
               <th className="px-5 py-2">Employee</th>
               <th className="px-5 py-2">Company</th>
-              <th className="px-5 py-2">Role</th>
+              <th className="hidden px-5 py-2 sm:table-cell">Role</th>
               <th className="px-5 py-2">Status</th>
               <th className="px-5 py-2">Task progress</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {employees.map((emp) => {
+            {staffList.map((emp) => {
               // Match by normalized assignee email when available (accurate),
               // falling back to the "Name (Company)" display string.
               const assigned = tasks.filter((t) =>
@@ -270,7 +311,7 @@ export default function TaskMonitoring() {
                     <p className="text-xs text-gray-500">{emp.email}</p>
                   </td>
                   <td className="px-5 py-3 text-gray-600">{emp.companyName}</td>
-                  <td className="px-5 py-3 text-gray-600">{emp.role}</td>
+                  <td className="hidden px-5 py-3 text-gray-600 sm:table-cell">{emp.role}</td>
                   <td className="px-5 py-3">
                     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ${
                       emp.active !== false ? 'bg-brand-50 text-brand-700 ring-brand-200' : 'bg-gray-100 text-gray-500 ring-gray-200'
@@ -291,8 +332,12 @@ export default function TaskMonitoring() {
                 </tr>
               )
             })}
+            {staffList.length === 0 && (
+              <tr><td colSpan={5} className="px-5 py-8 text-center text-xs text-gray-400">No staff found — add employees in People.</td></tr>
+            )}
           </tbody>
         </table>
+        </div>
       </section>
     </div>
   )

@@ -273,6 +273,7 @@ function CeoTimeKeeping() {
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [expandedEmail, setExpandedEmail] = useState(null)
+  const [query, setQuery] = useState('')
     // Hours are always shown as [h]:mm (e.g. 40:30) — the old decimal/hours
   // toggle was removed so report formatting stays predictable (16.3).
   const fmt = 'hmm'
@@ -311,6 +312,15 @@ function CeoTimeKeeping() {
   }, [allEmployees])
 
   const employees = allEmployees.filter((e) => e.active !== false)
+  // Search across employee, company, role, email and assigned shift name.
+  const q = query.trim().toLowerCase()
+  const visibleEmployees = q
+    ? employees.filter((e) => {
+        const shift = shiftForEmployee(shiftsByCompany[e.companyId], e.email)
+        return [e.name, e.email, e.companyName, e.role, shift?.name, shift?.start + '-' + shift?.end]
+          .filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
+      })
+    : employees
 
   // Pre-group punches so each render pass is O(n), not O(employees × punches).
   const windowedByEmail = new Map()
@@ -376,8 +386,24 @@ return (
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-gray-900">Employee Timesheet ({employees.length} active)</h2>
-            <p className="mt-0.5 text-xs text-gray-500">On-time / late is compared against each employee's assigned shift schedule.</p>
+            <h2 className="text-base font-semibold text-gray-900">Employee Timesheet ({visibleEmployees.length}/{employees.length} shown)</h2>
+            <p className="mt-0.5 text-xs text-gray-500">On-time / late is compared against each employee's assigned shift schedule. Click a row for day-by-day detail.</p>
+          </div>
+          <div className="flex flex-col gap-2 lg:items-end">
+          <div className="relative w-full sm:w-64">
+            <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search employee, shift…"
+              aria-label="Search timesheet"
+              className="w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-10 pr-9 text-sm transition placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
+            />
+            {query && (
+              <button type="button" onClick={() => setQuery('')} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <PeriodNavigator anchor={cursor} view={view} onAnchor={setCursor} />
@@ -393,6 +419,7 @@ return (
               Weekly Report
             </button>
           </div>
+          </div>
                 </div>
         <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 px-4 py-3 text-xs text-gray-600 sm:border-0 sm:px-0 sm:pb-3">
           <span className="inline-flex items-center rounded-full bg-brand-100 px-2.5 py-1 font-medium text-brand-700">
@@ -400,7 +427,7 @@ return (
             {view === 'day' && (() => {
               const today = new Date()
               let on = 0, late = 0
-              for (const emp of employees) {
+              for (const emp of visibleEmployees) {
                 const shift = shiftForEmployee(shiftsByCompany[emp.companyId], emp.email)
                 const st = dayStatus(windowed(emp.email), shift || null, {
                   isToday: sameDay(cursor, today),
@@ -412,7 +439,7 @@ return (
               }
               return ' · ' + on + ' on time · ' + late + ' late'
             })()}
-            {view === 'week' && (' · ' + employees.reduce((s, e) => s + hoursForDay(windowed(e.email)), 0).toFixed(1) + 'h week total')}
+            {view === 'week' && (' · ' + visibleEmployees.reduce((s, e) => s + hoursForDay(windowed(e.email)), 0).toFixed(1) + 'h week total')}
           </span>
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[10px] font-medium text-gray-400">Legend:</span>
@@ -448,7 +475,7 @@ return (
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {employees.map((emp) => {
+              {visibleEmployees.map((emp) => {
                 const vp = windowed(emp.email)
                 const shift = shiftForEmployee(shiftsByCompany[emp.companyId], emp.email)
                 const exempt = isExemptEmployee(emp)
@@ -560,9 +587,9 @@ return (
                   </>
                 )
               })}
-              {employees.length === 0 && (
+              {visibleEmployees.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-xs text-gray-400">No active employees found.</td>
+                  <td colSpan={8} className="px-6 py-8 text-center text-xs text-gray-400">{q ? 'No employees match "' + query.trim() + '". Clear the search.' : 'No active employees found.'}</td>
                 </tr>
               )}
             </tbody>
@@ -605,7 +632,7 @@ return (
         )}
         {layout === 'compact' && (loading ? <SkeletonRows rows={6} label="Loading timesheets…" /> : (
           <div className="divide-y divide-gray-100">
-            {employees.map((emp) => {
+            {visibleEmployees.map((emp) => {
               const vp = windowed(emp.email)
               const shift = shiftForEmployee(shiftsByCompany[emp.companyId], emp.email)
               const exempt = isExemptEmployee(emp)
@@ -617,17 +644,72 @@ return (
               const sub = view === 'day'
                 ? (vp.length + ' punches · ' + (agg.total ? agg.total.toFixed(1) + 'h' : 'No hours'))
                 : (days + ' day(s) · ' + vp.length + ' punches · ' + (agg.total ? agg.total.toFixed(1) + 'h total' : 'No hours'))
+              const isExpanded = expandedEmail === emp.email
+              const detailDays = view === 'day'
+                ? []
+                : (view === 'week' ? windowDays(cursor, 'week') : [...new Set(vp.map((p) => systemDateKey(p.time)))].sort().map((k) => new Date(k + 'T12:00:00')))
               return (
-                <div key={emp.companyId + '-' + emp.email} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{emp.name} <span className="text-xs text-gray-400">· {emp.companyName}{shift ? ' · ' + (shift.open ? 'Open' : (shift.name || shift.start + '–' + shift.end)) : ''}</span></p>
-                    <p className="text-xs text-gray-500">{sub}</p>
+                <div key={emp.companyId + '-' + emp.email}>
+                <button
+                  type="button"
+                  onClick={() => view !== 'day' && setExpandedEmail(isExpanded ? null : emp.email)}
+                  disabled={view === 'day'}
+                  className={'flex w-full items-center justify-between px-4 py-3 text-left hover:bg-gray-50 ' + (view !== 'day' ? 'cursor-pointer' : '') + (isExpanded ? ' bg-brand-50/40' : '')}
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    {view !== 'day' && (
+                      <svg className={'h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ' + (isExpanded ? 'rotate-90' : '')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{emp.name} <span className="text-xs text-gray-400">· {emp.companyName}{shift ? ' · ' + (shift.open ? 'Open' : (shift.name || shift.start + '–' + shift.end)) : ''}</span></p>
+                      <p className="text-xs text-gray-500">{sub}</p>
+                    </div>
                   </div>
-                  <span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + st.cls}>{st.label}</span>
+                  <span className={'ml-2 shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ' + st.cls}>{st.label}</span>
+                </button>
+                {isExpanded && view !== 'day' && (
+                  <div className="border-t border-gray-100 bg-gray-50/60 px-4 py-2">
+                    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                      <table className="w-full min-w-[480px] text-left text-xs">
+                        <thead className="bg-gray-50 text-[10px] uppercase tracking-wide text-gray-400">
+                          <tr>
+                            <th className="px-3 py-1.5">Date</th>
+                            <th className="px-3 py-1.5">In</th>
+                            <th className="px-3 py-1.5">Out</th>
+                            <th className="px-3 py-1.5 text-right">Hrs</th>
+                            <th className="px-3 py-1.5">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {detailDays.map((d, i) => {
+                            const key = systemDateKey(d)
+                            const dayPunches = vp.filter((p) => systemDateKey(p.time) === key).sort((a, b) => new Date(a.time) - new Date(b.time))
+                            const firstIn = dayPunches.find((p) => p.type === 'in')
+                            const lastOut = [...dayPunches].reverse().find((p) => p.type === 'out')
+                            const hrs = hoursForDay(dayPunches)
+                            const dst = dayStatus(dayPunches, shift, { isToday: sameDay(d, new Date()), isPast: d.getTime() < startOfDay(new Date()).getTime(), exempt })
+                            return (
+                              <tr key={key + '-' + i} className={dayPunches.length ? '' : 'opacity-60'}>
+                                <td className="px-3 py-1.5 font-medium text-gray-800">{d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td>
+                                <td className="px-3 py-1.5 tabular-nums text-gray-600">{firstIn ? fmtClock(firstIn.time) : '—'}</td>
+                                <td className="px-3 py-1.5 tabular-nums text-gray-600">{lastOut ? fmtClock(lastOut.time) : '—'}</td>
+                                <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">{hrs ? hrs.toFixed(1) + 'h' : '—'}</td>
+                                <td className="px-3 py-1.5"><span className={'inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ' + dst.cls}>{dst.label}</span></td>
+                              </tr>
+                            )
+                          })}
+                          {detailDays.length === 0 && (
+                            <tr><td colSpan={5} className="px-3 py-3 text-center text-gray-400">No punches in this period.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
                 </div>
               )
             })}
-            {employees.length === 0 && <p className="p-6 text-center text-xs text-gray-400">No active employees.</p>}
+            {visibleEmployees.length === 0 && <p className="p-6 text-center text-xs text-gray-400">{q ? 'No employees match "' + query.trim() + '".' : 'No active employees.'}</p>}
           </div>
         ))}
 
@@ -643,7 +725,7 @@ return (
                 <button onClick={() => setSelectedDate(null)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
               </div>
               <div className="flex-1 divide-y divide-gray-100 overflow-y-auto">
-                {employees.map((emp) => {
+                {visibleEmployees.map((emp) => {
                   const dayPunches = attendance.filter((p) => p.email === emp.email && systemDateKey(p.time) === selectedDate).sort((a, b) => new Date(a.time) - new Date(b.time))
                   if (!dayPunches.length) return null
                   const firstIn = dayPunches.find((p) => p.type === 'in')
@@ -661,7 +743,7 @@ return (
                     </div>
                   )
                 })}
-                {employees.every((emp) => attendance.filter((p) => p.email === emp.email && systemDateKey(p.time) === selectedDate).length === 0) && (
+                {visibleEmployees.every((emp) => attendance.filter((p) => p.email === emp.email && systemDateKey(p.time) === selectedDate).length === 0) && (
                   <p className="p-6 text-center text-xs text-gray-400">No records for this day.</p>
                 )}
               </div>
@@ -670,7 +752,7 @@ return (
                 <button onClick={() => {
                   const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')
                   const dayRows = attendance.filter((p) => systemDateKey(p.time) === selectedDate)
-                  const rows = employees.map((emp) => {
+                  const rows = visibleEmployees.map((emp) => {
                     const ps = dayRows.filter((p) => p.email === emp.email).sort((a, b) => new Date(a.time) - new Date(b.time))
                     if (!ps.length) return null
                     const firstIn = ps.find((p) => p.type === 'in')
@@ -691,77 +773,114 @@ return (
           const monday = startOfWeek(cursor)
           const sunday = endOfDay(addDays(monday, 6))
           const inWeek = (t) => { const x = new Date(t).getTime(); return x >= monday.getTime() && x <= sunday.getTime() }
-          const rows = employees
-            .map((emp) => ({ emp, agg: aggregateWindow(attendance.filter((p) => p.email === emp.email && inWeek(p.time))) }))
+          const rows = visibleEmployees
+            .map((emp) => {
+              const weekPunches = attendance.filter((p) => p.email === emp.email && inWeek(p.time))
+              return { emp, agg: aggregateWindow(weekPunches), days: new Set(weekPunches.map((p) => systemDateKey(p.time))).size, shift: shiftForEmployee(shiftsByCompany[emp.companyId], emp.email) }
+            })
             .filter((r) => r.agg.total > 0)
                     const label = '[h]:mm'
-          const reportName = 'weekly_hmm'
           const weekLabel = monday.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' – ' + addDays(monday, 6).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+          const totReg = rows.reduce((s, r) => s + r.agg.regular, 0)
+          const totOt = rows.reduce((s, r) => s + r.agg.ot, 0)
+          const totAll = rows.reduce((s, r) => s + r.agg.total, 0)
+          const generatedAt = new Date().toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
           const printReport = () => {
-            const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
-            const tr = rows.map(({ emp, agg }) =>
-              '<tr><td>' + esc(emp.name) + '</td><td>' + esc(emp.companyName) + '</td><td>' + (agg.clockIn ? esc(fmtStamp(agg.clockIn.time)) : '—') + '</td><td>' + (agg.clockOut ? esc(fmtStamp(agg.clockOut.time)) : '—') + '</td><td>' + esc(fmtHours(agg.regular, fmt)) + '</td><td>' + esc(fmtHours(agg.ot, fmt)) + '</td><td><b>' + esc(fmtHours(agg.total, fmt)) + '</b></td></tr>'
+            const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')
+            const tr = rows.map(({ emp, agg, days, shift }) =>
+              '<tr><td><b>' + esc(emp.name) + '</b><br><span style="color:#6b7280;font-size:11px">' + esc(emp.role || 'Unassigned') + '</span></td><td>' + esc(emp.companyName) + '<br><span style="color:#6b7280;font-size:11px">' + esc(shift ? (shift.open ? 'Open shift' : (shift.name || shift.start + '–' + shift.end)) : 'No shift') + '</span></td><td style="text-align:center">' + days + '</td><td style="text-align:right">' + esc(fmtHours(agg.regular, fmt)) + '</td><td style="text-align:right">' + esc(fmtHours(agg.ot, fmt)) + '</td><td style="text-align:right"><b>' + esc(fmtHours(agg.total, fmt)) + '</b></td></tr>'
             ).join('')
             const tot = (k) => esc(fmtHours(rows.reduce((s, r) => s + r.agg[k], 0), fmt))
-            const html = '<html><head><meta charset="utf-8"><title>Weekly Time Report (' + reportName + ')</title><style>body{font-family:Arial,sans-serif;font-size:12px}h2{margin:0 0 4px}p{margin:0 0 12px;color:#555}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th:nth-child(n+5),td:nth-child(n+5){text-align:right}th{background:#ecfdf5}tfoot td{font-weight:bold;background:#f9fafb}</style></head><body><h2>Weekly Time Report — ' + esc(weekLabel) + '</h2><p>Report: ' + esc(reportName) + ' (Regular/Overtime/Total in ' + esc(label) + ') · ' + rows.length + ' employee(s) with logged time</p><table><thead><tr><th>Employee</th><th>Company</th><th>Clock-In</th><th>Clock-Out</th><th>Regular (' + esc(label) + ')</th><th>Overtime (' + esc(label) + ')</th><th>Total (' + esc(label) + ')</th></tr></thead><tbody>' + (tr || '<tr><td colspan="7">No time logs for this week.</td></tr>') + '</tbody><tfoot><tr><td colspan="4">Total</td><td>' + tot('regular') + '</td><td>' + tot('ot') + '</td><td>' + tot('total') + '</td></tr></tfoot></table></body></html>'
+            const html = '<html><head><meta charset="utf-8"><title>Weekly Time Report — ' + esc(weekLabel) + '</title>'
+              + '<style>@page{size:A4;margin:18mm 14mm}body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#111827;margin:0}'
+              + '.cover{background:linear-gradient(135deg,#065f46,#059669 60%,#34d399);color:#fff;border-radius:12px;padding:26px 28px;margin-bottom:18px}'
+              + '.cover h1{margin:0 0 4px;font-size:22px}.cover p{margin:2px 0;font-size:12px;opacity:.92}'
+              + '.chips{display:flex;gap:10px;margin:14px 0 18px}.chip{flex:1;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;background:#f9fafb}.chip b{display:block;font-size:16px;margin-top:2px}.chip span{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6b7280}'
+              + 'table{border-collapse:collapse;width:100%}th,td{border:1px solid #e5e7eb;padding:9px 10px;text-align:left;vertical-align:top}th{background:#ecfdf5;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#065f46}tbody tr:nth-child(even){background:#f9fafb}tfoot td{font-weight:bold;background:#ecfdf5}'
+              + '.meta{color:#6b7280;font-size:11px;margin:0 0 14px}.sign{display:flex;gap:32px;margin-top:28px}.sign div{flex:1;border-top:1px solid #9ca3af;padding-top:6px;font-size:11px;color:#374151}.foot{margin-top:18px;font-size:10px;color:#9ca3af;text-align:center}</style></head><body>'
+              + '<div class="cover"><p style="font-size:11px;letter-spacing:.12em;font-weight:bold">UNIFIED WORKFORCE · WEEKLY TIME REPORT</p><h1>Week of ' + esc(weekLabel) + '</h1><p>' + rows.length + ' employee(s) with logged time · Regular/Overtime/Total in ' + esc(label) + ' · Time zone ' + esc(tz) + '</p><p>Generated ' + esc(generatedAt) + '</p></div>'
+              + '<div class="chips"><div class="chip"><span>Staff with logs</span><b>' + rows.length + '</b></div><div class="chip"><span>Regular</span><b>' + tot('regular') + '</b></div><div class="chip"><span>Overtime</span><b>' + tot('ot') + '</b></div><div class="chip"><span>Total</span><b>' + tot('total') + '</b></div></div>'
+              + '<table><thead><tr><th>Employee</th><th>Company / Shift</th><th style="text-align:center">Days</th><th style="text-align:right">Regular (' + esc(label) + ')</th><th style="text-align:right">Overtime (' + esc(label) + ')</th><th style="text-align:right">Total (' + esc(label) + ')</th></tr></thead><tbody>' + (tr || '<tr><td colspan="6">No time logs for this week.</td></tr>') + '</tbody><tfoot><tr><td colspan="3">Total</td><td style="text-align:right">' + tot('regular') + '</td><td style="text-align:right">' + tot('ot') + '</td><td style="text-align:right">' + tot('total') + '</td></tr></tfoot></table>'
+              + '<div class="sign"><div>Prepared by (HR / Manager)<br><br><br>Signature over printed name · Date</div><div>Approved by (CEO)<br><br><br>Signature over printed name · Date</div></div>'
+              + '<p class="foot">Unified Workforce · Confidential — for internal use only · ' + esc(generatedAt) + '</p></body></html>'
             const win = window.open('', '_blank'); if (win) { win.document.write(html); win.document.close(); win.focus(); win.print() }
           }
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setReportOpen(false)}>
-              <div className="absolute inset-0 bg-gray-900/50" />
-              <div className="relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-start justify-between border-b border-gray-100 px-5 py-4">
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-900">Weekly Time Report</h3>
-                    <p className="mt-0.5 text-xs text-gray-500">Week of {weekLabel} · then print or save as PDF.</p>
+              <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
+              <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-gradient-to-br from-brand-800 via-brand-600 to-emerald-500 px-5 py-5 text-white sm:px-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-100">Unified Workforce · Weekly Time Report</p>
+                      <h3 className="mt-1 text-lg font-bold sm:text-xl">Week of {weekLabel}</h3>
+                      <p className="mt-1 text-xs text-emerald-50">{rows.length} employee(s) with logs · {tz} · Generated {generatedAt}</p>
+                    </div>
+                    <button onClick={() => setReportOpen(false)} aria-label="Close report" className="rounded-lg bg-white/15 p-1.5 text-white hover:bg-white/25"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
                   </div>
-                  <button onClick={() => setReportOpen(false)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {[
+                      ['Staff', String(rows.length)],
+                      ['Regular', fmtHours(totReg, fmt)],
+                      ['Overtime', fmtHours(totOt, fmt)],
+                      ['Total', fmtHours(totAll, fmt)],
+                    ].map(([k, v]) => (
+                      <div key={k} className="rounded-xl bg-white/12 px-3 py-2 ring-1 ring-white/25 backdrop-blur">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-100">{k}</p>
+                        <p className="mt-0.5 text-base font-bold tabular-nums">{v}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="flex-1 overflow-auto">
-                  <table className="w-full min-w-[640px] text-left text-xs">
+                  <table className="w-full min-w-[620px] text-left text-xs">
                     <thead className="sticky top-0 bg-white text-[10px] uppercase tracking-wide text-gray-500 shadow-[0_1px_0_0_#e5e7eb]">
                       <tr>
                         <th className="px-5 py-2.5">Employee</th>
-                        <th className="px-3 py-2.5">Company</th>
-                        <th className="px-3 py-2.5">Clock-In</th>
-                        <th className="px-3 py-2.5">Clock-Out</th>
+                        <th className="px-3 py-2.5">Shift</th>
+                        <th className="px-3 py-2.5 text-center">Days</th>
                         <th className="px-3 py-2.5 text-right">Regular ({label})</th>
                         <th className="px-3 py-2.5 text-right">Overtime ({label})</th>
                         <th className="px-5 py-2.5 text-right">Total ({label})</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {rows.map(({ emp, agg }) => (
+                      {rows.map(({ emp, agg, days, shift }) => (
                         <tr key={emp.companyId + '-' + emp.email} className="hover:bg-gray-50">
-                          <td className="px-5 py-2.5 font-medium text-gray-900">{emp.name}</td>
-                          <td className="px-3 py-2.5 text-gray-600">{emp.companyName}</td>
-                          <td className="px-3 py-2.5 tabular-nums text-gray-700">{agg.clockIn ? fmtStamp(agg.clockIn.time) : '—'}</td>
-                          <td className="px-3 py-2.5 tabular-nums text-gray-700">{agg.clockOut ? fmtStamp(agg.clockOut.time) : '—'}</td>
+                          <td className="px-5 py-2.5">
+                            <p className="font-medium text-gray-900">{emp.name}</p>
+                            <p className="text-[11px] text-gray-500">{emp.companyName} · {emp.role || 'Unassigned'}</p>
+                          </td>
+                          <td className="px-3 py-2.5 text-gray-600">{shift ? (shift.open ? 'Open' : (shift.name || shift.start + '–' + shift.end)) : '—'}</td>
+                          <td className="px-3 py-2.5 text-center tabular-nums text-gray-700">{days}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums text-gray-700">{fmtHours(agg.regular, fmt)}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums text-amber-700">{fmtHours(agg.ot, fmt)}</td>
                           <td className="px-5 py-2.5 text-right font-semibold tabular-nums text-gray-900">{fmtHours(agg.total, fmt)}</td>
                         </tr>
                       ))}
-                      {rows.length === 0 && <tr><td colSpan={7} className="px-5 py-8 text-center text-xs text-gray-400">No time logs for this week.</td></tr>}
+                      {rows.length === 0 && <tr><td colSpan={6} className="px-5 py-8 text-center text-xs text-gray-400">No time logs for this week.</td></tr>}
                     </tbody>
                     {rows.length > 0 && (
                       <tfoot>
-                        <tr className="bg-gray-50 font-semibold text-gray-900">
-                          <td className="px-5 py-2.5" colSpan={4}>Total</td>
-                          <td className="px-3 py-2.5 text-right tabular-nums">{fmtHours(rows.reduce((s, r) => s + r.agg.regular, 0), fmt)}</td>
-                          <td className="px-3 py-2.5 text-right tabular-nums">{fmtHours(rows.reduce((s, r) => s + r.agg.ot, 0), fmt)}</td>
-                          <td className="px-5 py-2.5 text-right tabular-nums">{fmtHours(rows.reduce((s, r) => s + r.agg.total, 0), fmt)}</td>
+                        <tr className="bg-brand-50/60 font-semibold text-gray-900">
+                          <td className="px-5 py-2.5" colSpan={3}>Total</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{fmtHours(totReg, fmt)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{fmtHours(totOt, fmt)}</td>
+                          <td className="px-5 py-2.5 text-right tabular-nums">{fmtHours(totAll, fmt)}</td>
                         </tr>
                       </tfoot>
                     )}
                   </table>
                 </div>
-                <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-3">
-                  <button onClick={() => setReportOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
-                  <button onClick={printReport} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                    Print / Save PDF
-                  </button>
+                <div className="flex flex-col gap-2 border-t border-gray-100 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[11px] text-gray-400">Tip: print to PDF for a CEO-ready copy with signature lines.</p>
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setReportOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
+                    <button onClick={printReport} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-700">
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                      Print / Save PDF
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -777,13 +896,13 @@ return (
               : view === 'week'
                 ? 'Week of ' + startOfWeek(cursor).toLocaleDateString([], { month: 'short', day: 'numeric' })
                 : cursor.toLocaleDateString([], { month: 'long', year: 'numeric' })}
-            {' · '}{employees.length} active · click a row to expand day-by-day detail
+            {' · '}{visibleEmployees.length}/{employees.length} shown · click a row to expand day-by-day detail
           </span>
           <span className="font-semibold text-gray-900">
             {sameDay(cursor, new Date()) && (liveCount + ' currently clocked in · ')}
             {(() => {
               let reg = 0, ot = 0
-              for (const e of employees) {
+              for (const e of visibleEmployees) {
                 const a = aggregateWindow(windowed(e.email))
                 reg += a.regular
                 ot += a.ot
