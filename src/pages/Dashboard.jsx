@@ -601,7 +601,7 @@ function CeoDashboard({ user }) {
         {/* Clocked-in employee list — single loading state, single empty state */}
         <div className="space-y-3">
           {loading ? (
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm"><SkeletonRows rows={4} label="Loading team activity…" /></div>
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm"><SkeletonRows rows={4} page="Dashboard" /></div>
           ) : clockedInEmployees.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-gray-300 bg-white p-10 text-center">
               <svg className="mx-auto mb-3 h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">

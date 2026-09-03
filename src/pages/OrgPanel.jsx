@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ORG_KINDS, useOrgUnits } from '../lib/org'
+import { PageLoader } from '../components/Skeleton'
 
 // Organization Setup — manage departments, business units, locations,
 // cost centers, positions, job levels and employment types.
@@ -71,7 +72,7 @@ export default function OrgPanel() {
 
       {/* List */}
       {loading ? (
-        <p className="py-8 text-center text-sm text-gray-400">Loading…</p>
+        <div className="overflow-hidden rounded-xl border border-gray-200"><PageLoader page="Organization" compact detail="Loading departments, locations and roles…" /></div>
       ) : (
         <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
           {rows.map((row) => (

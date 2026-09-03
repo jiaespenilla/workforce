@@ -451,7 +451,7 @@ return (
           </div>
         </div>
 
-{layout === 'table' && (loading ? <SkeletonRows rows={6} label="Loading timesheets…" /> : <div className="overflow-x-auto">
+{layout === 'table' && (loading ? <SkeletonRows rows={6} page="Time Keeping" /> : <div className="overflow-x-auto">
           <table className="w-full min-w-[960px] text-left text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
@@ -630,7 +630,7 @@ return (
             <p className="mt-3 text-center text-[11px] text-gray-400">Calendar shows how many employees clocked in each day in {cursor.toLocaleDateString([], { month: 'long', year: 'numeric' })}.</p>
           </div>
         )}
-        {layout === 'compact' && (loading ? <SkeletonRows rows={6} label="Loading timesheets…" /> : (
+        {layout === 'compact' && (loading ? <SkeletonRows rows={6} page="Time Keeping" /> : (
           <div className="divide-y divide-gray-100">
             {visibleEmployees.map((emp) => {
               const vp = windowed(emp.email)
@@ -1070,7 +1070,7 @@ return (
             </div>
           </div>
         </div>
-        {layout === 'table' && (loading ? <SkeletonRows rows={7} label="Loading your timesheet…" /> : <div className="overflow-x-auto">
+        {layout === 'table' && (loading ? <SkeletonRows rows={7} page="Time Keeping" /> : <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>

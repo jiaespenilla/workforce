@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { isMaintenanceMode, syncSystemSettingsFromServer } from './lib/systemSettings'
 import RequireRole from './components/RequireRole'
+import { PageLoader } from './components/Skeleton'
 import Layout from './components/Layout'
 import AdminLayout from './components/AdminLayout'
 import SessionManager from './components/SessionManager'
@@ -27,7 +28,7 @@ const People = lazy(() => import('./pages/People'))
 const StorageSetup = lazy(() => import('./pages/StorageSetup'))
 
 function RouteLoader() {
-  return <div className="flex min-h-[50vh] items-center justify-center text-sm text-gray-400">Loading…</div>
+  return <PageLoader page="Page" detail="Preparing your workspace…" />
 }
 
 // Single /profile route — wraps the page in the layout matching the user's role.

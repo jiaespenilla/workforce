@@ -7,6 +7,7 @@ import { getSystemIcon, setSystemIcon } from '../lib/documentMeta'
 import { SYSTEM_ICON_PRESETS } from '../lib/iconPresets'
 import { api, apiEnabled } from '../lib/api'
 import { loadVersionHistory, saveVersionHistory, seedInitialHistory } from '../lib/versionHistory'
+import { PageLoader } from '../components/Skeleton'
 import OrgPanel from './OrgPanel'
 
 const TABS = [
@@ -520,7 +521,7 @@ function VersionPanel({ settings, onSaved }) {
     setEditingId(null)
   }
 
-  if (loading) return <p className="py-8 text-center text-sm text-gray-400">Loading version history…</p>
+  if (loading) return <PageLoader page="System Configuration" compact detail="Loading version history…" />
 
   return (
     <div className="space-y-5">
