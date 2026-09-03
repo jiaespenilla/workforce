@@ -132,13 +132,13 @@ export default function Login() {
               )}
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                  Email
+                  Email or username
                 </label>
                 <input
                   id="email"
-                  type="email"
+                  type="text"
                   required
-                  placeholder="you@company.com"
+                  placeholder="you@company.com or admin username"
                   autoComplete="username"
                   disabled={submitting}
                   className={`${inputCls} disabled:opacity-60`}
