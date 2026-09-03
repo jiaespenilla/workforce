@@ -52,6 +52,19 @@ describe('decideAction', () => {
     expect(decideAction(punches, shift, new Date('2026-08-28T18:10:00'), 15).overtime).toBe(false)
   })
 
+  it('timed shift: late clock-in without a full 8h is NOT overtime even past end + grace', () => {
+    const shift = { start: '09:00', end: '18:00' }
+    // In at 12:00, out at 19:00 (past 18:15) but only 7h worked → no OT.
+    const r = decideAction([{ time: '2026-08-28T12:00:00', type: 'in' }], shift, late, 15)
+    expect(r.action).toBe('out')
+    expect(r.overtime).toBe(false)
+    expect(r.overtimeMinutes).toBe(0)
+    // In at 09:00, out at 19:00 is a full 10h → still OT.
+    const full = decideAction([{ time: '2026-08-28T09:00:00', type: 'in' }], shift, late, 15)
+    expect(full.overtime).toBe(true)
+    expect(full.overtimeMinutes).toBe(600)
+  })
+
   it('ignores punches from other days', () => {
     const shift = { start: '09:00', end: '18:00' }
     const yesterday = [{ time: '2026-08-27T09:00:00', type: 'in' }]

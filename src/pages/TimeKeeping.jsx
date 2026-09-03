@@ -311,7 +311,8 @@ function CeoTimeKeeping() {
     return () => { cancelled = true }
   }, [allEmployees])
 
-  const employees = allEmployees.filter((e) => e.active !== false)
+  // CEO/administrators are excluded — they have no timesheet to track.
+  const employees = allEmployees.filter((e) => e.active !== false && !isExemptEmployee(e))
   // Search across employee, company, role, email and assigned shift name.
   const q = query.trim().toLowerCase()
   const visibleEmployees = q

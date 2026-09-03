@@ -38,7 +38,8 @@ export async function saveCompanyShiftData(companyId, updater) {
  *   starts the session up to the actual clock-out (minutes beyond 8h are OT).
  * - With a timed shift: first scan of the day is CLOCK-IN; once clocked in,
  *   the next scan is CLOCK-OUT. Clocking out beyond shift end + OT grace
- *   marks OVERTIME.
+ *   marks OVERTIME — but only when a full regular shift (default 8h) was
+ *   actually worked, so late clock-ins that fall short never earn OT.
  * - Without any shift: simple alternation based on their last punch.
  */
 export function decideAction(punches, shift, now = new Date(), otGraceMinutes = 15, regularWorkMinutes = 480) {
@@ -82,15 +83,19 @@ export function decideAction(punches, shift, now = new Date(), otGraceMinutes = 
 
   const hasOpenClockIn = lastToday && lastToday.type === 'in'
 
-  // Already clocked in this shift → this scan ends it. Detect overtime when
-  // the clock-out happens past shift end + grace period.
+  // Already clocked in this shift → this scan ends it. Overtime needs BOTH:
+  // (1) clock-out past shift end + grace, AND (2) a full regular shift worked
+  // (default 8h). A late clock-in that never completes regular hours is NOT
+  // overtime even when the clock-out lands past the shift end.
   if (hasOpenClockIn) {
     const endM = toMinutes(shift.end)
     const graceM = Number.isFinite(otGraceMinutes) ? Number(otGraceMinutes) : 15
     const nowM = now.getHours() * 60 + now.getMinutes()
-    const overtime = nowM >= endM + graceM
+    const worked = sessionMinutes(lastToday.time)
+    const regularM = Number.isFinite(regularWorkMinutes) ? Number(regularWorkMinutes) : 480
+    const overtime = nowM >= endM + graceM && worked >= regularM
     // Match TimeKeeping's display: the whole flagged session counts as OT.
-    return { action: 'out', overtime, overtimeMinutes: overtime ? sessionMinutes(lastToday.time) : 0 }
+    return { action: 'out', overtime, overtimeMinutes: overtime ? worked : 0 }
   }
 
   // Not yet clocked in today → this scan starts the shift.
