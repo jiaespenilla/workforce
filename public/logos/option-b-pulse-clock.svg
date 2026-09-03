@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="CadensIQ Pulse Clock logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#065f46"/>
+      <stop offset="0.6" stop-color="#059669"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <!-- clock face -->
+  <circle cx="26" cy="32" r="15" fill="#ffffff"/>
+  <circle cx="26" cy="32" r="15" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.4"/>
+  <!-- hands at 9:05 — start of the workday -->
+  <path d="M26 32 L26 22" stroke="#059669" stroke-width="3" stroke-linecap="round"/>
+  <path d="M26 32 L33 35" stroke="#059669" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="26" cy="32" r="2.4" fill="#065f46"/>
+  <!-- activity pulse running through the day -->
+  <path d="M38 28 L43 28 L46 22 L49 36 L52 28 L56 28" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

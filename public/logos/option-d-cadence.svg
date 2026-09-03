@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="CadensIQ Cadence logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#065f46"/>
+      <stop offset="0.6" stop-color="#059669"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <!-- ascending bars = growth + rhythm (cadence), tracing a C -->
+  <rect x="16" y="36" width="7" height="12" rx="2.5" fill="#ffffff" opacity="0.6"/>
+  <rect x="25.5" y="29" width="7" height="19" rx="2.5" fill="#ffffff" opacity="0.8"/>
+  <rect x="35" y="22" width="7" height="26" rx="2.5" fill="#ffffff"/>
+  <!-- clock-in dot crowning the rhythm -->
+  <circle cx="46" cy="18" r="4" fill="#ffffff"/>
+  <circle cx="46" cy="18" r="1.8" fill="#059669"/>
+</svg>
