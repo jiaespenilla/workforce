@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getActiveSettings, isMaintenanceMode } from '../lib/systemSettings'
 import { getSystemIcon } from '../lib/documentMeta'
+import { kioskEnabled } from '../lib/roles'
 import NotificationBell from './NotificationBell'
 import DefaultPasswordBanner from './DefaultPasswordBanner'
 import Avatar from './Avatar'
@@ -130,7 +131,7 @@ export default function Layout({ children }) {
             </>
           )}
         </NavLink>
-        {user?.role === 'employee' && user?.perms?.kiosk !== false && (
+        {user?.role === 'employee' && kioskEnabled(user?.perms) && (
           <NavLink
             to="/kiosk-credentials"
             onClick={() => setOpen(false)}

@@ -29,9 +29,15 @@ describe('StorageSetup page', () => {
     render(<StorageSetup />)
     await screen.findByDisplayValue('FOLDER123')
     expect(screen.queryByText(/2\s*TB/i)).toBeNull()
-    const combo = screen.getByRole('combobox')
+    const combo = screen.getByRole('combobox', { name: /provider/i })
     expect([...combo.options].some((o) => o.text.toLowerCase().includes('2tb'))).toBe(false)
     expect(combo.value).toBe('gdrive') // saved config is loaded back (attachment_storage)
+  })
+
+  it('offers a per-company selector', async () => {
+    render(<StorageSetup />)
+    await screen.findByDisplayValue('FOLDER123')
+    expect(screen.getByRole('combobox', { name: /company/i }).value).toBe('1')
   })
 
   it('loads the saved attachment_storage config from company settings', async () => {
@@ -60,6 +66,6 @@ describe('StorageSetup page', () => {
     expect(put).toBeTruthy()
     expect(put.path).toBe('/api/company-settings/1')
     expect(put.body).toEqual({ attachment_storage: { provider: 'gdrive', folderId: 'FOLDER123' } })
-    expect(await screen.findByText(/storage saved: gdrive/i)).toBeTruthy()
+    expect(await screen.findByText(/storage saved for acme: gdrive/i)).toBeTruthy()
   })
 })

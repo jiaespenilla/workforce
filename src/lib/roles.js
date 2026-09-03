@@ -10,7 +10,11 @@ const FALLBACK_TEAM_ROLES = ['CEO', 'HR Manager', 'Team Lead', 'Employee']
 // not a per-role permission.
 const PAGE_KEYS = ['dashboard', 'timekeeping', 'tasks', 'payroll', 'employees', 'shifts']
 
+// Kiosk credential methods — each can be shown/hidden per role.
+export const KIOSK_METHODS = ['fingerprint', 'pin', 'qr']
+
 // Fill in missing permission keys and migrate the old single "mainMenu" flag.
+// The legacy boolean `kiosk` flag migrates to per-method toggles.
 function normalizePerms(perms) {
   const p = { ...(perms || {}) }
   if ('mainMenu' in p && !PAGE_KEYS.some((k) => k in p)) {
@@ -19,8 +23,29 @@ function normalizePerms(perms) {
   PAGE_KEYS.forEach((k) => {
     if (!(k in p)) p[k] = true
   })
-  if (!('kiosk' in p)) p.kiosk = true
+  if (typeof p.kiosk === 'boolean') {
+    const on = p.kiosk
+    p.kiosk = Object.fromEntries(KIOSK_METHODS.map((m) => [m, on]))
+  } else if (p.kiosk && typeof p.kiosk === 'object') {
+    p.kiosk = Object.fromEntries(KIOSK_METHODS.map((m) => [m, p.kiosk[m] !== false]))
+  } else if (!('kiosk' in p)) {
+    p.kiosk = Object.fromEntries(KIOSK_METHODS.map((m) => [m, true]))
+  }
   return p
+}
+
+// Is a kiosk credential method visible to this role? Absent = allowed.
+export function kioskMethodAllowed(perms, method) {
+  if (!perms || !('kiosk' in perms)) return true
+  if (typeof perms.kiosk === 'boolean') return perms.kiosk
+  return perms.kiosk?.[method] !== false
+}
+
+// Does this role see the Kiosk Credentials page at all?
+export function kioskEnabled(perms) {
+  if (!perms || !('kiosk' in perms)) return true
+  if (typeof perms.kiosk === 'boolean') return perms.kiosk
+  return KIOSK_METHODS.some((m) => perms.kiosk?.[m] !== false)
 }
 
 function loadLocalRoles() {

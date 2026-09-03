@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { usePageTitle } from '../lib/documentMeta'
 import { api, apiEnabled } from '../lib/api'
 import { getCredential, setFingerprint, setPin, ensureQrCode } from '../lib/credentials'
+import { kioskMethodAllowed } from '../lib/roles'
 
 // Self-service kiosk credential registration — employees register their own
 // fingerprint, PIN and QR badge used to identify them at the time kiosk.
@@ -80,6 +81,17 @@ export default function KioskCredentials() {
 
   if (!user) return null
 
+  // Per-role visibility — an admin can hide any credential method for this role.
+  const showFp = kioskMethodAllowed(user.perms, 'fingerprint')
+  const showPin = kioskMethodAllowed(user.perms, 'pin')
+  const showQr = kioskMethodAllowed(user.perms, 'qr')
+  const shownCount = [showFp, showPin, showQr].filter(Boolean).length
+  const gridCls = shownCount === 1
+    ? 'grid gap-4 sm:grid-cols-1 sm:max-w-md'
+    : shownCount === 2
+      ? 'grid gap-4 sm:grid-cols-2'
+      : 'grid gap-4 sm:grid-cols-3'
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -88,7 +100,7 @@ export default function KioskCredentials() {
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Kiosk Credentials</h1>
           <p className="mt-1 text-sm leading-relaxed text-gray-500">
           Register how <span className="font-semibold">{user.name}</span> is identified at the time kiosk —
-          fingerprint, PIN or QR badge. Once registered, you no longer select your name on the kiosk.
+          {[showFp && 'fingerprint', showPin && 'PIN', showQr && 'QR badge'].filter(Boolean).join(', ') || 'no methods available'}. Once registered, you no longer select your name on the kiosk.
         </p>
         </div>
       </div>
@@ -97,7 +109,15 @@ export default function KioskCredentials() {
         <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-xs font-medium text-red-700 ring-1 ring-red-200">{error}</p>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      {shownCount === 0 ? (
+        <div className="rounded-xl border-2 border-dashed border-gray-200 bg-white p-8 text-center">
+          <p className="text-sm font-medium text-gray-900">No credential methods available</p>
+          <p className="mt-1 text-xs text-gray-500">Your administrator has hidden all kiosk credential methods for your role.</p>
+        </div>
+      ) : (
+      <div className={gridCls}>
+        {showFp && (
+        <>
         {/* Fingerprint */}
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
@@ -122,6 +142,10 @@ export default function KioskCredentials() {
           )}
         </div>
 
+        </>
+        )}
+        {showPin && (
+        <>
         {/* PIN */}
         <form onSubmit={(e) => { e.preventDefault(); savePin() }} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
@@ -148,6 +172,10 @@ export default function KioskCredentials() {
           </button>
         </form>
 
+        </>
+        )}
+        {showQr && (
+        <>
         {/* QR */}
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
@@ -164,7 +192,10 @@ export default function KioskCredentials() {
           </button>
           {qrCodeStr && <p className="mt-1 break-all text-center text-[10px] tabular-nums text-gray-400">{qrCodeStr}</p>}
         </div>
+        </>
+        )}
       </div>
+      )}
 
       <div className="rounded-xl border border-brand-200 bg-brand-50/60 p-4 text-xs leading-relaxed text-brand-800">
         <p className="font-bold">How it works at the kiosk</p>

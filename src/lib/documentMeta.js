@@ -37,6 +37,25 @@ export function applyFavicon() {
   link.href = getSystemIcon() || '/vite.svg'
 }
 
+// Public (unauthenticated) surfaces — login, kiosk — hydrate the selected
+// system icon straight from the server so they match what signed-in users
+// see, even when localStorage was cleared or the device is fresh.
+export async function fetchPublicSystemIcon() {
+  try {
+    const res = await fetch('/api/public/settings')
+    if (!res.ok) return getSystemIcon()
+    const s = await res.json()
+    if (s.system_icon) {
+      localStorage.setItem(ICON_KEY, s.system_icon)
+      applyFavicon()
+      return s.system_icon
+    }
+    return getSystemIcon()
+  } catch {
+    return getSystemIcon()
+  }
+}
+
 // Watches for system-name changes (applied at logout) and refreshes the title.
 export function useTitleSync(page) {
   useEffect(() => {

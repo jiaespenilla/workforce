@@ -2,20 +2,18 @@ import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
 import { getActiveSettings, getPendingSettings, queueSystemSettings, pushSystemSettingsToServer, pushSystemIconToServer, getSystemTimeZone, isMaintenanceMode, setMaintenanceMode, getSessionTimeoutMinutes, setSessionTimeoutMinutes } from '../lib/systemSettings'
 import { getLegalDocs, saveLegalDocs } from '../lib/legal'
-import { getConfiguredRoles, saveRolesList, canAction } from '../lib/roles'
+import { getConfiguredRoles, saveRolesList, canAction, kioskMethodAllowed, KIOSK_METHODS } from '../lib/roles'
 import { getSystemIcon, setSystemIcon } from '../lib/documentMeta'
 import { SYSTEM_ICON_PRESETS } from '../lib/iconPresets'
 import { api, apiEnabled } from '../lib/api'
 import { loadVersionHistory, saveVersionHistory, seedInitialHistory } from '../lib/versionHistory'
 import { PageLoader } from '../components/Skeleton'
-import OrgPanel from './OrgPanel'
 
 const TABS = [
   ['company', 'System Settings', 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z'],
   ['roles', 'Roles & Permissions', 'M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6 1.37a6 6 0 10-6-6 6 6 0 006 6z'],
   ['email', 'Email Notifications', 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'],
   ['legal', 'Terms & Policies', 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'],
-  ['organization', 'Organization', 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4'],
   ['system', 'System Status', 'M13 10V3L4 14h7v7l9-11h-7z'],
   ['version', 'Version Control', 'M9 5h6M9 12h6M9 19h6m-3-7a3 3 0 110 6 3 3 0 010-6zm-7 7a2 2 0 012-2h14a2 2 0 012 2v1a2 2 0 01-2 2H6a2 2 0 01-2-2v-1z'],
 ]
@@ -197,7 +195,6 @@ function RolesPanel({ roles, onAdd, onRename, onRemove, onTogglePerm }) {
                     ['payroll', 'Payroll'],
                     ['employees', 'People'],
                     ['shifts', 'Shift Schedules'],
-                    ['kiosk', 'Kiosk'],
                     // 'storage' removed (19) — Storage Setup is administrator-only
                     ['settings', 'This Console'],
                   ].map(([key, label]) => (
@@ -209,6 +206,23 @@ function RolesPanel({ roles, onAdd, onRename, onRemove, onTogglePerm }) {
                       <span className="text-xs font-medium text-gray-700">{label}</span>
                     </label>
                   ))}
+                </div>
+
+                {/* Kiosk credentials — per-method visibility (fingerprint / PIN / QR) */}
+                <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Kiosk credentials shown to this role</p>
+                  <p className="mt-0.5 text-[11px] text-gray-400">Turn off a method to hide it on the Kiosk Credentials page. Turning all three off hides the page.</p>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    {KIOSK_METHODS.map((m) => (
+                      <label key={m} className="flex cursor-pointer items-center gap-3 rounded-lg border border-white bg-white px-3 py-2.5 shadow-sm transition hover:shadow">
+                        <Toggle
+                          checked={kioskMethodAllowed(r.perms, m)}
+                          onChange={(value) => onTogglePerm(i, `kiosk.${m}`, value)}
+                        />
+                        <span className="text-xs font-medium capitalize text-gray-700">{m === 'pin' ? 'PIN code' : m === 'qr' ? 'QR badge' : 'Fingerprint'}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Action-level permissions */}
@@ -1032,8 +1046,6 @@ export default function SystemConfig() {
               </div>
             </div>
           )}
-
-          {tab === 'organization' && <OrgPanel />}
 
           {tab === 'system' && <StatusPanel settings={settings} />}
 

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getActiveSettings } from '../lib/systemSettings'
-import { getSystemIcon } from '../lib/documentMeta'
+import { fetchPublicSystemIcon, getSystemIcon } from '../lib/documentMeta'
 import { loadKioskConfig } from './KioskSetup'
 import { getCompanyShifts, decideAction } from '../lib/shifts'
 import { getCompanyKioskConfig } from '../lib/kioskConfig'
@@ -90,9 +90,16 @@ export default function Kiosk() {
   const settings = getActiveSettings()
   const systemName = settings.name
   const brandLetter = (systemName || 'U').charAt(0).toUpperCase()
-  const brandIcon = getSystemIcon()
+  const [brandIcon, setBrandIcon] = useState(getSystemIcon)
   const [kioskCompanyId, setKioskCompanyId] = useState(null)
   const [config, setConfig] = useState(() => loadKioskConfig())
+
+  // Public kiosk has no login — pull the admin-selected icon so it matches the system.
+  useEffect(() => {
+    let live = true
+    fetchPublicSystemIcon().then((icon) => { if (live && icon) setBrandIcon(icon) })
+    return () => { live = false }
+  }, [])
 
   // When company is detected (via employee tag), load that company's unique setup automatically
   useEffect(() => {

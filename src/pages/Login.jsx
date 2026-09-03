@@ -1,10 +1,10 @@
 import { usePageTitle } from '../lib/documentMeta'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiEnabled } from '../lib/api'
 import { getActiveSettings } from '../lib/systemSettings'
-import { getSystemIcon } from '../lib/documentMeta'
+import { fetchPublicSystemIcon, getSystemIcon } from '../lib/documentMeta'
 
 const features = [
   {
@@ -34,6 +34,13 @@ export default function Login() {
   const [sessionExpired] = useState(() => sessionStorage.getItem('uw_session_expired') === '1')
   const settings = getActiveSettings()
   const brandLetter = (settings.name || 'C').charAt(0).toUpperCase()
+  // Pull the admin-selected icon so the login brand matches the rest of the system.
+  const [brandIcon, setBrandIcon] = useState(getSystemIcon)
+  useEffect(() => {
+    let live = true
+    fetchPublicSystemIcon().then((icon) => { if (live && icon) setBrandIcon(icon) })
+    return () => { live = false }
+  }, [])
 
   if (sessionExpired) sessionStorage.removeItem('uw_session_expired')
 
@@ -64,8 +71,6 @@ export default function Login() {
 
   const inputCls =
     'mt-1.5 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 placeholder-gray-400 transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10'
-
-  const brandIcon = getSystemIcon()
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -104,7 +109,7 @@ export default function Login() {
           </ul>
         </div>
 
-        <p className="relative text-xs text-emerald-100">Secure cloud platform · {settings.version || 'v0.1.0'}</p>
+        <p className="relative text-xs font-semibold tabular-nums text-emerald-100">{settings.version || 'v0.1.0'}</p>
       </div>
 
       {/* Form panel */}
