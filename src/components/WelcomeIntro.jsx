@@ -7,61 +7,60 @@ function initialsOf(name) {
   return (name || '').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?'
 }
 
+const welcomeKey = (email) => `uw_welcome_seen_${String(email || '').trim().toLowerCase()}`
+function isWelcomeSeen(email) {
+  try { return !!localStorage.getItem(welcomeKey(email)) } catch { return false }
+}
+function markWelcomeSeen(email) {
+  try { localStorage.setItem(welcomeKey(email), '1') } catch {}
+}
+function unwrapCompanies(res) {
+  return Array.isArray(res) ? res : (res?.data || [])
+}
+
 export default function WelcomeIntro() {
   const { user } = useAuth()
   const [company, setCompany] = useState(null)
   const [open, setOpen] = useState(false)
   const settings = getActiveSettings()
+  const email = user?.email || ''
 
   useEffect(() => {
-    if (!user || user.role === 'administrator') return
-    const key = `uw_welcome_seen_${user.email.toLowerCase()}`
-    if (localStorage.getItem(key)) {
-      // still fetch company for later reopen, but don't auto-open
-      if (apiEnabled()) {
-        api('/api/companies').then((cs) => {
-          const c = cs.find((co) => (co.employees || []).some((e) => e.email.toLowerCase() === user.email.toLowerCase())) || cs[0] || null
-          if (c) setCompany(c)
-        }).catch(() => {})
-      }
-      // allow manual reopen via notification click
-      const handler = () => {
-        setOpen(true)
-      }
-      window.addEventListener('uw:open-welcome', handler)
-      return () => window.removeEventListener('uw:open-welcome', handler)
-    }
-
-    let cancelled = false
-    const load = async () => {
-      try {
-        if (!apiEnabled()) {
-          setOpen(true)
-          return
-        }
-        const companies = await api('/api/companies')
-        const c = companies.find((co) => (co.employees || []).some((e) => e.email.toLowerCase() === user.email.toLowerCase())) || companies[0] || null
-        if (!cancelled && c) {
-          setCompany(c)
-          setOpen(true)
-        } else if (!cancelled) {
-          setOpen(true)
-        }
-      } catch {
-        if (!cancelled) setOpen(true)
-      }
-    }
-    // slight delay so page renders first
-    const t = setTimeout(load, 800)
+    if (!user || user.role === 'administrator' || !email) return
+    // Manual reopen via notification click — always allowed, even after first login.
     const reopen = () => setOpen(true)
     window.addEventListener('uw:open-welcome', reopen)
+
+    // Fetch company for the welcome card (both first-time and reopen paths).
+    if (apiEnabled()) {
+      api('/api/companies').then((res) => {
+        const cs = unwrapCompanies(res)
+        const c = cs.find((co) => (co.employees || []).some((e) => String(e.email || '').toLowerCase() === email.toLowerCase())) || cs[0] || null
+        if (c) setCompany(c)
+      }).catch(() => {})
+    }
+
+    // Already seen → never auto-open again (fixes repeat pop-up on mobile revisits).
+    if (isWelcomeSeen(email)) {
+      return () => window.removeEventListener('uw:open-welcome', reopen)
+    }
+
+    // First login only: mark seen IMMEDIATELY on show (not on dismiss), so a
+    // refresh/close without clicking "Get started" still won't reshow it.
+    let cancelled = false
+    const t = setTimeout(() => {
+      if (cancelled) return
+      markWelcomeSeen(email)
+      setOpen(true)
+    }, 800)
     return () => { cancelled = true; clearTimeout(t); window.removeEventListener('uw:open-welcome', reopen) }
-  }, [user])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.email, user?.role])
 
   if (!open || !user || user.role === 'administrator') return null
 
   const dismiss = () => {
-    try { localStorage.setItem(`uw_welcome_seen_${user.email.toLowerCase()}`, '1') } catch {}
+    markWelcomeSeen(user.email)
     // Persist welcome intro to notifications so user can revisit via bell
     try {
       const subject = `Welcome to ${company?.name || 'your company'} — You're all set!`

@@ -108,35 +108,61 @@ function downloadFile(content, filename, mime) {
   URL.revokeObjectURL(url)
 }
 
-function TaskExportToolbar({ tasks }) {
+function TaskExportToolbar({ tasks, label = 'Task report' }) {
+  const [toast, setToast] = useState(null)
   if (tasks.length === 0) return null
+
+  const showToast = (msg, ok = true) => {
+    setToast({ msg, ok })
+    setTimeout(() => setToast(null), 3200)
+  }
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(buildReportText(tasks))
-      alert('Task report copied to clipboard.')
+      showToast(`✓ ${tasks.length} task(s) copied to clipboard — ready to paste anywhere.`, true)
     } catch {
-      alert('Unable to access the clipboard.')
+      showToast('Unable to access the clipboard. Try Word or PDF export instead.', false)
     }
   }
 
-  const word = () =>
+  const word = () => {
     downloadFile('\ufeff' + buildReportHtml(tasks), 'employee-tasks-report.doc', 'application/msword')
+    showToast(`✓ ${tasks.length} task(s) downloaded as Word.`, true)
+  }
 
   const pdf = () => {
     const win = window.open('', '_blank')
-    if (!win) return alert('Please allow pop-ups to export as PDF.')
+    if (!win) { showToast('Please allow pop-ups to export as PDF.', false); return }
     win.document.write(buildReportHtml(tasks))
     win.document.close()
     win.focus()
     win.print()
+    showToast(`Opening print preview for ${tasks.length} task(s).`, true)
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
-      <button onClick={copy} title="Copy report" className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-brand-400 hover:text-brand-700">Copy</button>
-      <button onClick={word} title="Download as Word document" className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-brand-400 hover:text-brand-700">Word</button>
-      <button onClick={pdf} title="Export as PDF (print)" className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700">PDF</button>
+    <div className="relative">
+      <div className="flex flex-wrap gap-2" aria-label={label}>
+        <button onClick={copy} title="Copy report to clipboard" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-brand-400 hover:text-brand-700">
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+          Copy
+        </button>
+        <button onClick={word} title="Download as Word document" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-brand-400 hover:text-brand-700">
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+          Word
+        </button>
+        <button onClick={pdf} title="Export as PDF (print)" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700">
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4H7v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+          PDF
+        </button>
+      </div>
+      {toast && (
+        <div role="status" className={`absolute right-0 top-full z-10 mt-2 flex w-64 items-start gap-2 rounded-xl px-3 py-2.5 text-xs font-medium shadow-lg ring-1 transition ${toast.ok ? 'bg-emerald-600 text-white ring-emerald-500' : 'bg-red-600 text-white ring-red-500'}`}>
+          <span className="mt-0.5 shrink-0">{toast.ok ? '✓' : '!'}</span>
+          <span>{toast.msg}</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -213,7 +239,12 @@ function TaskProgressModal({ task, onClose, onStatusChange }) {
           </div>
           <div>
             <dt className="font-semibold uppercase tracking-wide text-gray-400">Due date</dt>
-            <dd className="mt-0.5 font-medium tabular-nums text-gray-900">{task.due || '—'}</dd>
+            <dd className={`mt-0.5 font-medium tabular-nums ${String(task?.due || '').slice(0,10) && String(task.due).slice(0,10) < localTodayISO() && task.status !== 'completed' ? 'text-red-700' : 'text-gray-900'}`}>
+              {task.due || '—'}
+              {String(task?.due || '').slice(0,10) && String(task.due).slice(0,10) < localTodayISO() && task.status !== 'completed' && (
+                <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">Overdue</span>
+              )}
+            </dd>
           </div>
           <div>
             <dt className="font-semibold uppercase tracking-wide text-gray-400">Current status</dt>
@@ -261,10 +292,7 @@ function CeoDashboard({ user }) {
   const [allAttendance, setAllAttendance] = useState([])
     const [genStartDate, setGenStartDate] = useState('')
   const [genEndDate, setGenEndDate] = useState('')
-  const [genTargetDate, setGenTargetDate] = useState(() => localTodayISO())
-  const [genConfirmOpen, setGenConfirmOpen] = useState(false)
   const [genResult, setGenResult] = useState(null)
-  const [genCreatedTasks, setGenCreatedTasks] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { const t=setInterval(()=>setNow(new Date()),1000); return ()=>clearInterval(t) }, [])
@@ -328,70 +356,41 @@ function CeoDashboard({ user }) {
     }
   }
 
-  // "Copy tasks" generator - now supports a date RANGE.
-  // Tasks whose due date falls within [genStartDate, genEndDate] are copied
-  // to the target, preserving day offsets (e.g. 2025-01-01..03 -> 2025-02-01..03).
-  // If only From is set, it behaves like the previous single-day copy.
+  // Task viewer by date RANGE — no copies are created (originals are retained).
+  // Pick From..To to list the original tasks due in that window, then export.
+  // This replaces the old "Copy to" duplication flow which caused confusion.
   const genEffectiveEnd = genEndDate || genStartDate
   const genSourceTasks = () => {
     if (!genStartDate) return []
     const end = genEffectiveEnd
-    return allTasks.filter((t) => {
-      const k = dueKey(t)
-      if (!k) return false
-      return k >= genStartDate && k <= end
-    })
+    return allTasks
+      .filter((t) => {
+        const k = dueKey(t)
+        if (!k) return false
+        return k >= genStartDate && k <= end
+      })
+      .sort((a, b) => dueKey(a).localeCompare(dueKey(b)))
   }
-  // days between two YYYY-MM-DD strings
-  const daysBetween = (a, b) => {
-    const da = new Date(a + 'T00:00:00')
-    const db = new Date(b + 'T00:00:00')
-    return Math.round((db - da) / 86400000)
-  }
-  const addDaysISO = (iso, days) => {
+  const rangeError = genEndDate && genStartDate && genEndDate < genStartDate ? 'End date cannot be before start date.' : null
+
+  // --- Due-date helpers (26): overdue = past due & not completed; due soon = within 3 days ---
+  const todayKey = localTodayISO()
+  const addDaysKey = (iso, days) => {
     const d = new Date(iso + 'T00:00:00')
     d.setDate(d.getDate() + days)
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }
-  const handleCopyTasks = () => {
-    if (!genStartDate) { setGenResult({ type:'error', msg:'Select a From start day.' }); return }
-    if (genEndDate && genEndDate < genStartDate) { setGenResult({ type:'error', msg:'End date cannot be before start date.' }); return }
-    if (!genTargetDate) { setGenResult({ type:'error', msg:'Select a target day.' }); return }
-    const src = genSourceTasks()
-    if (!src.length) { setGenResult({ type:'error', msg:`No tasks found between ${genStartDate} and ${genEffectiveEnd}.` }); return }
-    setGenConfirmOpen(true)
+  const isOverdue = (t) => {
+    const k = dueKey(t)
+    return !!k && k < todayKey && t.status !== 'completed'
   }
-  const doCopyTasks = async () => {
-    const src = genSourceTasks()
-    let created = 0
-    let failed = 0
-    const newlyCreated = []
-    for (const t of src) {
-      const offset = daysBetween(genStartDate, dueKey(t))
-      const targetDue = addDaysISO(genTargetDate, offset)
-      try {
-        if (apiEnabled()) {
-          const c = await api('/api/tasks', { method: 'POST', body: { title: t.title, assignee: t.assignee, priority: t.priority, due: targetDue, status: 'pending' } })
-          setAllTasks((p)=> [...p, c])
-          newlyCreated.push(c)
-        } else {
-          const clone = { ...t, id: Date.now()+created+Math.random(), due: targetDue, status: 'pending' }
-          setAllTasks((p)=> [...p, clone])
-          newlyCreated.push(clone)
-        }
-        created++
-      } catch { failed++ }
-    }
-    setGenConfirmOpen(false)
-    const rangeLabel = genStartDate === genEffectiveEnd ? genStartDate : `${genStartDate} → ${genEffectiveEnd}`
-    const targetLabel = src.length === 1 ? genTargetDate : `${genTargetDate} (+${daysBetween(genStartDate, dueKey(src[src.length-1]))}d)`
-    setGenCreatedTasks(newlyCreated)
-    setGenResult(created
-      ? { type:'success', msg:`${created} task(s) from ${rangeLabel} generated to ${targetLabel}.${failed ? ` ${failed} failed - try again.` : ''}` }
-      : { type:'error', msg:`No tasks were generated. ${failed} task(s) failed - check your connection and try again.` }
-    )
-    if (created) setTimeout(()=>setGenResult(null), 8000)
+  const isDueSoon = (t, days = 3) => {
+    const k = dueKey(t)
+    if (!k || t.status === 'completed') return false
+    return k >= todayKey && k <= addDaysKey(todayKey, days)
   }
+  const overdueTasks = allTasks.filter(isOverdue).sort((a, b) => dueKey(a).localeCompare(dueKey(b)))
+  const dueSoonTasks = allTasks.filter((t) => isDueSoon(t, 3)).sort((a, b) => dueKey(a).localeCompare(dueKey(b)))
 
 
   return (
@@ -445,37 +444,105 @@ function CeoDashboard({ user }) {
         </div>
       </div>
 
+      {(overdueTasks.length > 0 || dueSoonTasks.length > 0) && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" role="alert" aria-label="Due task alerts">
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-100 text-red-600">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            </span>
+            <div>
+              <h3 className="text-sm font-bold text-gray-900">Due attention needed</h3>
+              <p className="text-xs text-gray-500">{overdueTasks.length} overdue · {dueSoonTasks.length} due within 3 days (today {todayKey})</p>
+            </div>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+              <p className="text-xs font-bold text-red-700">Overdue · {overdueTasks.length}</p>
+              <div className="mt-2 max-h-28 space-y-1 overflow-y-auto">
+                {overdueTasks.slice(0, 6).map((t)=> (
+                  <button key={t.id} type="button" onClick={()=>setViewingTask(t)} className="block w-full truncate rounded px-1 py-0.5 text-left text-xs text-red-800 hover:bg-red-100">
+                    <span className="font-semibold">{t.title}</span> <span className="text-red-500">· {t.assignee} · due {dueKey(t)}</span>
+                  </button>
+                ))}
+                {overdueTasks.length === 0 && <p className="text-xs text-gray-400">None — nice.</p>}
+                {overdueTasks.length > 6 && <p className="text-xs text-red-400">+{overdueTasks.length - 6} more</p>}
+              </div>
+            </div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="text-xs font-bold text-amber-700">Due soon (3 days) · {dueSoonTasks.length}</p>
+              <div className="mt-2 max-h-28 space-y-1 overflow-y-auto">
+                {dueSoonTasks.slice(0, 6).map((t)=> (
+                  <button key={t.id} type="button" onClick={()=>setViewingTask(t)} className="block w-full truncate rounded px-1 py-0.5 text-left text-xs text-amber-800 hover:bg-amber-100">
+                    <span className="font-semibold">{t.title}</span> <span className="text-amber-600">· {t.assignee} · due {dueKey(t)}</span>
+                  </button>
+                ))}
+                {dueSoonTasks.length === 0 && <p className="text-xs text-gray-400">Nothing due in the next 3 days.</p>}
+                {dueSoonTasks.length > 6 && <p className="text-xs text-amber-500">+{dueSoonTasks.length - 6} more</p>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-                        <h3 className="text-sm font-bold text-gray-900">Generate tasks from date range</h3>
-            <p className="mt-1 text-xs text-gray-500">Copy all tasks within a source range to a target date — offsets are preserved.</p>
+            <h3 className="text-sm font-bold text-gray-900">Tasks by date range</h3>
+            <p className="mt-1 text-xs text-gray-500">View the original tasks due in a window — no copies are created. Export when ready.</p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <label className="text-xs font-medium text-gray-700">From
-              <input type="date" value={genStartDate} onChange={(e)=>{ setGenStartDate(e.target.value); if(!genEndDate) setGenEndDate(e.target.value) }} className="ml-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
+              <input type="date" value={genStartDate} onChange={(e)=>{ setGenStartDate(e.target.value); if(!genEndDate) setGenEndDate(e.target.value); setGenResult(null) }} className="ml-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
             </label>
             <label className="text-xs font-medium text-gray-700">To
-              <input type="date" value={genEndDate} onChange={(e)=>setGenEndDate(e.target.value)} className="ml-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
+              <input type="date" value={genEndDate} onChange={(e)=>{ setGenEndDate(e.target.value); setGenResult(null) }} className="ml-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
             </label>
-            <label className="text-xs font-medium text-gray-700">Copy to
-              <input type="date" value={genTargetDate} onChange={(e)=>setGenTargetDate(e.target.value)} className="ml-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
-            </label>
-            <button onClick={handleCopyTasks} className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-brand-700">Generate</button>
+            {(genStartDate || genEndDate) && (
+              <button onClick={()=>{ setGenStartDate(''); setGenEndDate(''); setGenResult(null) }} className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50">Clear</button>
+            )}
           </div>
         </div>
-        {genStartDate && genTargetDate && (
-          <div className="mt-3 space-y-2">
-            <p className="text-xs text-gray-500">
-              {genSourceTasks().length} task(s) from <span className="font-mono font-semibold">{genStartDate}</span> to <span className="font-mono font-semibold">{genEffectiveEnd}</span> will be generated starting at <span className="font-mono font-semibold">{genTargetDate}</span>{genSourceTasks().length>1 ? ` (preserving ${daysBetween(genStartDate, genEffectiveEnd)} day spread)` : ''}.
-            </p>
+        {genStartDate && (
+          <div className="mt-3 space-y-3">
+            {(() => {
+              const src = genSourceTasks()
+              return (
+                <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-brand-900">{src.length} task(s) due {genStartDate === genEffectiveEnd ? genStartDate : `${genStartDate} → ${genEffectiveEnd}`}</h4>
+                      <p className="mt-1 text-xs text-brand-700">Original tasks only — nothing duplicated. Overdue is red, due soon is amber.</p>
+                    </div>
+                    <TaskExportToolbar tasks={src} label="Date-range task report" />
+                  </div>
+                  <div className="mt-3 max-h-56 divide-y divide-brand-100 overflow-y-auto rounded-lg border border-brand-100 bg-white">
+                    {src.slice(0, 30).map((t)=> {
+                      const overdue = isOverdue(t)
+                      const soon = !overdue && isDueSoon(t, 3)
+                      return (
+                      <button key={t.id} type="button" onClick={()=>setViewingTask(t)} className={`flex w-full items-center justify-between px-3 py-2 text-left text-xs hover:bg-brand-50/60 ${overdue ? 'bg-red-50/60' : ''}`}>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-gray-900">{t.title}</p>
+                          <p className="truncate text-gray-500">{t.assignee} · {t.priority} · due <span className={`font-mono font-semibold tabular-nums ${overdue ? 'text-red-700' : soon ? 'text-amber-700' : ''}`}>{dueKey(t) || '—'}</span></p>
+                        </div>
+                        <span className="ml-2 flex shrink-0 items-center gap-1">
+                          {overdue && <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">Overdue</span>}
+                          {!overdue && soon && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700 ring-1 ring-amber-200">Due soon</span>}
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[t.status] || 'bg-gray-100'}`}>{STATUS_LABELS[t.status] || t.status}</span>
+                        </span>
+                      </button>
+                    )})}
+                    {src.length === 0 && <p className="px-3 py-6 text-center text-xs text-gray-400">No tasks due in this range.</p>}
+                    {src.length > 30 && <p className="px-3 py-2 text-center text-xs text-gray-400">+{src.length - 30} more</p>}
+                  </div>
+                </div>
+              )
+            })()}
             {(() => {
               const punches = allAttendance.filter((p)=> {
                 const d = (p.time||'').slice(0,10)
                 return d >= genStartDate && d <= genEffectiveEnd
               })
-              // Pre-classify punches per email in one pass (O(n)) instead of
-              // re-scanning the punch list for every employee (O(n*m)).
               const lastPunchByEmail = new Map()
               for (const p of punches) {
                 const key = (p.email || '').toLowerCase()
@@ -495,7 +562,7 @@ function CeoDashboard({ user }) {
                 <div className="grid gap-2 rounded-lg border border-gray-100 bg-gray-50 p-3 sm:grid-cols-3">
                   <div className="rounded-lg bg-white p-3 shadow-sm">
                     <p className="text-xs font-bold text-emerald-700">Clocked In · {clockedIn.length}</p>
-                    <div className="mt-2 space-y-1 max-h-24 overflow-y-auto">
+                    <div className="mt-2 max-h-24 space-y-1 overflow-y-auto">
                       {clockedIn.slice(0,5).map((e)=> <p key={e.email} className="truncate text-xs text-gray-700">{e.name}</p>)}
                       {clockedIn.length===0 && <p className="text-xs text-gray-400">None</p>}
                       {clockedIn.length>5 && <p className="text-xs text-gray-400">+{clockedIn.length-5} more</p>}
@@ -503,7 +570,7 @@ function CeoDashboard({ user }) {
                   </div>
                   <div className="rounded-lg bg-white p-3 shadow-sm">
                     <p className="text-xs font-bold text-gray-700">Clocked Out · {clockedOut.length}</p>
-                    <div className="mt-2 space-y-1 max-h-24 overflow-y-auto">
+                    <div className="mt-2 max-h-24 space-y-1 overflow-y-auto">
                       {clockedOut.slice(0,5).map((e)=> <p key={e.email} className="truncate text-xs text-gray-700">{e.name}</p>)}
                       {clockedOut.length===0 && <p className="text-xs text-gray-400">None</p>}
                       {clockedOut.length>5 && <p className="text-xs text-gray-400">+{clockedOut.length-5} more</p>}
@@ -511,7 +578,7 @@ function CeoDashboard({ user }) {
                   </div>
                   <div className="rounded-lg bg-white p-3 shadow-sm">
                     <p className="text-xs font-bold text-red-600">Absent · {absent.length}</p>
-                    <div className="mt-2 space-y-1 max-h-24 overflow-y-auto">
+                    <div className="mt-2 max-h-24 space-y-1 overflow-y-auto">
                       {absent.slice(0,5).map((e)=> <p key={e.email} className="truncate text-xs text-gray-700">{e.name}</p>)}
                       {absent.length===0 && <p className="text-xs text-gray-400">None</p>}
                       {absent.length>5 && <p className="text-xs text-gray-400">+{absent.length-5} more</p>}
@@ -522,75 +589,15 @@ function CeoDashboard({ user }) {
             })()}
           </div>
         )}
-        {genResult && (
-          <div className={`mt-2 rounded-lg px-4 py-3 text-xs font-medium ring-1 ${genResult.type==='success'?'bg-emerald-50 text-emerald-700 ring-emerald-200':'bg-amber-50 text-amber-700 ring-amber-200'}`}>{genResult.msg}</div>
-        )}
-        {genCreatedTasks.length > 0 && (
-          <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50/40 p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h4 className="text-sm font-bold text-brand-900">Generated tasks — ready to export</h4>
-                <p className="mt-1 text-xs text-brand-700">{genCreatedTasks.length} task(s) created. They now appear in your task list.</p>
-              </div>
-              <TaskExportToolbar tasks={genCreatedTasks} />
-            </div>
-            <div className="mt-3 max-h-48 overflow-y-auto divide-y divide-brand-100 rounded-lg border border-brand-100 bg-white">
-              {genCreatedTasks.slice(0, 20).map((t)=> (
-                <div key={t.id} className="flex items-center justify-between px-3 py-2 text-xs">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-gray-900">{t.title}</p>
-                    <p className="truncate text-gray-500">{t.assignee} · {t.priority} · due {dueKey(t)}</p>
-                  </div>
-                  <span className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[t.status] || 'bg-gray-100'}`}>{STATUS_LABELS[t.status] || t.status}</span>
-                </div>
-              ))}
-              {genCreatedTasks.length > 20 && <p className="px-3 py-2 text-center text-xs text-gray-400">+{genCreatedTasks.length - 20} more</p>}
-            </div>
-            <div className="mt-3 flex gap-2">
-              <button onClick={()=>setGenCreatedTasks([])} className="text-xs font-medium text-brand-600 hover:text-brand-800">Dismiss</button>
-              <span className="text-xs text-gray-400">· Export via Copy / Word / PDF above, or find them in the full task list below.</span>
-            </div>
-          </div>
+        {(rangeError || genResult) && (
+          <div className={`mt-2 rounded-lg px-4 py-3 text-xs font-medium ring-1 ${rangeError || genResult?.type !== 'success' ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-emerald-50 text-emerald-700 ring-emerald-200'}`}>{rangeError || genResult.msg}</div>
         )}
       </div>
-
-      {genConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={()=>setGenConfirmOpen(false)}>
-          <div className="absolute inset-0 bg-gray-900/50" />
-          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onClick={(e)=>e.stopPropagation()}>
-            <h3 className="text-base font-bold text-gray-900">Confirm generate tasks</h3>
-            {(() => {
-              const src = genSourceTasks()
-              const rangeLabel = genStartDate === genEffectiveEnd ? genStartDate : `${genStartDate} → ${genEffectiveEnd}`
-              return (
-                <>
-                  <p className="mt-1 text-sm text-gray-500">Generate <span className="font-semibold text-gray-900">{src.length} task(s)</span> from <span className="font-mono text-xs bg-gray-100 px-1 py-0.5 rounded">{rangeLabel}</span> to <span className="font-mono text-xs bg-gray-100 px-1 py-0.5 rounded">{genTargetDate}</span>{src.length>1 ? ` (offsets preserved)` : ''}?</p>
-                  <div className="mt-4 max-h-40 overflow-y-auto divide-y divide-gray-100 rounded-lg border border-gray-200 bg-gray-50">
-                    {src.slice(0, 5).map((t) => {
-                      const targetDue = addDaysISO(genTargetDate, daysBetween(genStartDate, dueKey(t)))
-                      return (
-                      <div key={t.id} className="px-3 py-2 text-xs">
-                        <p className="font-medium text-gray-900 truncate">{t.title}</p>
-                        <p className="text-gray-500">{t.assignee} · {t.priority} · due {dueKey(t)} → {targetDue}</p>
-                      </div>
-                    )})}
-                    {src.length > 5 && <p className="px-3 py-2 text-center text-xs text-gray-400">+{src.length - 5} more</p>}
-                  </div>
-                </>
-              )
-            })()}
-            <div className="mt-6 flex justify-end gap-2">
-              <button onClick={()=>setGenConfirmOpen(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={doCopyTasks} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Confirm &amp; Generate</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className={selected ? 'grid items-start gap-6 lg:grid-cols-[1fr_minmax(320px,420px)]' : ''}>
         {/* Clocked-in employee list */}
         <div className="space-y-3">
-          {loading && <div className="rounded-xl border border-gray-200 bg-white shadow-sm"><SkeletonRows rows={4} /></div>}
+          {loading && <div className="rounded-xl border border-gray-200 bg-white shadow-sm"><SkeletonRows rows={4} label="Loading team activity…" /></div>}
           {!loading && clockedInEmployees.length === 0 && (
             <div className="rounded-xl border-2 border-dashed border-gray-200 bg-white px-5 py-8 text-center text-sm text-gray-400 shadow-sm">
               Nobody is clocked in right now.
@@ -678,26 +685,31 @@ function CeoDashboard({ user }) {
                     <span className="rounded-full bg-gray-100 px-2 py-0.5 tabular-nums">{group.length}</span>
                   </p>
                   <div className="space-y-2">
-                    {group.map((task) => (
+                    {group.map((task) => {
+                      const overdue = String(task?.due || '').slice(0,10) && String(task.due).slice(0,10) < todayKey && task.status !== 'completed'
+                      return (
                       <button
                         key={task.id}
                         type="button"
                         onClick={() => setViewingTask(task)}
                         className={`block w-full rounded-xl border p-3.5 text-left transition hover:border-brand-400 hover:shadow-md ${
-                          status === 'completed' ? 'border-brand-100 bg-brand-50/40' : 'border-gray-200'
+                          overdue ? 'border-red-300 bg-red-50/60' : status === 'completed' ? 'border-brand-100 bg-brand-50/40' : 'border-gray-200'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <h3 className={`text-sm font-medium ${status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                          <h3 className={`text-sm font-medium ${status === 'completed' ? 'text-gray-400 line-through' : overdue ? 'text-red-800' : 'text-gray-900'}`}>
                             {task.title}
                           </h3>
-                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${STATUS_STYLES[status]}`}>
-                            {STATUS_LABELS[status]}
+                          <span className="flex shrink-0 items-center gap-1">
+                            {overdue && <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Overdue</span>}
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${STATUS_STYLES[status]}`}>
+                              {STATUS_LABELS[status]}
+                            </span>
                           </span>
                         </div>
                         <p className="mt-1.5 text-[11px] text-gray-400">
                           Priority: <span className="font-medium text-gray-500">{task.priority}</span>
-                          {task.due && <> · Due: <span className="font-medium tabular-nums text-gray-500">{task.due}</span></>}
+                          {task.due && <> · Due: <span className={`font-medium tabular-nums ${overdue ? 'text-red-700' : 'text-gray-500'}`}>{task.due}</span></>}
                         </p>
                         <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600">
                           View full progress
@@ -706,7 +718,8 @@ function CeoDashboard({ user }) {
                           </svg>
                         </p>
                       </button>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )

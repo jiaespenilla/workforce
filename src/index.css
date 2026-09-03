@@ -68,3 +68,8 @@ input[type='date']:disabled {
 .animate-pulse-slow {
   animation: pulse-slow 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
