@@ -406,10 +406,6 @@ function CeoDashboard({ user }) {
             {clockedInEmployees.length} currently clocked-in via kiosk · click an employee to view their tasks.
           </p>
         </div>
-        <div className="shrink-0">
-          <p className="mb-1 text-right text-[11px] font-medium uppercase tracking-wide text-gray-400">Export all tasks ({allTasks.length})</p>
-          <TaskExportToolbar tasks={allTasks} />
-        </div>
       </div>
 
       {/* Summary chips + status legend */}
