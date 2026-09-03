@@ -272,6 +272,7 @@ function CeoTimeKeeping() {
   const [shiftsByCompany, setShiftsByCompany] = useState({})
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [expandedEmail, setExpandedEmail] = useState(null)
     // Hours are always shown as [h]:mm (e.g. 40:30) — the old decimal/hours
   // toggle was removed so report formatting stays predictable (16.3).
   const fmt = 'hmm'
@@ -418,19 +419,28 @@ return (
             <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-brand-100 text-brand-700">On time</span>
             <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-amber-100 text-amber-700">Late</span>
             <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-emerald-100 text-emerald-700">Present</span>
-            <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-violet-100 text-violet-700">Not required</span>
+            <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-violet-100 text-violet-700">Exempt</span>
             <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-gray-100 text-gray-500">Missed</span>
           </div>
         </div>
 
-{layout === 'table' && (loading ? <SkeletonRows rows={6} /> : <div className="overflow-x-auto">
-          <table className="w-full min-w-[880px] text-left text-sm">
+{layout === 'table' && (loading ? <SkeletonRows rows={6} label="Loading timesheets…" /> : <div className="overflow-x-auto">
+          <table className="w-full min-w-[960px] text-left text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
                 <th className="px-6 py-3">Employee</th>
-                <th className="px-6 py-3">Company</th>
-                <th className="px-6 py-3">Clock-In</th>
-                <th className="px-6 py-3">Clock-Out</th>
+                <th className="px-6 py-3">Shift</th>
+                {view === 'day' ? (
+                  <>
+                    <th className="px-6 py-3">Clock-In</th>
+                    <th className="px-6 py-3">Clock-Out</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="px-6 py-3 text-center">Days</th>
+                    <th className="px-6 py-3 text-center">Punches</th>
+                  </>
+                )}
                 <th className="px-6 py-3 text-right">Regular ([h]:mm)</th>
                 <th className="px-6 py-3 text-right">Overtime ([h]:mm)</th>
                 <th className="px-6 py-3 text-right">Total ([h]:mm)</th>
@@ -450,15 +460,40 @@ return (
                   : summaryStatus(allFor(emp.email), shift, cursor, view, { exempt })
                 const isLive = isToday && lastPunch?.type === 'in'
                 const hasHours = agg.total > 0
+                const isExpanded = expandedEmail === emp.email
+                // Days present in window (for week/month): distinct system-date keys with punches
+                const daysPresent = new Set(vp.map((p) => systemDateKey(p.time))).size
+                const totalDays = view === 'week' ? 7 : view === 'month' ? daysInMonth(cursor) : 1
+                // Per-day breakdown for the expandable detail (week: all 7 days; month: only days with punches to stay readable)
+                const detailDays = view === 'day'
+                  ? []
+                  : (view === 'week' ? windowDays(cursor, 'week') : [...new Set(vp.map((p) => systemDateKey(p.time)))].sort().map((k) => new Date(k + 'T12:00:00')))
                 return (
-                  <tr key={emp.companyId + '-' + emp.email} className="hover:bg-gray-50">
+                  <>
+                  <tr key={emp.companyId + '-' + emp.email} onClick={() => view !== 'day' && setExpandedEmail(isExpanded ? null : emp.email)} title={view !== 'day' ? (isExpanded ? 'Click to collapse day-by-day breakdown' : 'Click to expand day-by-day breakdown') : undefined} className={'hover:bg-gray-50 ' + (view !== 'day' ? 'cursor-pointer ' : '') + (isExpanded ? 'bg-brand-50/40' : '')}>
                     <td className="px-6 py-3">
-                      <p className="font-medium text-gray-900">{emp.name}</p>
-                      <p className="text-xs text-gray-500">{emp.role || 'Unassigned'}</p>
+                      <div className="flex items-center gap-2">
+                        {view !== 'day' && (
+                          <svg className={'h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ' + (isExpanded ? 'rotate-90' : '')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        )}
+                        <div>
+                          <p className="font-medium text-gray-900">{emp.name}</p>
+                          <p className="text-xs text-gray-500">{emp.companyName} · {emp.role || 'Unassigned'}</p>
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-6 py-3 text-gray-600">{emp.companyName}</td>
-                    <td className="px-6 py-3 tabular-nums text-gray-700">{agg.clockIn ? fmtStamp(agg.clockIn.time) : '—'}</td>
-                    <td className="px-6 py-3 tabular-nums text-gray-700">{agg.clockOut ? fmtStamp(agg.clockOut.time) : '—'}</td>
+                    <td className="px-6 py-3 text-gray-600">{shift ? (shift.open ? 'Open' : (shift.name || shift.start + '–' + shift.end)) : '—'}</td>
+                    {view === 'day' ? (
+                      <>
+                        <td className="px-6 py-3 tabular-nums text-gray-700">{agg.clockIn ? fmtStamp(agg.clockIn.time) : '—'}</td>
+                        <td className="px-6 py-3 tabular-nums text-gray-700">{agg.clockOut ? fmtStamp(agg.clockOut.time) : '—'}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-6 py-3 text-center tabular-nums text-gray-700">{daysPresent}/{totalDays}</td>
+                        <td className="px-6 py-3 text-center tabular-nums text-gray-700">{vp.length}</td>
+                      </>
+                    )}
                     <td className="px-6 py-3 text-right tabular-nums text-gray-700">{hasHours ? fmtHours(agg.regular, fmt) : '—'}</td>
                     <td className="px-6 py-3 text-right tabular-nums text-amber-700">{agg.ot > 0 ? fmtHours(agg.ot, fmt) : '—'}</td>
                     <td className="px-6 py-3 text-right font-semibold tabular-nums text-gray-900">{hasHours ? fmtHours(agg.total, fmt) : '—'}</td>
@@ -474,6 +509,55 @@ return (
                       </div>
                     </td>
                   </tr>
+                  {isExpanded && view !== 'day' && (
+                    <tr key={emp.companyId + '-' + emp.email + '-detail'} className="bg-gray-50/60">
+                      <td colSpan={8} className="px-6 py-3">
+                        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">
+                          {view === 'week' ? 'Day-by-day breakdown (Mon–Sun)' : 'Days with punches in ' + cursor.toLocaleDateString([], { month: 'long', year: 'numeric' })}
+                        </p>
+                        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                          <table className="w-full min-w-[560px] text-left text-xs">
+                            <thead className="bg-gray-50 text-[10px] uppercase tracking-wide text-gray-400">
+                              <tr>
+                                <th className="px-4 py-2">Date</th>
+                                <th className="px-4 py-2">Clock-In</th>
+                                <th className="px-4 py-2">Clock-Out</th>
+                                <th className="px-4 py-2 text-right">Hours</th>
+                                <th className="px-4 py-2 text-right">OT</th>
+                                <th className="px-4 py-2">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {detailDays.map((d, i) => {
+                                const key = systemDateKey(d)
+                                const dayPunches = vp.filter((p) => systemDateKey(p.time) === key).sort((a, b) => new Date(a.time) - new Date(b.time))
+                                const firstIn = dayPunches.find((p) => p.type === 'in')
+                                const lastOut = [...dayPunches].reverse().find((p) => p.type === 'out')
+                                const hrs = hoursForDay(dayPunches)
+                                const ot = overtimeForDay(dayPunches)
+                                const dst = dayStatus(dayPunches, shift, { isToday: sameDay(d, new Date()), isPast: d.getTime() < startOfDay(new Date()).getTime(), exempt })
+                                const label = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+                                return (
+                                  <tr key={key + '-' + i} className={dayPunches.length ? '' : 'opacity-60'}>
+                                    <td className="px-4 py-2 font-medium text-gray-800">{label}</td>
+                                    <td className="px-4 py-2 tabular-nums text-gray-600">{firstIn ? fmtClock(firstIn.time) : '—'}</td>
+                                    <td className="px-4 py-2 tabular-nums text-gray-600">{lastOut ? fmtClock(lastOut.time) : '—'}</td>
+                                    <td className="px-4 py-2 text-right tabular-nums text-gray-700">{hrs ? hrs.toFixed(1) + 'h' : '—'}</td>
+                                    <td className="px-4 py-2 text-right tabular-nums text-amber-700">{ot ? '+' + ot.toFixed(1) + 'h' : '—'}</td>
+                                    <td className="px-4 py-2"><span className={'inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ' + dst.cls}>{dst.label}</span></td>
+                                  </tr>
+                                )
+                              })}
+                              {detailDays.length === 0 && (
+                                <tr><td colSpan={6} className="px-4 py-4 text-center text-gray-400">No punches in this period.</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </>
                 )
               })}
               {employees.length === 0 && (
@@ -519,22 +603,25 @@ return (
             <p className="mt-3 text-center text-[11px] text-gray-400">Calendar shows how many employees clocked in each day in {cursor.toLocaleDateString([], { month: 'long', year: 'numeric' })}.</p>
           </div>
         )}
-        {layout === 'compact' && (loading ? <SkeletonRows rows={6} /> : (
+        {layout === 'compact' && (loading ? <SkeletonRows rows={6} label="Loading timesheets…" /> : (
           <div className="divide-y divide-gray-100">
             {employees.map((emp) => {
               const vp = windowed(emp.email)
               const shift = shiftForEmployee(shiftsByCompany[emp.companyId], emp.email)
               const exempt = isExemptEmployee(emp)
-              const hrs = hoursForDay(vp).toFixed(1)
-              const last = vp[vp.length - 1]
+              const agg = aggregateWindow(vp)
+              const days = new Set(vp.map((p) => systemDateKey(p.time))).size
               const st = view === 'day'
                 ? dayStatus(vp, shift, { isToday: sameDay(cursor, new Date()), isPast: cursor.getTime() < startOfDay(new Date()).getTime(), exempt })
                 : summaryStatus(allFor(emp.email), shift, cursor, view, { exempt })
+              const sub = view === 'day'
+                ? (vp.length + ' punches · ' + (agg.total ? agg.total.toFixed(1) + 'h' : 'No hours'))
+                : (days + ' day(s) · ' + vp.length + ' punches · ' + (agg.total ? agg.total.toFixed(1) + 'h total' : 'No hours'))
               return (
                 <div key={emp.companyId + '-' + emp.email} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{emp.name} <span className="text-xs text-gray-400">· {emp.companyName}</span></p>
-                    <p className="text-xs text-gray-500">{vp.length} punches · {hrs}h · {last ? new Date(last.time).toLocaleDateString() : 'No record'}</p>
+                    <p className="text-sm font-medium text-gray-900">{emp.name} <span className="text-xs text-gray-400">· {emp.companyName}{shift ? ' · ' + (shift.open ? 'Open' : (shift.name || shift.start + '–' + shift.end)) : ''}</span></p>
+                    <p className="text-xs text-gray-500">{sub}</p>
                   </div>
                   <span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + st.cls}>{st.label}</span>
                 </div>
@@ -690,11 +777,19 @@ return (
               : view === 'week'
                 ? 'Week of ' + startOfWeek(cursor).toLocaleDateString([], { month: 'short', day: 'numeric' })
                 : cursor.toLocaleDateString([], { month: 'long', year: 'numeric' })}
-            {' · '}{employees.length} active
+            {' · '}{employees.length} active · click a row to expand day-by-day detail
           </span>
           <span className="font-semibold text-gray-900">
             {sameDay(cursor, new Date()) && (liveCount + ' currently clocked in · ')}
-            {employees.reduce((s, e) => s + hoursForDay(windowed(e.email)), 0).toFixed(1)}h total
+            {(() => {
+              let reg = 0, ot = 0
+              for (const e of employees) {
+                const a = aggregateWindow(windowed(e.email))
+                reg += a.regular
+                ot += a.ot
+              }
+              return (reg + ot).toFixed(1) + 'h total (' + reg.toFixed(1) + 'h regular · ' + ot.toFixed(1) + 'h OT)'
+            })()}
           </span>
         </div>
       </div>
@@ -856,7 +951,7 @@ return (
             </div>
           </div>
         </div>
-        {layout === 'table' && (loading ? <SkeletonRows rows={7} /> : <div className="overflow-x-auto">
+        {layout === 'table' && (loading ? <SkeletonRows rows={7} label="Loading your timesheet…" /> : <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>

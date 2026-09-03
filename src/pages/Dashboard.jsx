@@ -293,7 +293,9 @@ function CeoDashboard({ user }) {
     const [genStartDate, setGenStartDate] = useState('')
   const [genEndDate, setGenEndDate] = useState('')
   const [genResult, setGenResult] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loadingCompanies, setLoadingCompanies] = useState(true)
+  const [loadingTasks, setLoadingTasks] = useState(true)
+  const loading = loadingCompanies || loadingTasks
 
   useEffect(() => { const t=setInterval(()=>setNow(new Date()),1000); return ()=>clearInterval(t) }, [])
 
@@ -304,7 +306,7 @@ function CeoDashboard({ user }) {
         setAllEmployees(list.flatMap((c) => c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id }))))
       })
       .catch(() => setAllEmployees([]))
-      .finally(() => setLoading(false))
+      .finally(() => setLoadingCompanies(false))
     }, [])
 
   const employees = allEmployees.filter((e) => e.active !== false && e.email !== user.email)
@@ -312,7 +314,7 @@ function CeoDashboard({ user }) {
 
   useEffect(() => {
     if (apiEnabled()) {
-      api('/api/tasks').then((res) => setAllTasks(Array.isArray(res) ? res : (res.data || []))).catch(() => setAllTasks(loadLocalAllTasks())).finally(() => setLoading(false))
+      api('/api/tasks').then((res) => setAllTasks(Array.isArray(res) ? res : (res.data || []))).catch(() => setAllTasks(loadLocalAllTasks())).finally(() => setLoadingTasks(false))
       api('/api/attendance').then((res) => {
         const records = Array.isArray(res) ? res : (res.data || [])
         setAllAttendance(records)
@@ -327,6 +329,7 @@ function CeoDashboard({ user }) {
       setAllTasks(loadLocalAllTasks())
       setClockState(getLocalClockInState())
       try { setAllAttendance(JSON.parse(localStorage.getItem('uw_punches'))||[]) } catch { setAllAttendance([]) }
+      setLoadingTasks(false)
     }
   }, [])
 
@@ -595,15 +598,20 @@ function CeoDashboard({ user }) {
       </div>
 
       <div className={selected ? 'grid items-start gap-6 lg:grid-cols-[1fr_minmax(320px,420px)]' : ''}>
-        {/* Clocked-in employee list */}
+        {/* Clocked-in employee list — single loading state, single empty state */}
         <div className="space-y-3">
-          {loading && <div className="rounded-xl border border-gray-200 bg-white shadow-sm"><SkeletonRows rows={4} label="Loading team activity…" /></div>}
-          {!loading && clockedInEmployees.length === 0 && (
-            <div className="rounded-xl border-2 border-dashed border-gray-200 bg-white px-5 py-8 text-center text-sm text-gray-400 shadow-sm">
-              Nobody is clocked in right now.
+          {loading ? (
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm"><SkeletonRows rows={4} label="Loading team activity…" /></div>
+          ) : clockedInEmployees.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-gray-300 bg-white p-10 text-center">
+              <svg className="mx-auto mb-3 h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm font-medium text-gray-900">No one is clocked in right now</p>
+              <p className="mt-1 text-xs text-gray-500">Employees appear here once they check in through the kiosk.</p>
             </div>
-          )}
-          {clockedInEmployees.map((emp) => {
+          ) : (
+          clockedInEmployees.map((emp) => {
             const punch = clockState[emp.email]
             const empTasks = tasksByAssignee.get(`${emp.name} (${emp.companyName})`) || []
             const openCount = empTasks.filter((t) => t.status !== 'completed').length
@@ -640,17 +648,7 @@ function CeoDashboard({ user }) {
                 </div>
               </button>
             )
-          })}
-
-          {clockedInEmployees.length === 0 && (
-            <div className="rounded-xl border-2 border-dashed border-gray-300 bg-white p-10 text-center">
-              <svg className="mx-auto mb-3 h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-sm font-medium text-gray-900">No one is clocked in right now</p>
-              <p className="mt-1 text-xs text-gray-500">Employees appear here once they check in through the kiosk.</p>
-            </div>
-          )}
+          }))}
         </div>
 
         {/* Selected employee's tasks */}
