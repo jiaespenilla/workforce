@@ -39,12 +39,20 @@ function LegalModal({ title, content, onConfirm, onClose }) {
 
 const inputCls = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10'
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const isEmailValid = (v) => EMAIL_RE.test(String(v || '').trim())
+
 export default function CompanyRegistration() {
   usePageTitle('Company Registration')
   const [logo, setLogo] = useState(null) // data URL
   const [submitted, setSubmitted] = useState(false)
+  const [submittedSummary, setSubmittedSummary] = useState(null)
   const [companyName, setCompanyName] = useState('')
+  const [company, setCompany] = useState({ industry: 'Technology', address: '', city: '', contactPhone: '', contactEmail: '' })
   const [nameError, setNameError] = useState('')
+  const [formError, setFormError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const formTopRef = useRef(null)
   const [checkingName, setCheckingName] = useState(false)
   const [people, setPeople] = useState(() => {
     const roles = getConfiguredRoles().filter((r) => !r.perms?.settings).map((r) => r.name)
@@ -151,11 +159,12 @@ export default function CompanyRegistration() {
   }
 
   if (submitted) {
+    const s = submittedSummary || { name: companyName || 'your company', members: people.length }
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-10">
-        <div className="max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white text-center shadow-lg">
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-brand-700 via-brand-600 to-emerald-500 px-4 py-10">
+        <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white text-center shadow-2xl">
           <div className="h-2 w-full bg-gradient-to-r from-brand-600 to-emerald-400" />
-          <div className="p-10">
+          <div className="p-8 sm:p-10">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-100">
               <svg className="h-7 w-7 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -163,24 +172,35 @@ export default function CompanyRegistration() {
             </div>
             <h1 className="text-xl font-bold text-gray-900">Registration submitted!</h1>
             <p className="mt-2 text-sm leading-relaxed text-gray-500">
-              Your company and team are now pending review by an administrator. Once approved, each team member can sign in with their registered email.
+              <span className="font-semibold text-gray-800">{s.name}</span> ({s.members} member{s.members !== 1 ? 's' : ''}) is now pending review by an administrator.
             </p>
-            <a href="/login" className="mt-6 inline-block rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">Go to login</a>
+            <ol className="mt-5 space-y-2 rounded-xl bg-gray-50 p-4 text-left text-xs leading-relaxed text-gray-600 ring-1 ring-gray-100">
+              <li className="flex gap-2"><span className="font-bold text-brand-600">1.</span> An administrator reviews and approves your registration.</li>
+              <li className="flex gap-2"><span className="font-bold text-brand-600">2.</span> Each team member signs in with their registered email.</li>
+              <li className="flex gap-2"><span className="font-bold text-brand-600">3.</span> Set up shifts and start clocking in via the Time Kiosk.</li>
+            </ol>
+            <a href="/login" className="mt-6 inline-block w-full rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow hover:bg-brand-700">Go to login</a>
           </div>
         </div>
       </div>
     )
   }
 
+  const fail = (msg) => {
+    setFormError(msg)
+    setSubmitting(false)
+    formTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setFormError('')
     if (!bothDocsRead) {
       setLegalError(true)
       agreementRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
-    const form = e.target
-    const data = Object.fromEntries(new FormData(form).entries())
+    const data = company
 
     const members = people
       .map((p) => ({
@@ -191,32 +211,42 @@ export default function CompanyRegistration() {
       .filter((p) => p.name && p.email)
 
     if (members.length === 0) {
-      alert('Please add at least one team member with a name and email.')
+      fail('Please add at least one team member with a name and email.')
+      return
+    }
+    const badEmail = members.find((m) => !isEmailValid(m.email))
+    if (badEmail) {
+      fail(`"${badEmail.email}" doesn't look like a valid email. Please fix it and try again.`)
+      return
+    }
+    if (!isEmailValid(data.contactEmail)) {
+      fail('Please enter a valid contact email for the company.')
       return
     }
     // Ensure emails are unique
     const emails = new Set()
     for (const m of members) {
       if (emails.has(m.email)) {
-        alert(`Duplicate email: ${m.email}. Each team member needs a unique email.`)
+        fail(`Duplicate email: ${m.email}. Each team member needs a unique email.`)
         return
       }
       emails.add(m.email)
     }
 
     // Final duplicate-name guard before submit (covers race conditions)
-    const trimmedCompanyName = (companyName || data.companyName || '').trim()
+    const trimmedCompanyName = (companyName || '').trim()
     if (!trimmedCompanyName) {
-      alert('Company name is required.')
+      fail('Company name is required.')
       return
     }
     if (nameError) {
-      alert(nameError)
+      fail(nameError)
       return
     }
+    setSubmitting(true)
 
     const ceo = members.find((m) => m.role === 'CEO') || members[0]
-    const company = {
+    const payload = {
       id: `reg-${Date.now()}`,
       name: trimmedCompanyName || 'Unnamed Company',
       industry: data.industry,
@@ -234,15 +264,17 @@ export default function CompanyRegistration() {
     if (apiEnabled()) {
       // Cloud mode — saved to the D1 database; admin notification queued server-side.
       try {
-        await api('/api/companies', { method: 'POST', body: company })
+        await api('/api/companies', { method: 'POST', body: payload })
       } catch (err) {
         // Server returns 409 for duplicate names — surface as inline error
         if (err.status === 409) setNameError(err.message)
-        alert(`Registration failed to save: ${err.message}`)
+        fail(`Registration failed to save: ${err.message}`)
         return
       }
 
     }
+    setSubmittedSummary({ name: payload.name, members: members.length })
+    setSubmitting(false)
     setSubmitted(true)
   }
 
@@ -258,14 +290,48 @@ export default function CompanyRegistration() {
       )}
 
       <div className="mx-auto max-w-2xl">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex items-center justify-between gap-3">
           <Logo light />
-          <span className="hidden rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white ring-1 ring-white/25 sm:inline">
-            Step 1 of 1 · Registration
-          </span>
+          <a href="/login" className="rounded-full bg-white/15 px-4 py-1.5 text-xs font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/25">
+            Already registered? Sign in
+          </a>
         </div>
 
+        {(() => {
+          const companyDone = companyName.trim() && company.address.trim() && company.city.trim() && isEmailValid(company.contactEmail) && company.contactPhone.trim()
+          const teamDone = people.some((p) => p.name.trim() && isEmailValid(p.email))
+          const agreeDone = bothDocsRead && agree
+          const steps = [
+            ['Company', !!companyDone],
+            ['Team', !!teamDone],
+            ['Agreement', !!agreeDone],
+          ]
+          return (
+            <ol className="mb-5 flex items-center gap-1 rounded-2xl bg-white/10 p-2 ring-1 ring-white/20 backdrop-blur" aria-label="Registration progress">
+              {steps.map(([label, done], i) => (
+                <li key={label} className="flex flex-1 items-center gap-2 px-2 py-1.5">
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${done ? 'bg-white text-brand-700' : 'bg-white/20 text-white'}`}>
+                    {done ? '✓' : i + 1}
+                  </span>
+                  <span className={`text-xs font-semibold ${done ? 'text-white' : 'text-emerald-50'}`}>{label}</span>
+                  {i < steps.length - 1 && <span className="ml-auto hidden h-px flex-1 bg-white/25 sm:block" aria-hidden="true" />}
+                </li>
+              ))}
+            </ol>
+          )
+        })()}
+
         <form onSubmit={handleSubmit} className="space-y-7 rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-gray-100 sm:p-8">
+          <div ref={formTopRef} className="scroll-mt-4" />
+          {formError && (
+            <div role="alert" className="flex items-start gap-2.5 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700 ring-1 ring-red-200">
+              <svg className="mt-0.5 h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              <span className="flex-1">{formError}</span>
+              <button type="button" onClick={() => setFormError('')} aria-label="Dismiss error" className="rounded-lg p-0.5 text-red-400 hover:bg-red-100 hover:text-red-600">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+          )}
           {/* Section 1 — Company */}
           <section aria-labelledby="sec-company">
             <div className="mb-5 flex items-center gap-3">
@@ -328,25 +394,28 @@ export default function CompanyRegistration() {
               </label>
               <label className="block text-sm sm:col-span-2">
                 <span className="font-medium text-gray-700">Address: *</span>
-                <input name="address" required placeholder="123 Main St, Suite 100" className={`mt-1 ${inputCls}`} />
+                <input name="address" required value={company.address} onChange={(e) => setCompany({ ...company, address: e.target.value })} placeholder="123 Main St, Suite 100" autoComplete="street-address" className={`mt-1 ${inputCls}`} />
               </label>
               <label className="block text-sm">
                 <span className="font-medium text-gray-700">City: *</span>
-                <input name="city" required placeholder="Makati" className={`mt-1 ${inputCls}`} />
+                <input name="city" required value={company.city} onChange={(e) => setCompany({ ...company, city: e.target.value })} placeholder="Makati" autoComplete="address-level2" className={`mt-1 ${inputCls}`} />
               </label>
               <label className="block text-sm">
                 <span className="font-medium text-gray-700">Industry: *</span>
-                <select name="industry" required className={`mt-1 ${inputCls}`}>
+                <select name="industry" required value={company.industry} onChange={(e) => setCompany({ ...company, industry: e.target.value })} className={`mt-1 ${inputCls}`}>
                   {industries.map((i) => <option key={i}>{i}</option>)}
                 </select>
               </label>
               <label className="block text-sm sm:col-span-2">
                 <span className="font-medium text-gray-700">Contact phone: *</span>
-                <input name="contactPhone" required type="tel" placeholder="+63 917 000 0000" className={`mt-1 ${inputCls}`} />
+                <input name="contactPhone" required type="tel" value={company.contactPhone} onChange={(e) => setCompany({ ...company, contactPhone: e.target.value })} placeholder="+63 917 000 0000" autoComplete="tel" className={`mt-1 ${inputCls}`} />
               </label>
               <label className="block text-sm sm:col-span-2">
                 <span className="font-medium text-gray-700">Contact email: *</span>
-                <input name="contactEmail" required type="email" placeholder="info@company.com" className={`mt-1 ${inputCls}`} />
+                <input name="contactEmail" required type="email" value={company.contactEmail} onChange={(e) => setCompany({ ...company, contactEmail: e.target.value })} placeholder="info@company.com" autoComplete="email" aria-invalid={company.contactEmail ? !isEmailValid(company.contactEmail) : undefined} className={`mt-1 ${inputCls} ${company.contactEmail && !isEmailValid(company.contactEmail) ? 'border-red-300 focus:border-red-500 focus:ring-red-500/10' : ''}`} />
+                {company.contactEmail && !isEmailValid(company.contactEmail) && (
+                  <span className="mt-1 block text-xs font-medium text-red-600">Enter a valid email address.</span>
+                )}
               </label>
             </div>
           </section>
@@ -416,8 +485,10 @@ export default function CompanyRegistration() {
                     onChange={(e) => setPerson(i, 'email', e.target.value)}
                     placeholder="name@company.com *"
                     type="email"
+                    autoComplete="email"
                     aria-label={`Member ${i + 1} email`}
-                    className={inputCls}
+                    aria-invalid={person.email ? !isEmailValid(person.email) : undefined}
+                    className={`${inputCls} ${person.email && !isEmailValid(person.email) ? 'border-red-300 focus:border-red-500 focus:ring-red-500/10' : ''}`}
                   />
                   <select
                     value={person.role}
@@ -438,7 +509,7 @@ export default function CompanyRegistration() {
                     disabled={people.length === 1}
                     title={people.length === 1 ? 'At least one member is required' : 'Remove'}
                     aria-label={`Remove member ${i + 1}`}
-                    className="flex items-center justify-center rounded-lg px-3 py-2 text-red-500 transition enabled:hover:bg-red-50 enabled:hover:text-red-600 disabled:opacity-30"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center justify-self-end rounded-lg border border-gray-200 text-red-500 transition enabled:hover:border-red-200 enabled:hover:bg-red-50 enabled:hover:text-red-600 disabled:opacity-30 sm:border-0 sm:justify-self-auto"
                   >
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -519,12 +590,20 @@ export default function CompanyRegistration() {
 
           <button
             type="submit"
-            disabled={!!nameError || checkingName}
-            className={`group w-full rounded-xl py-4 text-sm font-semibold shadow-lg transition focus:outline-none focus:ring-4 ${nameError || checkingName ? 'cursor-not-allowed bg-gray-300 text-gray-500 focus:ring-gray-300/30' : 'bg-gradient-to-r from-brand-600 to-brand-700 text-white hover:from-brand-700 hover:to-brand-800 focus:ring-brand-500/30 hover:shadow-xl'}`}
+            disabled={!!nameError || checkingName || submitting}
+            className={`group w-full rounded-xl py-4 text-sm font-semibold shadow-lg transition focus:outline-none focus:ring-4 ${nameError || checkingName || submitting ? 'cursor-not-allowed bg-gray-300 text-gray-500 focus:ring-gray-300/30' : 'bg-gradient-to-r from-brand-600 to-brand-700 text-white hover:from-brand-700 hover:to-brand-800 focus:ring-brand-500/30 hover:shadow-xl'}`}
           >
             <span className="inline-flex items-center gap-2">
-              {checkingName ? 'Checking name…' : nameError ? 'Fix company name to continue' : `Submit registration`}
-              <span className={`rounded-full bg-white/20 px-2.5 py-1 text-xs ${nameError||checkingName ? 'hidden' : 'group-hover:bg-white/30'}`}>{people.length} member{people.length !== 1 ? 's' : ''}</span>
+              {submitting ? (
+                <>
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                  Submitting registration…
+                </>
+              ) : checkingName ? 'Checking name…' : nameError ? 'Fix company name to continue' : `Submit registration`}
+              {!submitting && <span className={`rounded-full bg-white/20 px-2.5 py-1 text-xs ${nameError||checkingName ? 'hidden' : 'group-hover:bg-white/30'}`}>{people.length} member{people.length !== 1 ? 's' : ''}</span>}
             </span>
           </button>
 
