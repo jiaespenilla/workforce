@@ -309,7 +309,10 @@ function CeoDashboard({ user }) {
       .finally(() => setLoadingCompanies(false))
     }, [])
 
-  const employees = allEmployees.filter((e) => e.active !== false && e.email !== user.email)
+  // CEOs/administrators are not required to clock in/out — exclude them from
+  // staff counts, clocked-in lists and attendance tallies.
+  const isExempt = (e) => /^(ceo|administrator|admin)$/i.test(String(e?.role || ''))
+  const employees = allEmployees.filter((e) => e.active !== false && e.email !== user.email && !isExempt(e))
   const firstName = (user?.name || '').split(' ')[0] || 'there'
 
   useEffect(() => {
