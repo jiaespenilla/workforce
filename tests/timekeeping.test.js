@@ -5,6 +5,9 @@ import {
   hoursForDay,
   overtimeForDay,
   shiftForEmployee,
+  fmtHours,
+  aggregateWindow,
+  isExemptEmployee,
 } from '../src/pages/TimeKeeping'
 
 // Punch times are stored as UTC ISO strings. getSystemTimeZone() falls back to
@@ -133,5 +136,90 @@ describe('TimeKeeping shiftForEmployee', () => {
     expect(shiftForEmployee(data, 'a@x.com')).toBe(shift)
     expect(shiftForEmployee(data, 'unknown@x.com')).toBeNull()
     expect(shiftForEmployee(null, 'a@x.com')).toBeNull()
+  })
+})
+
+describe('fmtHours — weekly report number formats', () => {
+  it('formats [h]:mm with hours beyond 24 and minute rounding', () => {
+    expect(fmtHours(8, 'hmm')).toBe('8:00')
+    expect(fmtHours(8.5, 'hmm')).toBe('8:30')
+    expect(fmtHours(40.5, 'hmm')).toBe('40:30')
+    expect(fmtHours(0, 'hmm')).toBe('0:00')
+    expect(fmtHours(7.999, 'hmm')).toBe('8:00')
+  })
+  it('formats decimal hrs to two places', () => {
+    expect(fmtHours(8, 'hrs')).toBe('8.00')
+    expect(fmtHours(8.5, 'hrs')).toBe('8.50')
+    expect(fmtHours(40.25, 'hrs')).toBe('40.25')
+  })
+  it('treats missing/negative values as 0', () => {
+    expect(fmtHours(null, 'hmm')).toBe('0:00')
+    expect(fmtHours(-2, 'hrs')).toBe('0.00')
+  })
+})
+
+describe('CEO/admin exemption from clock-in requirement', () => {
+  // Anchor to LAST week (always in the past, regardless of when tests run).
+  function lastWeekMondayLocal() {
+    const now = new Date()
+    const back = (now.getDay() + 6) % 7 + 7
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate() - back)
+  }
+  it('isExemptEmployee matches only ceo/administrator roles', () => {
+    expect(isExemptEmployee({ role: 'CEO' })).toBe(true)
+    expect(isExemptEmployee({ role: 'administrator' })).toBe(true)
+    expect(isExemptEmployee({ role: 'Admin' })).toBe(true)
+    expect(isExemptEmployee({ role: 'Manager' })).toBe(false)
+    expect(isExemptEmployee({ role: 'Team Lead' })).toBe(false)
+    expect(isExemptEmployee({ role: 'Employee' })).toBe(false)
+    expect(isExemptEmployee(null)).toBe(false)
+  })
+  it('dayStatus shows Exempt on a past day without punches', () => {
+    expect(dayStatus([], shift, { isToday: false, isPast: true, exempt: true }).label).toBe('Exempt')
+    expect(dayStatus([], shift, { isToday: true, exempt: true }).label).toBe('Exempt')
+  })
+  it('dayStatus still reports real attendance when an exempt person has punches', () => {
+    expect(dayStatus([{ type: 'in', time: AT_SHIFT_START }], shift, { isToday: true, exempt: true }).label).toBe('On time')
+    expect(dayStatus([{ type: 'in', time: LATE }], shift, { isToday: true, exempt: true }).label).toBe('Late')
+  })
+  it('summaryStatus shows Exempt for an exempt person with an empty past week', () => {
+    const monday = lastWeekMondayLocal()
+    const st = summaryStatus([], shift, monday, 'week', { exempt: true })
+    expect(st.label).toBe('Exempt')
+    expect(st.cls).toBe('bg-violet-100 text-violet-700')
+  })
+  it('summaryStatus counts attendance normally for a non-exempt person with an empty past week', () => {
+    const monday = lastWeekMondayLocal()
+    const st = summaryStatus([], shift, monday, 'week')
+    expect(st.label).toContain('missed')
+  })
+})
+
+describe('aggregateWindow — weekly report columns', () => {
+  // Mon/Tue punches in Asia/Manila: each "in" at 08:00 local.
+  const monIn = '2026-08-31T00:00:00.000Z'
+  const monOut = '2026-08-31T08:00:00.000Z' // 8h, no OT
+  const tueIn = '2026-09-01T00:00:00.000Z'
+  const tueOut = '2026-09-01T10:00:00.000Z' // 10h session, whole session OT
+  it('computes first clock-in, last clock-out, regular/overtime/total', () => {
+    const agg = aggregateWindow([
+      { type: 'in', time: tueIn },
+      { type: 'out', time: tueOut, overtime: true, overtime_minutes: 600 },
+      { type: 'in', time: monIn },
+      { type: 'out', time: monOut },
+    ])
+    expect(agg.clockIn.time).toBe(monIn)
+    expect(agg.clockOut.time).toBe(tueOut)
+    expect(agg.total).toBeCloseTo(18)  // 8h + 10h
+    expect(agg.ot).toBeCloseTo(10)     // whole flagged session counts
+    expect(agg.regular).toBeCloseTo(8) // total - overtime
+  })
+  it('handles an empty window', () => {
+    const agg = aggregateWindow([])
+    expect(agg.clockIn).toBeNull()
+    expect(agg.clockOut).toBeNull()
+    expect(agg.regular).toBe(0)
+    expect(agg.ot).toBe(0)
+    expect(agg.total).toBe(0)
   })
 })

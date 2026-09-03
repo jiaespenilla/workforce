@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { getSystemTimeZone } from '../lib/systemSettings'
 import { getCompanyShifts } from '../lib/shifts'
 import { api, apiEnabled } from '../lib/api'
+import { SkeletonRows } from '../components/Skeleton'
 
 function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
 function endOfDay(d) { const x = new Date(d); x.setHours(23, 59, 59, 999); return x }
@@ -97,6 +98,48 @@ export function overtimeForDay(punchesForDay) {
   }
   return total / 3600000
 }
+// Format hours in one of two report styles:
+//   'hmm' → [h]:mm  e.g. 40:30 (hours may exceed 24, minutes 00-59)
+//   'hrs' → decimal e.g. 40.50
+export function fmtHours(hours, mode = 'hrs') {
+  const h = Math.max(0, Number(hours) || 0)
+  if (mode === 'hmm') {
+    let totalMin = Math.round(h * 60)
+    const mm = totalMin % 60
+    const hh = Math.floor(totalMin / 60)
+    return `${hh}:${String(mm).padStart(2, '0')}`
+  }
+  return h.toFixed(2)
+}
+
+// CEO / administrators are not required to clock in or out.
+export function isExemptEmployee(emp) {
+  return /^(ceo|administrator|admin)$/i.test(String(emp?.role || ''))
+}
+
+// Aggregate one employee's punches over a window into the report columns:
+// CLOCK-IN (first in), CLOCK-OUT (last out), REGULAR, OVERTIME, TOTAL.
+export function aggregateWindow(punchesForWindow) {
+  const sorted = [...(punchesForWindow || [])].sort((a, b) => new Date(a.time) - new Date(b.time))
+  const clockIn = sorted.find((p) => p.type === 'in') || null
+  const clockOut = [...sorted].reverse().find((p) => p.type === 'out') || null
+  // Group by system-timezone day so OT is computed per day, then summed.
+  const byDay = new Map()
+  for (const p of sorted) {
+    const k = systemDateKey(p.time)
+    if (!byDay.has(k)) byDay.set(k, [])
+    byDay.get(k).push(p)
+  }
+  let total = 0
+  let ot = 0
+  for (const dayPunches of byDay.values()) {
+    total += hoursForDay(dayPunches)
+    ot += overtimeForDay(dayPunches)
+  }
+  const regular = Math.max(0, total - ot)
+  return { clockIn, clockOut, regular, ot, total }
+}
+
 
 function toMinutes(t) {
   if (!t) return null
@@ -117,7 +160,11 @@ export function shiftForEmployee(shiftData, email) {
 // On time  = first clock-in is no later than the shift start time.
 // Late     = first clock-in is after the shift start time.
 // Missed   = a timed shift day is over with no clock-in.
-export function dayStatus(punches, shift, { isToday, isPast } = {}) {
+// Exempt   = CEO/administrators are not required to clock in or out.
+export function dayStatus(punches, shift, { isToday, isPast, exempt } = {}) {
+  if (exempt && !punches.length) {
+    return { label: 'Exempt', cls: 'bg-violet-100 text-violet-700' }
+  }
   if (!shift || shift.open) {
     if (punches.length) return { label: 'Present', cls: 'bg-brand-100 text-brand-700' }
     return { label: isToday ? 'Not yet' : isPast ? 'Absent' : 'Upcoming', cls: 'bg-gray-100 text-gray-500' }
@@ -135,7 +182,7 @@ export function dayStatus(punches, shift, { isToday, isPast } = {}) {
 }
 
 // Week/month summary chip for a whole window (CEO view).
-export function summaryStatus(allPunches, shift, anchor, view) {
+export function summaryStatus(allPunches, shift, anchor, view, { exempt } = {}) {
   const byDate = new Map()
   for (const p of allPunches) {
     const k = systemDateKey(p.time)
@@ -149,13 +196,17 @@ export function summaryStatus(allPunches, shift, anchor, view) {
     const st = dayStatus(punches, shift, {
       isToday: sameDay(d, today),
       isPast: d.getTime() < startOfDay(today).getTime(),
+      exempt,
     })
     if (st.label === 'On time') onTime++
     else if (st.label === 'Late') late++
     else if (st.label === 'Missed' || st.label === 'Absent') missed++
     if (punches.length) present++
   }
-  if (!present) return { label: missed ? `${missed} missed` : 'No punches', cls: 'bg-gray-100 text-gray-500' }
+  if (!present) {
+    if (exempt && !missed) return { label: 'Exempt', cls: 'bg-violet-100 text-violet-700' }
+    return { label: missed ? `${missed} missed` : 'No punches', cls: 'bg-gray-100 text-gray-500' }
+  }
   if (shift && !shift.open) {
     return { label: `${onTime} on time · ${late} late`, cls: late > onTime ? 'bg-amber-100 text-amber-700' : 'bg-brand-100 text-brand-700' }
   }
@@ -220,6 +271,10 @@ function CeoTimeKeeping() {
   const [allEmployees, setAllEmployees] = useState([])
   const [shiftsByCompany, setShiftsByCompany] = useState({})
   const [refreshing, setRefreshing] = useState(false)
+  const [loading, setLoading] = useState(true)
+  // Weekly-report / timesheet number format: 'hmm' → [h]:mm, 'hrs' → decimal.
+  const [fmt, setFmt] = useState('hmm')
+  const [reportOpen, setReportOpen] = useState(false)
 
   const tz = getSystemTimeZone()
 
@@ -234,6 +289,7 @@ function CeoTimeKeeping() {
     setAttendance(attList)
     setAllEmployees(comps.flatMap((c) => c.employees.map((e) => ({ ...e, companyName: c.name, companyId: c.id }))))
     setRefreshing(false)
+    setLoading(false)
   }
 
   useEffect(() => { reload() }, [])
@@ -325,18 +381,28 @@ return (
             <PeriodNavigator anchor={cursor} view={view} onAnchor={setCursor} />
             <div className="flex gap-1 rounded-lg bg-gray-100 p-1">{tabs('period')}</div>
             <div className="flex gap-1 rounded-lg bg-gray-100 p-1">{tabs('layout')}</div>
+            <div className="flex gap-1 rounded-lg bg-gray-100 p-1" title="Hours display format">
+              <button onClick={() => setFmt('hmm')} className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition ${fmt === 'hmm' ? 'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>[h]:mm</button>
+              <button onClick={() => setFmt('hrs')} className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition ${fmt === 'hrs' ? 'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>hrs</button>
+            </div>
+            <button onClick={() => setReportOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700">
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>
+              Weekly Report
+            </button>
           </div>
         </div>
 
-{layout === 'table' && <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
+{layout === 'table' && (loading ? <SkeletonRows rows={6} /> : <div className="overflow-x-auto">
+          <table className="w-full min-w-[880px] text-left text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
                 <th className="px-6 py-3">Employee</th>
                 <th className="px-6 py-3">Company</th>
-                <th className="px-6 py-3">Clock In</th>
-                <th className="px-6 py-3">Clock Out</th>
-                <th className="px-6 py-3">Hours</th>
+                <th className="px-6 py-3">Clock-In</th>
+                <th className="px-6 py-3">Clock-Out</th>
+                <th className="px-6 py-3 text-right">Regular{fmt === 'hmm' ? ' ([h]:mm)' : ' (hrs)'}</th>
+                <th className="px-6 py-3 text-right">Overtime{fmt === 'hmm' ? ' ([h]:mm)' : ' (hrs)'}</th>
+                <th className="px-6 py-3 text-right">Total{fmt === 'hmm' ? ' ([h]:mm)' : ' (hrs)'}</th>
                 <th className="px-6 py-3">Status</th>
               </tr>
             </thead>
@@ -344,15 +410,15 @@ return (
               {employees.map((emp) => {
                 const vp = windowed(emp.email)
                 const shift = shiftForEmployee(shiftsByCompany[emp.companyId], emp.email)
+                const exempt = isExemptEmployee(emp)
                 const lastPunch = vp[vp.length - 1] || null
-                const clockIn = vp.find((p) => p.type === 'in')
-                const clockOut = [...vp].reverse().find((p) => p.type === 'out')
-                const hrs = hoursForDay(vp)
+                const agg = aggregateWindow(vp)
                 const isToday = sameDay(cursor, new Date())
                 const st = view === 'day'
-                  ? dayStatus(vp, shift, { isToday, isPast: cursor.getTime() < startOfDay(new Date()).getTime() })
-                  : summaryStatus(allFor(emp.email), shift, cursor, view)
+                  ? dayStatus(vp, shift, { isToday, isPast: cursor.getTime() < startOfDay(new Date()).getTime(), exempt })
+                  : summaryStatus(allFor(emp.email), shift, cursor, view, { exempt })
                 const isLive = isToday && lastPunch?.type === 'in'
+                const hasHours = agg.total > 0
                 return (
                   <tr key={`${emp.companyId}-${emp.email}`} className="hover:bg-gray-50">
                     <td className="px-6 py-3">
@@ -360,9 +426,11 @@ return (
                       <p className="text-xs text-gray-500">{emp.role || 'Unassigned'}</p>
                     </td>
                     <td className="px-6 py-3 text-gray-600">{emp.companyName}</td>
-                    <td className="px-6 py-3 tabular-nums text-gray-700">{clockIn ? fmtStamp(clockIn.time) : '—'}</td>
-                    <td className="px-6 py-3 tabular-nums text-gray-700">{clockOut ? fmtStamp(clockOut.time) : '—'}</td>
-                    <td className="px-6 py-3 tabular-nums text-gray-700">{hrs ? `${hrs.toFixed(1)}h` : '—'}</td>
+                    <td className="px-6 py-3 tabular-nums text-gray-700">{agg.clockIn ? fmtStamp(agg.clockIn.time) : '—'}</td>
+                    <td className="px-6 py-3 tabular-nums text-gray-700">{agg.clockOut ? fmtStamp(agg.clockOut.time) : '—'}</td>
+                    <td className="px-6 py-3 text-right tabular-nums text-gray-700">{hasHours ? fmtHours(agg.regular, fmt) : '—'}</td>
+                    <td className="px-6 py-3 text-right tabular-nums text-amber-700">{agg.ot > 0 ? fmtHours(agg.ot, fmt) : '—'}</td>
+                    <td className="px-6 py-3 text-right font-semibold tabular-nums text-gray-900">{hasHours ? fmtHours(agg.total, fmt) : '—'}</td>
                     <td className="px-6 py-3">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${st.cls}`}>{st.label}</span>
@@ -379,12 +447,12 @@ return (
               })}
               {employees.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-xs text-gray-400">No active employees found.</td>
+                  <td colSpan={8} className="px-6 py-8 text-center text-xs text-gray-400">No active employees found.</td>
                 </tr>
               )}
             </tbody>
           </table>
-        </div>}
+        </div>)}
 
 {layout === 'calendar' && (
           <div className="p-4">
@@ -420,16 +488,17 @@ return (
             <p className="mt-3 text-center text-[11px] text-gray-400">Calendar shows how many employees clocked in each day in {cursor.toLocaleDateString([], { month: 'long', year: 'numeric' })}.</p>
           </div>
         )}
-        {layout === 'compact' && (
+        {layout === 'compact' && (loading ? <SkeletonRows rows={6} /> : (
           <div className="divide-y divide-gray-100">
             {employees.map((emp) => {
               const vp = windowed(emp.email)
               const shift = shiftForEmployee(shiftsByCompany[emp.companyId], emp.email)
+              const exempt = isExemptEmployee(emp)
               const hrs = hoursForDay(vp).toFixed(1)
               const last = vp[vp.length - 1]
               const st = view === 'day'
-                ? dayStatus(vp, shift, { isToday: sameDay(cursor, new Date()), isPast: cursor.getTime() < startOfDay(new Date()).getTime() })
-                : summaryStatus(allFor(emp.email), shift, cursor, view)
+                ? dayStatus(vp, shift, { isToday: sameDay(cursor, new Date()), isPast: cursor.getTime() < startOfDay(new Date()).getTime(), exempt })
+                : summaryStatus(allFor(emp.email), shift, cursor, view, { exempt })
               return (
                 <div key={`${emp.companyId}-${emp.email}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
                   <div className="min-w-0">
@@ -442,7 +511,7 @@ return (
             })}
             {employees.length === 0 && <p className="p-6 text-center text-xs text-gray-400">No active employees.</p>}
           </div>
-        )}
+        ))}
 
 {selectedDate && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSelectedDate(null)}>
@@ -499,6 +568,96 @@ return (
           </div>
         )}
 
+{/* Weekly Report generator — 16.1: two choices, weekly_hmm ([h]:mm) or weekly (hrs) */}
+        {reportOpen && (() => {
+          const monday = startOfWeek(cursor)
+          const sunday = endOfDay(addDays(monday, 6))
+          const inWeek = (t) => { const x = new Date(t).getTime(); return x >= monday.getTime() && x <= sunday.getTime() }
+          const rows = employees
+            .map((emp) => ({ emp, agg: aggregateWindow(attendance.filter((p) => p.email === emp.email && inWeek(p.time))) }))
+            .filter((r) => r.agg.total > 0)
+          const label = fmt === 'hmm' ? '[h]:mm' : 'hrs'
+          const reportName = fmt === 'hmm' ? 'weekly_hmm' : 'weekly'
+          const weekLabel = `${monday.toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${addDays(monday, 6).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`
+          const printReport = () => {
+            const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+            const tr = rows.map(({ emp, agg }) =>
+              `<tr><td>${esc(emp.name)}</td><td>${esc(emp.companyName)}</td><td>${agg.clockIn ? esc(fmtStamp(agg.clockIn.time)) : '—'}</td><td>${agg.clockOut ? esc(fmtStamp(agg.clockOut.time)) : '—'}</td><td>${esc(fmtHours(agg.regular, fmt))}</td><td>${esc(fmtHours(agg.ot, fmt))}</td><td><b>${esc(fmtHours(agg.total, fmt))}</b></td></tr>`
+            ).join('')
+            const tot = (k) => esc(fmtHours(rows.reduce((s, r) => s + r.agg[k], 0), fmt))
+            const html = `<html><head><meta charset="utf-8"><title>Weekly Time Report (${reportName})</title><style>body{font-family:Arial,sans-serif;font-size:12px}h2{margin:0 0 4px}p{margin:0 0 12px;color:#555}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th:nth-child(n+5),td:nth-child(n+5){text-align:right}th{background:#ecfdf5}tfoot td{font-weight:bold;background:#f9fafb}</style></head><body><h2>Weekly Time Report — ${esc(weekLabel)}</h2><p>Report: ${esc(reportName)} (Regular/Overtime/Total in ${esc(label)}) · ${rows.length} employee(s) with logged time</p><table><thead><tr><th>Employee</th><th>Company</th><th>Clock-In</th><th>Clock-Out</th><th>Regular (${esc(label)})</th><th>Overtime (${esc(label)})</th><th>Total (${esc(label)})</th></tr></thead><tbody>${tr || '<tr><td colspan="7">No time logs for this week.</td></tr>'}</tbody><tfoot><tr><td colspan="4">Total</td><td>${tot('regular')}</td><td>${tot('ot')}</td><td>${tot('total')}</td></tr></tfoot></table></body></html>`
+            const win = window.open('', '_blank'); if (win) { win.document.write(html); win.document.close(); win.focus(); win.print() }
+          }
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setReportOpen(false)}>
+              <div className="absolute inset-0 bg-gray-900/50" />
+              <div className="relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-start justify-between border-b border-gray-100 px-5 py-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">Weekly Time Report</h3>
+                    <p className="mt-0.5 text-xs text-gray-500">Week of {weekLabel} · choose a format, then print or save as PDF.</p>
+                  </div>
+                  <button onClick={() => setReportOpen(false)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                </div>
+                <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-5 py-3">
+                  <span className="text-xs font-medium text-gray-500">Format:</span>
+                  {([['weekly_hmm', 'weekly_hmm — [h]:mm'], ['weekly', 'weekly — hrs']].map(([k, lbl]) => (
+                    <button key={k} onClick={() => setFmt(k === 'weekly_hmm' ? 'hmm' : 'hrs')} className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${fmt === (k === 'weekly_hmm' ? 'hmm' : 'hrs') ? 'bg-brand-600 text-white shadow-sm' : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:text-gray-900'}`}>{lbl}</button>
+                  )))}
+                </div>
+                <div className="flex-1 overflow-auto">
+                  <table className="w-full min-w-[640px] text-left text-xs">
+                    <thead className="sticky top-0 bg-white text-[10px] uppercase tracking-wide text-gray-500 shadow-[0_1px_0_0_#e5e7eb]">
+                      <tr>
+                        <th className="px-5 py-2.5">Employee</th>
+                        <th className="px-3 py-2.5">Company</th>
+                        <th className="px-3 py-2.5">Clock-In</th>
+                        <th className="px-3 py-2.5">Clock-Out</th>
+                        <th className="px-3 py-2.5 text-right">Regular ({label})</th>
+                        <th className="px-3 py-2.5 text-right">Overtime ({label})</th>
+                        <th className="px-5 py-2.5 text-right">Total ({label})</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {rows.map(({ emp, agg }) => (
+                        <tr key={`${emp.companyId}-${emp.email}`} className="hover:bg-gray-50">
+                          <td className="px-5 py-2.5 font-medium text-gray-900">{emp.name}</td>
+                          <td className="px-3 py-2.5 text-gray-600">{emp.companyName}</td>
+                          <td className="px-3 py-2.5 tabular-nums text-gray-700">{agg.clockIn ? fmtStamp(agg.clockIn.time) : '—'}</td>
+                          <td className="px-3 py-2.5 tabular-nums text-gray-700">{agg.clockOut ? fmtStamp(agg.clockOut.time) : '—'}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-gray-700">{fmtHours(agg.regular, fmt)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-amber-700">{fmtHours(agg.ot, fmt)}</td>
+                          <td className="px-5 py-2.5 text-right font-semibold tabular-nums text-gray-900">{fmtHours(agg.total, fmt)}</td>
+                        </tr>
+                      ))}
+                      {rows.length === 0 && <tr><td colSpan={7} className="px-5 py-8 text-center text-xs text-gray-400">No time logs for this week.</td></tr>}
+                    </tbody>
+                    {rows.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-gray-50 font-semibold text-gray-900">
+                          <td className="px-5 py-2.5" colSpan={4}>Total</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{fmtHours(rows.reduce((s, r) => s + r.agg.regular, 0), fmt)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{fmtHours(rows.reduce((s, r) => s + r.agg.ot, 0), fmt)}</td>
+                          <td className="px-5 py-2.5 text-right tabular-nums">{fmtHours(rows.reduce((s, r) => s + r.agg.total, 0), fmt)}</td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+                <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-3">
+                  <button onClick={() => setReportOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
+                  <button onClick={printReport} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                    Print / Save PDF
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
+
+
 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-6 py-3 text-sm">
           <span className="text-gray-500">
             {view === 'day'
@@ -528,6 +687,7 @@ export default function TimeKeeping() {
   const [shiftData, setShiftData] = useState({ shifts: [], assignments: {} })
   const [companyId, setCompanyId] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   const reload = async () => {
     if (!user?.email) return
@@ -542,6 +702,7 @@ export default function TimeKeeping() {
     const own = comps.find((c) => (c.employees || []).some((e) => (e.email || '').toLowerCase() === (user.email || '').toLowerCase()))
     setCompanyId(own?.id || comps[0]?.id || null)
     setRefreshing(false)
+    setLoading(false)
   }
 
   useEffect(() => { reload() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [user?.email])
@@ -670,7 +831,7 @@ return (
             </div>
           </div>
         </div>
-        {layout === 'table' && <div className="overflow-x-auto">
+        {layout === 'table' && (loading ? <SkeletonRows rows={7} /> : <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
@@ -704,7 +865,7 @@ return (
               )}
             </tbody>
           </table>
-        </div>}
+        </div>)}
 
 {layout === 'calendar' && (
           <div className="p-4">
