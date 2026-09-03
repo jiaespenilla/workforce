@@ -45,9 +45,9 @@ describe('StorageSetup page', () => {
   it('renders the step-by-step setup guide for the selected provider', async () => {
     render(<StorageSetup />)
     expect(await screen.findByText('Step-by-step Setup Guide')).toBeTruthy()
-    // gdrive-specific step visible
-    expect(screen.getByText(/Service Account/i)).toBeTruthy()
-    expect(screen.getByText(/GDRIVE_SERVICE_KEY/i)).toBeTruthy()
+    // gdrive-specific step visible (multiple mentions are expected)
+    expect(screen.getAllByText(/Service Account/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/GDRIVE_SERVICE_KEY/i).length).toBeGreaterThan(0)
     // verification step always present
     expect(screen.getByText(/must persist/i)).toBeTruthy()
   })

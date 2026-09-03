@@ -160,10 +160,10 @@ export function shiftForEmployee(shiftData, email) {
 // On time  = first clock-in is no later than the shift start time.
 // Late     = first clock-in is after the shift start time.
 // Missed   = a timed shift day is over with no clock-in.
-// Not required = CEO/administrators are not required to clock in or out.
+// Exempt = CEO/administrators are not required to clock in or out.
 export function dayStatus(punches, shift, { isToday, isPast, exempt } = {}) {
   if (exempt && !punches.length) {
-    return { label: 'Not required', cls: 'bg-violet-100 text-violet-700' }
+    return { label: 'Exempt', cls: 'bg-violet-100 text-violet-700' }
   }
   if (!shift || shift.open) {
     if (punches.length) return { label: 'Present', cls: 'bg-brand-100 text-brand-700' }
@@ -204,7 +204,7 @@ export function summaryStatus(allPunches, shift, anchor, view, { exempt } = {}) 
     if (punches.length) present++
   }
     if (!present) {
-    if (exempt && !missed) return { label: 'Not required', cls: 'bg-violet-100 text-violet-700' }
+    if (exempt && !missed) return { label: 'Exempt', cls: 'bg-violet-100 text-violet-700' }
     return { label: missed ? `${missed} missed` : 'No punches', cls: 'bg-gray-100 text-gray-500' }
   }
   if (shift && !shift.open) {
