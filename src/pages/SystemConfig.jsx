@@ -823,7 +823,7 @@ export default function SystemConfig() {
                 {/* Preset selection — 3 choices */}
                 <div className="mt-4">
                   <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Or choose a preset</p>
-                  <div className="mt-2 grid grid-cols-3 gap-3">
+                  <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {SYSTEM_ICON_PRESETS.map((preset) => (
                       <button
                         key={preset.id}

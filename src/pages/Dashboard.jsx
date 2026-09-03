@@ -264,6 +264,7 @@ function CeoDashboard({ user }) {
   const [genTargetDate, setGenTargetDate] = useState(() => localTodayISO())
   const [genConfirmOpen, setGenConfirmOpen] = useState(false)
   const [genResult, setGenResult] = useState(null)
+  const [genCreatedTasks, setGenCreatedTasks] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { const t=setInterval(()=>setNow(new Date()),1000); return ()=>clearInterval(t) }, [])
@@ -364,6 +365,7 @@ function CeoDashboard({ user }) {
     const src = genSourceTasks()
     let created = 0
     let failed = 0
+    const newlyCreated = []
     for (const t of src) {
       const offset = daysBetween(genStartDate, dueKey(t))
       const targetDue = addDaysISO(genTargetDate, offset)
@@ -371,8 +373,11 @@ function CeoDashboard({ user }) {
         if (apiEnabled()) {
           const c = await api('/api/tasks', { method: 'POST', body: { title: t.title, assignee: t.assignee, priority: t.priority, due: targetDue, status: 'pending' } })
           setAllTasks((p)=> [...p, c])
+          newlyCreated.push(c)
         } else {
-          setAllTasks((p)=> [...p, { ...t, id: Date.now()+created+Math.random(), due: targetDue, status: 'pending' }])
+          const clone = { ...t, id: Date.now()+created+Math.random(), due: targetDue, status: 'pending' }
+          setAllTasks((p)=> [...p, clone])
+          newlyCreated.push(clone)
         }
         created++
       } catch { failed++ }
@@ -380,11 +385,12 @@ function CeoDashboard({ user }) {
     setGenConfirmOpen(false)
     const rangeLabel = genStartDate === genEffectiveEnd ? genStartDate : `${genStartDate} → ${genEffectiveEnd}`
     const targetLabel = src.length === 1 ? genTargetDate : `${genTargetDate} (+${daysBetween(genStartDate, dueKey(src[src.length-1]))}d)`
+    setGenCreatedTasks(newlyCreated)
     setGenResult(created
-      ? { type:'success', msg:`${created} task(s) from ${rangeLabel} copied to ${targetLabel}.${failed ? ` ${failed} failed - try again.` : ''}` }
-      : { type:'error', msg:`No tasks were copied. ${failed} task(s) failed - check your connection and try again.` }
+      ? { type:'success', msg:`${created} task(s) from ${rangeLabel} generated to ${targetLabel}.${failed ? ` ${failed} failed - try again.` : ''}` }
+      : { type:'error', msg:`No tasks were generated. ${failed} task(s) failed - check your connection and try again.` }
     )
-    setTimeout(()=>setGenResult(null), 6000)
+    if (created) setTimeout(()=>setGenResult(null), 8000)
   }
 
 
@@ -522,6 +528,33 @@ function CeoDashboard({ user }) {
         )}
         {genResult && (
           <div className={`mt-2 rounded-lg px-4 py-3 text-xs font-medium ring-1 ${genResult.type==='success'?'bg-emerald-50 text-emerald-700 ring-emerald-200':'bg-amber-50 text-amber-700 ring-amber-200'}`}>{genResult.msg}</div>
+        )}
+        {genCreatedTasks.length > 0 && (
+          <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50/40 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-brand-900">Generated tasks — ready to export</h4>
+                <p className="mt-1 text-xs text-brand-700">{genCreatedTasks.length} task(s) created. They now appear in your task list.</p>
+              </div>
+              <TaskExportToolbar tasks={genCreatedTasks} />
+            </div>
+            <div className="mt-3 max-h-48 overflow-y-auto divide-y divide-brand-100 rounded-lg border border-brand-100 bg-white">
+              {genCreatedTasks.slice(0, 20).map((t)=> (
+                <div key={t.id} className="flex items-center justify-between px-3 py-2 text-xs">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-gray-900">{t.title}</p>
+                    <p className="truncate text-gray-500">{t.assignee} · {t.priority} · due {dueKey(t)}</p>
+                  </div>
+                  <span className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[t.status] || 'bg-gray-100'}`}>{STATUS_LABELS[t.status] || t.status}</span>
+                </div>
+              ))}
+              {genCreatedTasks.length > 20 && <p className="px-3 py-2 text-center text-xs text-gray-400">+{genCreatedTasks.length - 20} more</p>}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button onClick={()=>setGenCreatedTasks([])} className="text-xs font-medium text-brand-600 hover:text-brand-800">Dismiss</button>
+              <span className="text-xs text-gray-400">· Export via Copy / Word / PDF above, or find them in the full task list below.</span>
+            </div>
+          </div>
         )}
       </div>
 
