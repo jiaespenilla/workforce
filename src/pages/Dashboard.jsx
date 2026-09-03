@@ -232,7 +232,7 @@ function TaskProgressModal({ task, onClose, onStatusChange }) {
         </div>
 
         {/* Details */}
-        <dl className="mx-6 mt-5 grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl bg-gray-50 p-4 text-xs">
+        <dl className="mx-6 mt-5 grid grid-cols-1 gap-x-4 gap-y-3 rounded-xl bg-gray-50 p-4 text-xs sm:grid-cols-2">
           <div>
             <dt className="font-semibold uppercase tracking-wide text-gray-400">Priority</dt>
             <dd className="mt-0.5 font-medium text-gray-900">{task.priority}</dd>

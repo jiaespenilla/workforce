@@ -279,19 +279,19 @@ export default function Kiosk() {
   }
 
   const header = (
-    <header className="flex items-center justify-between">
-      <div className="flex items-center gap-3">
+    <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-3">
         {brandIcon ? (
-          <img src={brandIcon} alt="" className="h-12 w-12 rounded-2xl bg-white object-contain p-1 shadow-lg" />
+          <img src={brandIcon} alt="" className="h-12 w-12 shrink-0 rounded-2xl bg-white object-contain p-1 shadow-lg" />
         ) : (
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-xl font-black text-brand-600 shadow-lg">{brandLetter}</div>
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-xl font-black text-brand-600 shadow-lg">{brandLetter}</div>
         )}
-        <div className="leading-tight">
-          <span className="block text-lg font-bold">{systemName}</span>
-          <span className="block text-[11px] font-medium text-emerald-100">Time Kiosk{config.site ? ` · ${config.site}` : ''}</span>
+        <div className="min-w-0 leading-tight">
+          <span className="block truncate text-lg font-bold">{systemName}</span>
+          <span className="block truncate text-[11px] font-medium text-emerald-100">Time Kiosk{config.site ? ` · ${config.site}` : ''}</span>
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         {!deviceToken && (
           <button type="button" onClick={pairDevice} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow hover:bg-emerald-50">Pair device</button>
         )}
@@ -419,14 +419,14 @@ export default function Kiosk() {
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-brand-700 via-brand-600 to-emerald-500 p-6 text-white">
       {header}
 
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-8 py-8">
-        <div className={`flex w-full flex-col items-center gap-4 rounded-[2rem] bg-white/10 px-10 py-10 ring-1 ring-white/25 backdrop-blur`}>
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-6 px-2 py-8 sm:gap-8">
+        <div className={`flex w-full flex-col items-center gap-4 rounded-[2rem] bg-white/10 px-5 py-8 ring-1 ring-white/25 backdrop-blur sm:px-10 sm:py-10`}>
           <span className={`flex h-20 w-20 items-center justify-center rounded-full ${result.action === 'in' ? 'bg-brand-500' : 'bg-gray-900'} shadow-xl`}>
             <svg className="h-11 w-11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </span>
-          <p className="text-center text-4xl font-black tracking-wide">
+          <p className="text-center text-3xl font-black tracking-wide sm:text-4xl">
             CLOCKED {result.action === 'in' ? 'IN' : 'OUT'}
           </p>
           {result.action === 'out' && result.overtime && (
@@ -439,7 +439,7 @@ export default function Kiosk() {
         </div>
 
         <div className="text-center">
-          <p className="text-5xl font-black tabular-nums drop-shadow-lg">
+          <p className="text-4xl font-black tabular-nums drop-shadow-lg sm:text-5xl">
             {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </p>
         </div>

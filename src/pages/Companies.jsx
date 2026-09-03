@@ -120,43 +120,47 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
         className="relative max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start gap-4 border-b border-gray-100 p-6">
-          <CompanyLogo company={company} size="h-12 w-12" textSize="text-base" />
-          <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-bold text-gray-900">{company.name}</h2>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ${STATUS_STYLES[status]}`}>
-                {STATUS_LABELS[status]}
-              </span>
-              <StatusPill on={company.active !== false} />
-              <span className="text-xs text-gray-500">
-                {company.employees.length} employees · {activeCount} active
-              </span>
+        <div className="flex flex-col gap-3 border-b border-gray-100 p-4 sm:flex-row sm:items-start sm:gap-4 sm:p-6">
+          <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
+            <CompanyLogo company={company} size="h-12 w-12" textSize="text-base" />
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate text-lg font-bold text-gray-900">{company.name}</h2>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ${STATUS_STYLES[status]}`}>
+                  {STATUS_LABELS[status]}
+                </span>
+                <StatusPill on={company.active !== false} />
+                <span className="text-xs text-gray-500">
+                  {company.employees.length} employees · {activeCount} active
+                </span>
+              </div>
             </div>
           </div>
-          {!editing && tab === 'details' && (
-            <button
-              type="button"
-              onClick={() => {
-                setForm(buildCompanyForm(company))
-                setEditing(true)
-              }}
-              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-brand-400 hover:text-brand-700"
-            >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          <div className="flex shrink-0 items-center gap-2">
+            {!editing && tab === 'details' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setForm(buildCompanyForm(company))
+                  setEditing(true)
+                }}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-brand-400 hover:text-brand-700"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Edit
+              </button>
+            )}
+            <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-600">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
-              Edit
             </button>
-          )}
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-600">
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          </div>
         </div>
 
-        <div className="flex gap-1 border-b border-gray-100 px-6 pt-3">
+        <div className="flex gap-1 overflow-x-auto border-b border-gray-100 px-4 pt-3 sm:px-6">
           {[
             ['details', 'Company Details'],
             ['employees', 'Employees'],
@@ -278,8 +282,8 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
         )}
 
         {tab === 'employees' && (
-          <div className="p-6">
-            <table className="w-full text-left text-sm">
+          <div className="overflow-x-auto p-4 sm:p-6">
+            <table className="w-full min-w-[560px] text-left text-sm">
               <thead className="text-xs uppercase tracking-wide text-gray-500">
                 <tr>
                   <th className="pb-2">Employee</th>
@@ -423,16 +427,16 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
                 const inUse = company.employees.some((e)=>(e.locationId||e.location)===loc.id || (e.location||'').trim().toLowerCase()===loc.name.trim().toLowerCase())
                 const isEditing = editingLocId===loc.id
                 return (
-                  <div key={loc.id} className="flex items-center gap-2 p-3">
+                  <div key={loc.id} className="flex flex-wrap items-center gap-2 p-3">
                     {isEditing ? (
                       <>
-                        <input value={editingLocName} onChange={(e)=>setEditingLocName(e.target.value)} className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm" />
+                        <input value={editingLocName} onChange={(e)=>setEditingLocName(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm" />
                         <button type="button" onClick={async()=>{try{ await renameCompanyLocation(company.id, loc.id, editingLocName); setLocations((prev)=>prev.map((l)=>l.id===loc.id?{...l,name:editingLocName.trim()}:l)); setEditingLocId(null);}catch(err){setLocError(err.message)}} } className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white">Save</button>
                         <button type="button" onClick={()=>setEditingLocId(null)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs">Cancel</button>
                       </>
                     ) : (
                       <>
-                        <span className="flex-1 text-sm font-medium text-gray-900">{loc.name}</span>
+                        <span className="min-w-0 flex-1 basis-full text-sm font-medium text-gray-900 sm:basis-auto">{loc.name}</span>
                         {inUse && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">In use</span>}
                         <button type="button" onClick={()=>{setEditingLocId(loc.id); setEditingLocName(loc.name); setLocError('')}} className="rounded-lg border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">Rename</button>
                         <button type="button" onClick={async()=>{

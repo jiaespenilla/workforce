@@ -597,11 +597,11 @@ return (
         </div>)}
 
 {layout === 'calendar' && (
-          <div className="p-4">
-            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => <div key={d} className="py-1">{d}</div>)}
+          <div className="p-2 sm:p-4">
+            <div className="grid grid-cols-7 gap-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-gray-400 sm:gap-1 sm:text-[10px]">
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <div key={i} className="py-1">{d}</div>)}
             </div>
-            <div className="mt-1 grid grid-cols-7 gap-1">
+            <div className="mt-1 grid grid-cols-7 gap-0.5 sm:gap-1">
               {(() => {
                 const byDate = new Map()
                 for (const p of attendance) {
@@ -618,9 +618,9 @@ return (
                   const count = new Set(punches.map((p) => p.email)).size
                   const isToday = sameDay(d, new Date())
                   return (
-                    <button key={key} onClick={() => setSelectedDate(key)} className={'rounded-lg border p-2 text-center transition hover:shadow-sm ' + (count ? 'bg-brand-50 border-brand-200 hover:border-brand-300 ' : 'bg-gray-50 border-gray-100 hover:bg-white ') + (isToday ? 'ring-2 ring-brand-400' : '')}>
+                    <button key={key} onClick={() => setSelectedDate(key)} className={'min-w-0 rounded-lg border p-1 text-center transition hover:shadow-sm sm:p-2 ' + (count ? 'bg-brand-50 border-brand-200 hover:border-brand-300 ' : 'bg-gray-50 border-gray-100 hover:bg-white ') + (isToday ? 'ring-2 ring-brand-400' : '')}>
                       <p className="text-xs font-bold text-gray-900">{i + 1}</p>
-                      <p className={'text-[11px] font-semibold ' + (count ? 'text-brand-700' : 'text-gray-400')}>{count ? count + ' in' : '—'}</p>
+                      <p className={'truncate text-[10px] font-semibold sm:text-[11px] ' + (count ? 'text-brand-700' : 'text-gray-400')}>{count ? count + ' in' : '—'}</p>
                     </button>
                   )
                 })
@@ -1025,7 +1025,7 @@ return (
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 lg:col-span-2 lg:content-start">
+        <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:col-span-2 lg:content-start">
           {[
             ['Clock in/out', isClockedIn ? 'Clocked In' : 'Clocked Out', lastPunch ? fmtClock(lastPunch.time) : 'No punches yet'],
             ["Today's punches", String(todayPunches.length), todayHours.toFixed(1) + 'h today'],
@@ -1107,11 +1107,11 @@ return (
         </div>)}
 
 {layout === 'calendar' && (
-          <div className="p-4">
-            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => <div key={d} className="py-1">{d}</div>)}
+          <div className="p-2 sm:p-4">
+            <div className="grid grid-cols-7 gap-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-gray-400 sm:gap-1 sm:text-[10px]">
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <div key={i} className="py-1">{d}</div>)}
             </div>
-            <div className="mt-1 grid grid-cols-7 gap-1">
+            <div className="mt-1 grid grid-cols-7 gap-0.5 sm:gap-1">
               {(() => {
                 const byDate = new Map()
                 for (const p of myPunches) {
@@ -1130,14 +1130,14 @@ return (
                   const hasPunch = punches.length > 0
                   const isToday = sameDay(d, new Date())
                   return (
-                    <div key={key} className={'rounded-lg border p-2 text-left ' + (hasPunch ? (st.label === 'Late' ? 'bg-amber-50 border-amber-200' : 'bg-brand-50 border-brand-200') : 'bg-gray-50 border-gray-100') + (isToday ? ' ring-2 ring-brand-400' : '')}>
+                    <div key={key} className={'min-w-0 rounded-lg border p-1 text-left sm:p-2 ' + (hasPunch ? (st.label === 'Late' ? 'bg-amber-50 border-amber-200' : 'bg-brand-50 border-brand-200') : 'bg-gray-50 border-gray-100') + (isToday ? ' ring-2 ring-brand-400' : '')}>
                       <p className="text-xs font-bold text-gray-900">{i + 1}</p>
                       {hasPunch ? (
                         <>
-                          <p className={'mt-1 text-[10px] font-semibold leading-tight ' + st.cls}>{st.label}</p>
-                          <p className="text-[11px] font-semibold text-brand-700 tabular-nums">{hrs.toFixed(1)}h</p>
+                          <p className={'mt-1 hidden truncate text-[10px] font-semibold leading-tight sm:block ' + st.cls}>{st.label}</p>
+                          <p className="truncate text-[10px] font-semibold text-brand-700 tabular-nums sm:text-[11px]">{hrs.toFixed(1)}h</p>
                         </>
-                      ) : <p className="mt-1 text-[10px] text-gray-400">{st.label}</p>}
+                      ) : <p className="mt-1 hidden truncate text-[10px] text-gray-400 sm:block">{st.label}</p>}
                     </div>
                   )
                 })

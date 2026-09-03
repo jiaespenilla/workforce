@@ -265,10 +265,10 @@ export default function People() {
             const inUse = people.some((e)=>(e.locationId||e.location)===loc.id || (e.location||'').trim().toLowerCase()===loc.name.trim().toLowerCase())
             const isEditing = editingLocId===loc.id
             return (
-              <div key={loc.id} className="flex items-center gap-2 p-3">
+              <div key={loc.id} className="flex flex-wrap items-center gap-2 p-3">
                 {isEditing ? (
                   <>
-                    <input value={editingLocName} onChange={(e)=>setEditingLocName(e.target.value)} className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm" autoFocus />
+                    <input value={editingLocName} onChange={(e)=>setEditingLocName(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm" autoFocus />
                     <button type="button" onClick={async()=>{
                       if(!editingLocName.trim()) return setLocError('Name required.')
                       if(!canLocation('edit')) return setLocError('Editing locations is restricted for your role.')
@@ -278,7 +278,7 @@ export default function People() {
                   </>
                 ) : (
                   <>
-                    <span className="flex-1 text-sm font-medium text-gray-900">{loc.name}</span>
+                    <span className="min-w-0 flex-1 basis-full text-sm font-medium text-gray-900 sm:basis-auto">{loc.name}</span>
                     {inUse && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">In use</span>}
                     {canLocation('edit') && <button type="button" onClick={()=>{setEditingLocId(loc.id); setEditingLocName(loc.name); setLocError('')}} className="rounded-lg border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">Edit</button>}
                     {canLocation('delete') && <button type="button" onClick={async()=>{

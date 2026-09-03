@@ -173,10 +173,10 @@ function EmployeeTasks({ name }) {
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">My Tasks</h1>
           <p className="mt-1 text-sm leading-relaxed text-gray-500">Drag cards to update progress — your changes save automatically.</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <div className="relative">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
+          <div className="relative min-w-0 flex-1 sm:flex-none">
             <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            <input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search tasks…" className="w-40 rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/10 sm:w-52" />
+            <input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search tasks…" className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/10 sm:w-52" />
           </div>
           <select value={priorityFilter} onChange={(e)=>setPriorityFilter(e.target.value)} className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-300 focus:outline-none">
             <option value="all">All priorities</option>
@@ -198,10 +198,12 @@ function EmployeeTasks({ name }) {
             <select value={form.priority} onChange={(e)=>setForm({...form, priority:e.target.value})} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
               {Object.keys(priorityStyles).map((p)=><option key={p}>{p}</option>)}
             </select>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <input type="date" value={form.due} onChange={(e)=>setForm({...form, due:e.target.value})} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <button type="submit" className="rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white">Add</button>
-              <button type="button" onClick={()=>setShowAdd(false)} className="rounded-lg border border-gray-300 px-3 text-sm">Cancel</button>
+              <div className="flex gap-2">
+                <button type="submit" className="flex-1 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white sm:flex-none">Add</button>
+                <button type="button" onClick={()=>setShowAdd(false)} className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm sm:flex-none">Cancel</button>
+              </div>
             </div>
           </div>
         </form>
@@ -225,7 +227,7 @@ function EmployeeTasks({ name }) {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {columns.map((col) => (
           <div
             key={col.id}
