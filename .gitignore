@@ -4,4 +4,6 @@ dist/
 *.local
 .env
 
+# Wrangler / Miniflare local dev artifacts (cache + local D1 state)
+.wrangler/
 .env
