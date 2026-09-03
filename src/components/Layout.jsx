@@ -18,10 +18,8 @@ const nav = [
   { to: '/people', label: 'People', key: 'employees', ceoOnly: true, icon: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z' },
 ]
 
-const settingsNav = [
-  { to: '/storage-setup', label: 'Storage Setup', key: 'storage', icon: 'M3 7v10a2 2 0 002 2h1l3 3h8l3-3h1a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2z' },
-]
-
+// NOTE: Storage Setup removed from this sidebar (item 19) - it is
+// administrator-only and lives in the AdminLayout navigation now.
 function Logo({ light = false }) {
   const settings = getActiveSettings()
   // Logo letter = first letter of the configured system name.
@@ -105,38 +103,7 @@ export default function Layout({ children }) {
               ))}
             </nav>
 
-            {/* Settings section — gated by the role's per-page permissions */}
-            {settingsNav.filter((item) => user.perms?.[item.key] !== false).length > 0 && (
-            <>
-            <p className="px-3 pb-2 pt-6 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Settings</p>
-            <nav className="space-y-1">
-              {settingsNav.filter((item) => user.perms?.[item.key] !== false).map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === '/'}
-                  onClick={() => setOpen(false)}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      <svg className={`h-5 w-5 ${isActive ? 'text-brand-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
-                        <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                      </svg>
-                      {item.label}
-                    </>
-                  )}
-                </NavLink>
-              ))}
-            </nav>
-            </>
-            )}
+            {/* Settings section removed (item 19) — Storage Setup is administrator-only */}
           </>
         )
       })()}

@@ -142,8 +142,8 @@ export default function Profile() {
         {/* Preset icon selection — 3 SVG choices, kept alongside upload */}
         <div className="mt-6 rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4 sm:p-5">
           <p className="text-sm font-semibold text-gray-900">Or choose a preset icon</p>
-          <p className="mt-1 text-xs text-gray-500">Pick one of 3 SVG presets — tap to preview, then Save.</p>
-          <div className="mt-4 grid grid-cols-3 gap-3 sm:gap-4">
+                    <p className="mt-1 text-xs text-gray-500">Pick one of 6 SVG presets — tap to preview, then Save.</p>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
             {AVATAR_PRESETS.map((preset) => (
               <button
                 key={preset.id}

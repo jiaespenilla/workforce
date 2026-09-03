@@ -160,10 +160,10 @@ export function shiftForEmployee(shiftData, email) {
 // On time  = first clock-in is no later than the shift start time.
 // Late     = first clock-in is after the shift start time.
 // Missed   = a timed shift day is over with no clock-in.
-// Exempt   = CEO/administrators are not required to clock in or out.
+// Not required = CEO/administrators are not required to clock in or out.
 export function dayStatus(punches, shift, { isToday, isPast, exempt } = {}) {
   if (exempt && !punches.length) {
-    return { label: 'Exempt', cls: 'bg-violet-100 text-violet-700' }
+    return { label: 'Not required', cls: 'bg-violet-100 text-violet-700' }
   }
   if (!shift || shift.open) {
     if (punches.length) return { label: 'Present', cls: 'bg-brand-100 text-brand-700' }
@@ -203,8 +203,8 @@ export function summaryStatus(allPunches, shift, anchor, view, { exempt } = {}) 
     else if (st.label === 'Missed' || st.label === 'Absent') missed++
     if (punches.length) present++
   }
-  if (!present) {
-    if (exempt && !missed) return { label: 'Exempt', cls: 'bg-violet-100 text-violet-700' }
+    if (!present) {
+    if (exempt && !missed) return { label: 'Not required', cls: 'bg-violet-100 text-violet-700' }
     return { label: missed ? `${missed} missed` : 'No punches', cls: 'bg-gray-100 text-gray-500' }
   }
   if (shift && !shift.open) {
@@ -236,7 +236,7 @@ function PeriodNavigator({ anchor, view, onAnchor }) {
         <button onClick={() => onAnchor(addDays(anchor, -step))} className={navBtn} title="Previous">
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
         </button>
-        <button onClick={() => onAnchor(new Date())} className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${isCurrent ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900'}`}>
+        <button onClick={() => onAnchor(new Date())} className={'rounded-md px-3 py-1.5 text-sm font-medium transition ' + (isCurrent ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900')}>
           Today
         </button>
         <button onClick={() => onAnchor(addDays(anchor, step))} className={navBtn} title="Next">
@@ -272,8 +272,9 @@ function CeoTimeKeeping() {
   const [shiftsByCompany, setShiftsByCompany] = useState({})
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
-  // Weekly-report / timesheet number format: 'hmm' → [h]:mm, 'hrs' → decimal.
-  const [fmt, setFmt] = useState('hmm')
+    // Hours are always shown as [h]:mm (e.g. 40:30) — the old decimal/hours
+  // toggle was removed so report formatting stays predictable (16.3).
+  const fmt = 'hmm'
   const [reportOpen, setReportOpen] = useState(false)
 
   const tz = getSystemTimeZone()
@@ -334,7 +335,7 @@ function CeoTimeKeeping() {
 
   const tabs = (kind) => kind === 'period'
     ? (['day', 'week', 'month'].map((v) => (
-        <button key={v} onClick={() => setView(v)} className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize transition ${view === v ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+        <button key={v} onClick={() => setView(v)} className={'rounded-md px-3 py-1.5 text-sm font-medium capitalize transition ' + (view === v ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900')}>
           {v}
         </button>
       )))
@@ -343,7 +344,7 @@ function CeoTimeKeeping() {
         ['calendar', 'Calendar', 'M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7H3v12a2 2 0 002 2z'],
         ['compact', 'Compact', 'M4 6h16M4 10h16M4 14h10M4 18h10'],
       ].map(([k, label, icon]) => (
-        <button key={k} onClick={() => setLayout(k)} title={label} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${layout === k ? 'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
+        <button key={k} onClick={() => setLayout(k)} disabled={k === 'calendar' && view !== 'month' || loading} title={k === 'calendar' && view !== 'month' ? 'Available in Month view' : label} className={'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ' + (layout === k ? 'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700')}>
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d={icon} /></svg>
           <span className="hidden sm:inline">{label}</span>
         </button>
@@ -365,7 +366,7 @@ return (
             {now.toLocaleDateString([], { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} · {tz}
           </p>
           <button onClick={reload} disabled={refreshing} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 shadow-sm hover:text-gray-900">
-            <svg className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M20 9a8 8 0 00-14.2-3.3M4 15a8 8 0 0014.2 3.3" /></svg>
+            <svg className={'h-3.5 w-3.5' + (refreshing ? ' animate-spin' : '')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M20 9a8 8 0 00-14.2-3.3M4 15a8 8 0 0014.2 3.3" /></svg>
             {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
@@ -381,14 +382,44 @@ return (
             <PeriodNavigator anchor={cursor} view={view} onAnchor={setCursor} />
             <div className="flex gap-1 rounded-lg bg-gray-100 p-1">{tabs('period')}</div>
             <div className="flex gap-1 rounded-lg bg-gray-100 p-1">{tabs('layout')}</div>
-            <div className="flex gap-1 rounded-lg bg-gray-100 p-1" title="Hours display format">
-              <button onClick={() => setFmt('hmm')} className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition ${fmt === 'hmm' ? 'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>[h]:mm</button>
-              <button onClick={() => setFmt('hrs')} className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition ${fmt === 'hrs' ? 'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>hrs</button>
-            </div>
-            <button onClick={() => setReportOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700">
+            <button
+              onClick={() => setReportOpen(true)}
+              disabled={view !== 'week' || refreshing}
+              title={view !== 'week' ? 'Switch to Week view to open the report' : undefined}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>
               Weekly Report
             </button>
+          </div>
+                </div>
+        <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 px-4 py-3 text-xs text-gray-600 sm:border-0 sm:px-0 sm:pb-3">
+          <span className="inline-flex items-center rounded-full bg-brand-100 px-2.5 py-1 font-medium text-brand-700">
+            Clocked in now: {liveCount}
+            {view === 'day' && (() => {
+              const today = new Date()
+              let on = 0, late = 0
+              for (const emp of employees) {
+                const shift = shiftForEmployee(shiftsByCompany[emp.companyId], emp.email)
+                const st = dayStatus(windowed(emp.email), shift || null, {
+                  isToday: sameDay(cursor, today),
+                  isPast: cursor.getTime() < startOfDay(today).getTime(),
+                  exempt: isExemptEmployee(emp),
+                })
+                if (st.label === 'On time') on++
+                else if (st.label === 'Late') late++
+              }
+              return ' · ' + on + ' on time · ' + late + ' late'
+            })()}
+            {view === 'week' && (' · ' + employees.reduce((s, e) => s + hoursForDay(windowed(e.email)), 0).toFixed(1) + 'h week total')}
+          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-medium text-gray-400">Legend:</span>
+            <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-brand-100 text-brand-700">On time</span>
+            <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-amber-100 text-amber-700">Late</span>
+            <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-emerald-100 text-emerald-700">Present</span>
+            <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-violet-100 text-violet-700">Not required</span>
+            <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-gray-100 text-gray-500">Missed</span>
           </div>
         </div>
 
@@ -400,9 +431,9 @@ return (
                 <th className="px-6 py-3">Company</th>
                 <th className="px-6 py-3">Clock-In</th>
                 <th className="px-6 py-3">Clock-Out</th>
-                <th className="px-6 py-3 text-right">Regular{fmt === 'hmm' ? ' ([h]:mm)' : ' (hrs)'}</th>
-                <th className="px-6 py-3 text-right">Overtime{fmt === 'hmm' ? ' ([h]:mm)' : ' (hrs)'}</th>
-                <th className="px-6 py-3 text-right">Total{fmt === 'hmm' ? ' ([h]:mm)' : ' (hrs)'}</th>
+                <th className="px-6 py-3 text-right">Regular ([h]:mm)</th>
+                <th className="px-6 py-3 text-right">Overtime ([h]:mm)</th>
+                <th className="px-6 py-3 text-right">Total ([h]:mm)</th>
                 <th className="px-6 py-3">Status</th>
               </tr>
             </thead>
@@ -420,7 +451,7 @@ return (
                 const isLive = isToday && lastPunch?.type === 'in'
                 const hasHours = agg.total > 0
                 return (
-                  <tr key={`${emp.companyId}-${emp.email}`} className="hover:bg-gray-50">
+                  <tr key={emp.companyId + '-' + emp.email} className="hover:bg-gray-50">
                     <td className="px-6 py-3">
                       <p className="font-medium text-gray-900">{emp.name}</p>
                       <p className="text-xs text-gray-500">{emp.role || 'Unassigned'}</p>
@@ -433,7 +464,7 @@ return (
                     <td className="px-6 py-3 text-right font-semibold tabular-nums text-gray-900">{hasHours ? fmtHours(agg.total, fmt) : '—'}</td>
                     <td className="px-6 py-3">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${st.cls}`}>{st.label}</span>
+                        <span className={'inline-flex rounded-full px-2.5 py-1 text-xs font-medium ' + st.cls}>{st.label}</span>
                         {isLive && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
                             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
@@ -468,7 +499,7 @@ return (
                   byDate.get(key).push(p)
                 }
                 const first = startOfMonth(cursor)
-                const blanks = Array.from({ length: first.getDay() }, (_, i) => <div key={`b-${i}`} />)
+                const blanks = Array.from({ length: first.getDay() }, (_, i) => <div key={'b-' + i} />)
                 const days = Array.from({ length: daysInMonth(cursor) }, (_, i) => {
                   const d = addDays(first, i)
                   const key = systemDateKey(d)
@@ -476,9 +507,9 @@ return (
                   const count = new Set(punches.map((p) => p.email)).size
                   const isToday = sameDay(d, new Date())
                   return (
-                    <button key={key} onClick={() => setSelectedDate(key)} className={`rounded-lg border p-2 text-center transition hover:shadow-sm ${count ? 'bg-brand-50 border-brand-200 hover:border-brand-300' : 'bg-gray-50 border-gray-100 hover:bg-white'} ${isToday ? 'ring-2 ring-brand-400' : ''}`}>
+                    <button key={key} onClick={() => setSelectedDate(key)} className={'rounded-lg border p-2 text-center transition hover:shadow-sm ' + (count ? 'bg-brand-50 border-brand-200 hover:border-brand-300 ' : 'bg-gray-50 border-gray-100 hover:bg-white ') + (isToday ? 'ring-2 ring-brand-400' : '')}>
                       <p className="text-xs font-bold text-gray-900">{i + 1}</p>
-                      <p className={`text-[11px] font-semibold ${count ? 'text-brand-700' : 'text-gray-400'}`}>{count ? `${count} in` : '—'}</p>
+                      <p className={'text-[11px] font-semibold ' + (count ? 'text-brand-700' : 'text-gray-400')}>{count ? count + ' in' : '—'}</p>
                     </button>
                   )
                 })
@@ -500,12 +531,12 @@ return (
                 ? dayStatus(vp, shift, { isToday: sameDay(cursor, new Date()), isPast: cursor.getTime() < startOfDay(new Date()).getTime(), exempt })
                 : summaryStatus(allFor(emp.email), shift, cursor, view, { exempt })
               return (
-                <div key={`${emp.companyId}-${emp.email}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
+                <div key={emp.companyId + '-' + emp.email} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900">{emp.name} <span className="text-xs text-gray-400">· {emp.companyName}</span></p>
                     <p className="text-xs text-gray-500">{vp.length} punches · {hrs}h · {last ? new Date(last.time).toLocaleDateString() : 'No record'}</p>
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${st.cls}`}>{st.label}</span>
+                  <span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + st.cls}>{st.label}</span>
                 </div>
               )
             })}
@@ -534,12 +565,12 @@ return (
                   const shift = shiftForEmployee(shiftsByCompany[emp.companyId], emp.email)
                   const st = dayStatus(dayPunches, shift, { isToday: sameDay(new Date(selectedDate), new Date()), isPast: new Date(selectedDate).getTime() < startOfDay(new Date()).getTime() })
                   return (
-                    <div key={`${emp.companyId}-${emp.email}`} className="flex items-center justify-between px-5 py-3">
+                    <div key={emp.companyId + '-' + emp.email} className="flex items-center justify-between px-5 py-3">
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900">{emp.name} <span className="text-xs text-gray-400">· {emp.companyName}</span></p>
                         <p className="text-xs text-gray-500 tabular-nums">{firstIn ? fmtClock(firstIn.time) : '—'} → {lastOut ? fmtClock(lastOut.time) : '—'} · {hrs.toFixed(1)}h</p>
                       </div>
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${st.cls}`}>{st.label}</span>
+                      <span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + st.cls}>{st.label}</span>
                     </div>
                   )
                 })}
@@ -558,9 +589,9 @@ return (
                     const firstIn = ps.find((p) => p.type === 'in')
                     const shift = shiftForEmployee(shiftsByCompany[emp.companyId], emp.email)
                     const st = dayStatus(ps, shift, { isToday: false, isPast: true })
-                    return `<tr><td>${esc(emp.name)}</td><td>${esc(emp.companyName)}</td><td>${firstIn ? esc(fmtClock(firstIn.time)) : '—'}</td><td>${esc(hoursForDay(ps).toFixed(1))}h</td><td>${esc(st.label)}</td></tr>`
+                    return '<tr><td>' + esc(emp.name) + '</td><td>' + esc(emp.companyName) + '</td><td>' + (firstIn ? esc(fmtClock(firstIn.time)) : '—') + '</td><td>' + esc(hoursForDay(ps).toFixed(1)) + 'h</td><td>' + esc(st.label) + '</td></tr>'
                   }).filter(Boolean).join('')
-                  const html = `<html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;font-size:12px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#ecfdf5}</style></head><body><h2>Attendance — ${esc(selectedDate)}</h2><p>${dayRows.length} punches, ${new Set(dayRows.map((p) => p.email)).size} employees</p><table><thead><tr><th>Employee</th><th>Company</th><th>Clock In</th><th>Hours</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan=5>No records</td></tr>'}</tbody></table></body></html>`
+                  const html = '<html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;font-size:12px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#ecfdf5}</style></head><body><h2>Attendance — ' + esc(selectedDate) + '</h2><p>' + dayRows.length + ' punches, ' + new Set(dayRows.map((p) => p.email)).size + ' employees</p><table><thead><tr><th>Employee</th><th>Company</th><th>Clock In</th><th>Hours</th><th>Status</th></tr></thead><tbody>' + (rows || '<tr><td colspan=5>No records</td></tr>') + '</tbody></table></body></html>'
                   const win = window.open('', '_blank'); if (win) { win.document.write(html); win.document.close(); win.focus(); win.print() }
                 }} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Export PDF</button>
               </div>
@@ -568,7 +599,7 @@ return (
           </div>
         )}
 
-{/* Weekly Report generator — 16.1: two choices, weekly_hmm ([h]:mm) or weekly (hrs) */}
+{/* Weekly Report — single format, hours always shown as [h]:mm (16.3) */}
         {reportOpen && (() => {
           const monday = startOfWeek(cursor)
           const sunday = endOfDay(addDays(monday, 6))
@@ -576,16 +607,16 @@ return (
           const rows = employees
             .map((emp) => ({ emp, agg: aggregateWindow(attendance.filter((p) => p.email === emp.email && inWeek(p.time))) }))
             .filter((r) => r.agg.total > 0)
-          const label = fmt === 'hmm' ? '[h]:mm' : 'hrs'
-          const reportName = fmt === 'hmm' ? 'weekly_hmm' : 'weekly'
-          const weekLabel = `${monday.toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${addDays(monday, 6).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`
+                    const label = '[h]:mm'
+          const reportName = 'weekly_hmm'
+          const weekLabel = monday.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' – ' + addDays(monday, 6).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
           const printReport = () => {
             const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
             const tr = rows.map(({ emp, agg }) =>
-              `<tr><td>${esc(emp.name)}</td><td>${esc(emp.companyName)}</td><td>${agg.clockIn ? esc(fmtStamp(agg.clockIn.time)) : '—'}</td><td>${agg.clockOut ? esc(fmtStamp(agg.clockOut.time)) : '—'}</td><td>${esc(fmtHours(agg.regular, fmt))}</td><td>${esc(fmtHours(agg.ot, fmt))}</td><td><b>${esc(fmtHours(agg.total, fmt))}</b></td></tr>`
+              '<tr><td>' + esc(emp.name) + '</td><td>' + esc(emp.companyName) + '</td><td>' + (agg.clockIn ? esc(fmtStamp(agg.clockIn.time)) : '—') + '</td><td>' + (agg.clockOut ? esc(fmtStamp(agg.clockOut.time)) : '—') + '</td><td>' + esc(fmtHours(agg.regular, fmt)) + '</td><td>' + esc(fmtHours(agg.ot, fmt)) + '</td><td><b>' + esc(fmtHours(agg.total, fmt)) + '</b></td></tr>'
             ).join('')
             const tot = (k) => esc(fmtHours(rows.reduce((s, r) => s + r.agg[k], 0), fmt))
-            const html = `<html><head><meta charset="utf-8"><title>Weekly Time Report (${reportName})</title><style>body{font-family:Arial,sans-serif;font-size:12px}h2{margin:0 0 4px}p{margin:0 0 12px;color:#555}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th:nth-child(n+5),td:nth-child(n+5){text-align:right}th{background:#ecfdf5}tfoot td{font-weight:bold;background:#f9fafb}</style></head><body><h2>Weekly Time Report — ${esc(weekLabel)}</h2><p>Report: ${esc(reportName)} (Regular/Overtime/Total in ${esc(label)}) · ${rows.length} employee(s) with logged time</p><table><thead><tr><th>Employee</th><th>Company</th><th>Clock-In</th><th>Clock-Out</th><th>Regular (${esc(label)})</th><th>Overtime (${esc(label)})</th><th>Total (${esc(label)})</th></tr></thead><tbody>${tr || '<tr><td colspan="7">No time logs for this week.</td></tr>'}</tbody><tfoot><tr><td colspan="4">Total</td><td>${tot('regular')}</td><td>${tot('ot')}</td><td>${tot('total')}</td></tr></tfoot></table></body></html>`
+            const html = '<html><head><meta charset="utf-8"><title>Weekly Time Report (' + reportName + ')</title><style>body{font-family:Arial,sans-serif;font-size:12px}h2{margin:0 0 4px}p{margin:0 0 12px;color:#555}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th:nth-child(n+5),td:nth-child(n+5){text-align:right}th{background:#ecfdf5}tfoot td{font-weight:bold;background:#f9fafb}</style></head><body><h2>Weekly Time Report — ' + esc(weekLabel) + '</h2><p>Report: ' + esc(reportName) + ' (Regular/Overtime/Total in ' + esc(label) + ') · ' + rows.length + ' employee(s) with logged time</p><table><thead><tr><th>Employee</th><th>Company</th><th>Clock-In</th><th>Clock-Out</th><th>Regular (' + esc(label) + ')</th><th>Overtime (' + esc(label) + ')</th><th>Total (' + esc(label) + ')</th></tr></thead><tbody>' + (tr || '<tr><td colspan="7">No time logs for this week.</td></tr>') + '</tbody><tfoot><tr><td colspan="4">Total</td><td>' + tot('regular') + '</td><td>' + tot('ot') + '</td><td>' + tot('total') + '</td></tr></tfoot></table></body></html>'
             const win = window.open('', '_blank'); if (win) { win.document.write(html); win.document.close(); win.focus(); win.print() }
           }
           return (
@@ -595,15 +626,9 @@ return (
                 <div className="flex items-start justify-between border-b border-gray-100 px-5 py-4">
                   <div>
                     <h3 className="text-sm font-bold text-gray-900">Weekly Time Report</h3>
-                    <p className="mt-0.5 text-xs text-gray-500">Week of {weekLabel} · choose a format, then print or save as PDF.</p>
+                    <p className="mt-0.5 text-xs text-gray-500">Week of {weekLabel} · then print or save as PDF.</p>
                   </div>
                   <button onClick={() => setReportOpen(false)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
-                </div>
-                <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-5 py-3">
-                  <span className="text-xs font-medium text-gray-500">Format:</span>
-                  {([['weekly_hmm', 'weekly_hmm — [h]:mm'], ['weekly', 'weekly — hrs']].map(([k, lbl]) => (
-                    <button key={k} onClick={() => setFmt(k === 'weekly_hmm' ? 'hmm' : 'hrs')} className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${fmt === (k === 'weekly_hmm' ? 'hmm' : 'hrs') ? 'bg-brand-600 text-white shadow-sm' : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:text-gray-900'}`}>{lbl}</button>
-                  )))}
                 </div>
                 <div className="flex-1 overflow-auto">
                   <table className="w-full min-w-[640px] text-left text-xs">
@@ -620,7 +645,7 @@ return (
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {rows.map(({ emp, agg }) => (
-                        <tr key={`${emp.companyId}-${emp.email}`} className="hover:bg-gray-50">
+                        <tr key={emp.companyId + '-' + emp.email} className="hover:bg-gray-50">
                           <td className="px-5 py-2.5 font-medium text-gray-900">{emp.name}</td>
                           <td className="px-3 py-2.5 text-gray-600">{emp.companyName}</td>
                           <td className="px-3 py-2.5 tabular-nums text-gray-700">{agg.clockIn ? fmtStamp(agg.clockIn.time) : '—'}</td>
@@ -663,12 +688,12 @@ return (
             {view === 'day'
               ? cursor.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })
               : view === 'week'
-                ? `Week of ${startOfWeek(cursor).toLocaleDateString([], { month: 'short', day: 'numeric' })}`
+                ? 'Week of ' + startOfWeek(cursor).toLocaleDateString([], { month: 'short', day: 'numeric' })
                 : cursor.toLocaleDateString([], { month: 'long', year: 'numeric' })}
             {' · '}{employees.length} active
           </span>
           <span className="font-semibold text-gray-900">
-            {sameDay(cursor, new Date()) && `${liveCount} currently clocked in · `}
+            {sameDay(cursor, new Date()) && (liveCount + ' currently clocked in · ')}
             {employees.reduce((s, e) => s + hoursForDay(windowed(e.email)), 0).toFixed(1)}h total
           </span>
         </div>
@@ -693,7 +718,7 @@ export default function TimeKeeping() {
     if (!user?.email) return
     setRefreshing(true)
     const [records, companies] = await Promise.all([
-      apiEnabled() ? api(`/api/attendance?email=${encodeURIComponent(user.email)}`).catch(() => []) : Promise.resolve([]),
+      apiEnabled() ? api('/api/attendance?email=' + encodeURIComponent(user.email)).catch(() => []) : Promise.resolve([]),
       apiEnabled() ? api('/api/companies').catch(() => []) : Promise.resolve([]),
     ])
     const list = Array.isArray(records) ? records : (records.data || [])
@@ -765,16 +790,16 @@ return (
           <p className="mt-1 text-sm leading-relaxed text-gray-500">Your attendance records and on-time / late status.</p>
         </div>
         <button onClick={reload} disabled={refreshing} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 shadow-sm hover:text-gray-900">
-          <svg className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M20 9a8 8 0 00-14.2-3.3M4 15a8 8 0 0014.2 3.3" /></svg>
+          <svg className={'h-4 w-4 ' + (refreshing ? 'animate-spin' : '')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M20 9a8 8 0 00-14.2-3.3M4 15a8 8 0 0014.2 3.3" /></svg>
           {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className={`rounded-xl p-6 shadow-sm ${isClockedIn ? 'bg-gradient-to-br from-brand-600 to-emerald-500 text-white' : 'border border-gray-200 bg-white'}`}>
-          <p className={`text-sm font-medium ${isClockedIn ? 'text-emerald-100' : 'text-gray-500'}`}>Current status</p>
-          <p className={`mt-2 text-xl font-bold ${isClockedIn ? '' : 'text-gray-900'}`}>
-            {isClockedIn ? `Clocked In · ${fmtClock(lastPunch.time)}` : lastPunch ? 'Clocked Out' : 'Not clocked in today'}
+        <div className={'rounded-xl p-6 shadow-sm ' + (isClockedIn ? 'bg-gradient-to-br from-brand-600 to-emerald-500 text-white' : 'border border-gray-200 bg-white')}>
+          <p className={'text-sm font-medium ' + (isClockedIn ? 'text-emerald-100' : 'text-gray-500')}>Current status</p>
+          <p className={'mt-2 text-xl font-bold ' + (isClockedIn ? '' : 'text-gray-900')}>
+            {isClockedIn ? 'Clocked In · ' + fmtClock(lastPunch.time) : lastPunch ? 'Clocked Out' : 'Not clocked in today'}
           </p>
           <div className="mt-4 space-y-1 text-xs">
             {todayPunches.length === 0 && <p className={isClockedIn ? 'text-emerald-100/90' : 'text-gray-400'}>No punches yet today — use the kiosk to clock in.</p>}
@@ -789,8 +814,8 @@ return (
         <div className="grid grid-cols-2 gap-4 lg:col-span-2 lg:content-start">
           {[
             ['Clock in/out', isClockedIn ? 'Clocked In' : 'Clocked Out', lastPunch ? fmtClock(lastPunch.time) : 'No punches yet'],
-            ["Today's punches", String(todayPunches.length), `${todayHours.toFixed(1)}h today`],
-            ['Shift today', shift ? (shift.open ? 'Open shift' : `${shift.start}–${shift.end}`) : 'No shift assigned', shift ? (shift.open ? 'No fixed start time' : shift.name || '') : "Status won't compare to a shift"],
+            ["Today's punches", String(todayPunches.length), todayHours.toFixed(1) + 'h today'],
+            ['Shift today', shift ? (shift.open ? 'Open shift' : shift.start + '–' + shift.end) : 'No shift assigned', shift ? (shift.open ? 'No fixed start time' : shift.name || '') : "Status won't compare to a shift"],
             ['Last action', lastPunch?.type === 'in' ? 'Clock In' : 'Clock Out', lastPunch ? new Date(lastPunch.time).toLocaleDateString() : '—'],
           ].map(([label, value, sub]) => (
             <div key={label} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -812,7 +837,7 @@ return (
             <PeriodNavigator anchor={cursor} view={view} onAnchor={setCursor} />
             <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
               {['day', 'week', 'month'].map((v) => (
-                <button key={v} onClick={() => setView(v)} className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize transition ${view === v ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+                <button key={v} onClick={() => setView(v)} className={'rounded-md px-3 py-1.5 text-sm font-medium capitalize transition ' + (view === v ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900')}>
                   {v}
                 </button>
               ))}
@@ -823,7 +848,7 @@ return (
                 ['calendar', 'Calendar', 'M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7H3v12a2 2 0 002 2z'],
                 ['compact', 'Compact', 'M4 6h16M4 10h16M4 14h10M4 18h10'],
               ].map(([k, label, icon]) => (
-                <button key={k} onClick={() => setLayout(k)} title={label} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${layout === k ? 'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
+                <button key={k} onClick={() => setLayout(k)} disabled={k === 'calendar' && view !== 'month' || (loading)} title={k === 'calendar' && view !== 'month' ? 'Available in Month view' : label} className={'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ' + (layout === k ? 'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700')}>
                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d={icon} /></svg>
                   <span className="hidden sm:inline">{label}</span>
                 </button>
@@ -847,16 +872,16 @@ return (
             </thead>
             <tbody className="divide-y divide-gray-100">
               {timesheetRows.map((d, idx) => (
-                <tr key={`${d.day}-${d.date}-${idx}`} className={d.isToday ? 'bg-brand-50/60' : 'hover:bg-gray-50'}>
+                <tr key={d.day + '-' + d.date + '-' + idx} className={d.isToday ? 'bg-brand-50/60' : 'hover:bg-gray-50'}>
                   <td className="px-6 py-3 font-medium text-gray-900">{d.day}</td>
                   <td className="px-6 py-3 text-gray-600">{d.date}</td>
                   <td className="px-6 py-3 text-gray-600">{shift ? (shift.open ? 'Open' : shift.start) : '—'}</td>
                   <td className="px-6 py-3 tabular-nums text-gray-700">{d.in ?? '—'}</td>
                   <td className="px-6 py-3 tabular-nums text-gray-700">{d.out ?? '—'}</td>
                   <td className="px-6 py-3 tabular-nums text-gray-700">{d.hours ? d.hours.toFixed(1) : '—'}</td>
-                  <td className="px-6 py-3 tabular-nums text-gray-700">{d.ot ? `+${d.ot.toFixed(1)}` : '—'}</td>
+                  <td className="px-6 py-3 tabular-nums text-gray-700">{d.ot ? '+' + d.ot.toFixed(1) : '—'}</td>
                   <td className="px-6 py-3">
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${d.status.cls}`}>{d.status.label}</span>
+                    <span className={'inline-flex rounded-full px-2.5 py-1 text-xs font-medium ' + d.status.cls}>{d.status.label}</span>
                   </td>
                 </tr>
               ))}
@@ -881,7 +906,7 @@ return (
                   byDate.get(key).push(p)
                 }
                 const first = startOfMonth(cursor)
-                const blanks = Array.from({ length: first.getDay() }, (_, i) => <div key={`b-${i}`} />)
+                const blanks = Array.from({ length: first.getDay() }, (_, i) => <div key={'b-' + i} />)
                 const days = Array.from({ length: daysInMonth(cursor) }, (_, i) => {
                   const d = addDays(first, i)
                   const key = systemDateKey(d)
@@ -891,11 +916,11 @@ return (
                   const hasPunch = punches.length > 0
                   const isToday = sameDay(d, new Date())
                   return (
-                    <div key={key} className={`rounded-lg border p-2 text-left ${hasPunch ? (st.label === 'Late' ? 'bg-amber-50 border-amber-200' : 'bg-brand-50 border-brand-200') : 'bg-gray-50 border-gray-100'} ${isToday ? 'ring-2 ring-brand-400' : ''}`}>
+                    <div key={key} className={'rounded-lg border p-2 text-left ' + (hasPunch ? (st.label === 'Late' ? 'bg-amber-50 border-amber-200' : 'bg-brand-50 border-brand-200') : 'bg-gray-50 border-gray-100') + (isToday ? ' ring-2 ring-brand-400' : '')}>
                       <p className="text-xs font-bold text-gray-900">{i + 1}</p>
                       {hasPunch ? (
                         <>
-                          <p className={`mt-1 text-[10px] font-semibold leading-tight ${st.cls}`}>{st.label}</p>
+                          <p className={'mt-1 text-[10px] font-semibold leading-tight ' + st.cls}>{st.label}</p>
                           <p className="text-[11px] font-semibold text-brand-700 tabular-nums">{hrs.toFixed(1)}h</p>
                         </>
                       ) : <p className="mt-1 text-[10px] text-gray-400">{st.label}</p>}
@@ -911,15 +936,15 @@ return (
         {layout === 'compact' && (
           <div className="divide-y divide-gray-100">
             {timesheetRows.map((d, idx) => (
-              <div key={`${d.day}-${d.date}-${idx}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
+              <div key={d.day + '-' + d.date + '-' + idx} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
                 <div className="flex items-center gap-3">
-                  <span className={`flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold ${d.hours ? 'bg-brand-100 text-brand-700' : 'bg-gray-100 text-gray-500'}`}>{d.day.slice(0, 2)}</span>
+                  <span className={'flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold ' + (d.hours ? 'bg-brand-100 text-brand-700' : 'bg-gray-100 text-gray-500')}>{d.day.slice(0, 2)}</span>
                   <div>
                     <p className="text-sm font-medium text-gray-900">{d.day} · {d.date}</p>
-                    <p className="text-xs text-gray-500">{d.in || '—'} → {d.out || '—'} · {d.hours ? `${d.hours.toFixed(1)}h` : 'No hours'}</p>
+                    <p className="text-xs text-gray-500">{d.in || '—'} → {d.out || '—'} · {d.hours ? d.hours.toFixed(1) + 'h' : 'No hours'}</p>
                   </div>
                 </div>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${d.status.cls}`}>{d.status.label}</span>
+                <span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + d.status.cls}>{d.status.label}</span>
               </div>
             ))}
             {timesheetRows.length === 0 && <p className="p-6 text-center text-xs text-gray-400">No days in this period.</p>}
@@ -928,7 +953,7 @@ return (
 
 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-6 py-3 text-sm">
           <span className="text-gray-500">
-            {view === 'day' ? 'Daily' : view === 'week' ? 'Weekly' : 'Monthly'} total · {shift ? (shift.open ? 'Open shift' : `${shift.start}–${shift.end}`) : 'No shift assigned'}
+            {view === 'day' ? 'Daily' : view === 'week' ? 'Weekly' : 'Monthly'} total · {shift ? (shift.open ? 'Open shift' : shift.start + '–' + shift.end) : 'No shift assigned'}
           </span>
           <span className="font-semibold text-gray-900">{Math.max(0, totalHours - totalOT).toFixed(1)}h regular · {totalOT.toFixed(1)}h overtime</span>
         </div>

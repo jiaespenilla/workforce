@@ -7,7 +7,7 @@ export default function StorageSetup() {
   usePageTitle('Storage Setup')
   const { user } = useAuth()
   const [allEmployees, setAllEmployees] = useState([])
-  const [storageProvider, setStorageProvider] = useState('d1')
+  const [storageProvider, setStorageProvider] = useState('gdrive')
   const [storageFolderId, setStorageFolderId] = useState('')
   const [storageSaving, setStorageSaving] = useState(false)
   const [storageMsg, setStorageMsg] = useState(null)
@@ -25,7 +25,7 @@ export default function StorageSetup() {
     if (!cid) return
     api(`/api/company-settings/${encodeURIComponent(cid)}`).then((data) => {
       const cfg = data?.attachment_storage
-      if (cfg) { setStorageProvider(cfg.provider || 'd1'); setStorageFolderId(cfg.folderId || '') }
+      if (cfg) { setStorageProvider(cfg.provider || 'gdrive'); setStorageFolderId(cfg.folderId || '') }
     }).catch(() => {})
   }, [allEmployees, user.email])
 

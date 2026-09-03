@@ -124,6 +124,8 @@ export default function App() {
             <Route path="/task-monitoring" element={<TaskMonitoring />} />
             <Route path="/settings" element={<SystemConfig />} />
             <Route path="/kiosk-setup" element={<KioskSetup />} />
+            {/* Storage Setup — administrator-only (19); configured per active company */}
+            <Route path="/storage-setup" element={<StorageSetup />} />
           </Route>
 
           <Route path="/shifts" element={<PageGate perm="shifts"><ChromeByRole><ShiftSchedules /></ChromeByRole></PageGate>} />
@@ -148,7 +150,6 @@ export default function App() {
             <Route path="/payroll" element={<PageGate perm="payroll"><Payroll /></PageGate>} />
                                     <Route path="/kiosk-credentials" element={<PageGate perm="kiosk"><KioskCredentials /></PageGate>} />
             <Route path="/people" element={<PageGate perm="employees"><People /></PageGate>} />
-            <Route path="/storage-setup" element={<PageGate perm="storage"><StorageSetup /></PageGate>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/login" replace />} />

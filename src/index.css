@@ -22,6 +22,33 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Clickable things get the pointing-hand cursor (17).
+   Buttons/links/selects inside the app previously kept the default arrow,
+   which made it hard to tell what is clickable. */
+a,
+button:not(:disabled),
+[role='button']:not(:disabled),
+summary,
+select:not(:disabled),
+label:has(input[type='checkbox']),
+label:has(input[type='radio']) {
+  cursor: pointer;
+}
+button:disabled,
+[aria-disabled='true'],
+input[type='date']:disabled {
+  cursor: not-allowed;
+}
+
+/* Prevent iOS Safari auto-zoom when focusing small inputs (20) */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* Accessible keyboard focus everywhere */
 :focus-visible {
   outline: 2px solid var(--color-brand-600);

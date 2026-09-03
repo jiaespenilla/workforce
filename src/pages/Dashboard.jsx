@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+﻿import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api, apiEnabled } from '../lib/api'
@@ -44,16 +44,6 @@ function localTodayISO() {
 }
 // Normalize a task's due value to a plain YYYY-MM-DD key (handles datetimes/null).
 function dueKey(t) { return String(t?.due || '').slice(0, 10) }
-function addDaysISO(iso, n) {
-  const [y, m, d] = String(iso || localTodayISO()).split('-').map(Number)
-  const dt = new Date(y, m - 1, d + n)
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
-}
-function daysBetweenISO(a, b) {
-  const [ay, am, ad] = a.split('-').map(Number)
-  const [by, bm, bd] = b.split('-').map(Number)
-  return Math.round((new Date(by, bm - 1, bd) - new Date(ay, am - 1, ad)) / 86400000)
-}
 
 // Latest punch per employee email — a person is "clocked in" when their most
 // recent kiosk punch is a check-in for the current shift.
@@ -269,9 +259,8 @@ function CeoDashboard({ user }) {
   const [clockState, setClockState] = useState({})
   const [allEmployees, setAllEmployees] = useState([])
   const [allAttendance, setAllAttendance] = useState([])
-  const [genDate, setGenDate] = useState('')
+    const [genDate, setGenDate] = useState('')
   const [genTargetDate, setGenTargetDate] = useState('')
-  const [genDestDate, setGenDestDate] = useState(localTodayISO)
   const [genConfirmOpen, setGenConfirmOpen] = useState(false)
   const [genResult, setGenResult] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -337,47 +326,38 @@ function CeoDashboard({ user }) {
     }
   }
 
-  // Tasks whose due date falls inside the selected From→To range (order-agnostic).
+  // "Copy tasks" generator - copies each task whose due date (YYYY-MM-DD)
+  // matches the selected From day to the selected To day, keeping everything
+  // else identical and resetting status to 'pending'.
   const genSourceTasks = () => {
-    if (!genDate || !genTargetDate) return []
-    const lo = genDate <= genTargetDate ? genDate : genTargetDate
-    const hi = genDate <= genTargetDate ? genTargetDate : genDate
-    return allTasks.filter((t) => { const k = dueKey(t); return k && k >= lo && k <= hi })
+    if (!genDate) return []
+    return allTasks.filter((t) => dueKey(t) === genDate)
   }
-  const genRange = () => {
-    const lo = genDate <= genTargetDate ? genDate : genTargetDate
-    const hi = genDate <= genTargetDate ? genTargetDate : genDate
-    return { lo, hi, offset: genDate <= genTargetDate ? daysBetweenISO(genDate, genDestDate) : daysBetweenISO(genTargetDate, genDestDate) }
-  }
-  const handleGenerateFromDate = () => {
-    if (!genDate || !genTargetDate) { setGenResult({ type:'error', msg:'Select both From and To dates.' }); return }
-    if (!genDestDate) { setGenResult({ type:'error', msg:'Select a "Duplicate to" date.' }); return }
-    const { lo, hi } = genRange()
-    const src = genSourceTasks()
-    if (!src.length) { setGenResult({ type:'error', msg:`No tasks found between ${lo} and ${hi}.` }); return }
+  const handleCopyTasks = () => {
+    if (!genDate) { setGenResult({ type:'error', msg:'Select a From day.' }); return }
+    if (!genTargetDate) { setGenResult({ type:'error', msg:'Select a To day.' }); return }
     setGenConfirmOpen(true)
   }
-  const doGenerate = async () => {
+  const doCopyTasks = async () => {
     const src = genSourceTasks()
-    const { lo, hi, offset } = genRange()
     let created = 0
     let failed = 0
     for (const t of src) {
-      const newDue = addDaysISO(dueKey(t), offset)
       try {
         if (apiEnabled()) {
-          const c = await api('/api/tasks', { method: 'POST', body: { title: t.title, assignee: t.assignee, priority: t.priority, due: newDue, status: 'pending' } })
+          const c = await api('/api/tasks', { method: 'POST', body: { title: t.title, assignee: t.assignee, priority: t.priority, due: genTargetDate, status: 'pending' } })
           setAllTasks((p)=> [...p, c])
         } else {
-          setAllTasks((p)=> [...p, { ...t, id: Date.now()+created, due: newDue, status: 'pending' }])
+          setAllTasks((p)=> [...p, { ...t, id: Date.now()+created, due: genTargetDate, status: 'pending' }])
         }
         created++
       } catch { failed++ }
     }
     setGenConfirmOpen(false)
     setGenResult(created
-      ? { type:'success', msg:`${created} task(s) generated from ${lo} → ${hi}, shifted +${offset} day(s) (starting ${genDestDate}).${failed ? ` ${failed} failed — try again for the rest.` : ''}` }
-      : { type:'error', msg:`Generation failed for all ${failed} task(s). Check your connection and try again.` })
+      ? { type:'success', msg:`${created} task(s) from ${genDate} copied to ${genTargetDate}.${failed ? ` ${failed} failed - try again for the rest.` : ''}` }
+      : { type:'error', msg:`No tasks were copied. ${failed} task(s) failed - check your connection and try again.` }
+    )
     setTimeout(()=>setGenResult(null), 6000)
   }
 
@@ -400,11 +380,48 @@ function CeoDashboard({ user }) {
         </div>
       </div>
 
+      {/* Summary chips + status legend */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-lg bg-gray-50 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Total staff</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">{employees.length}</p>
+          </div>
+          <div className="rounded-lg bg-brand-50 p-3 ring-1 ring-brand-100">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-600">Clocked in</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-brand-700">{clockedInEmployees.length}</p>
+          </div>
+          <div className="rounded-lg bg-amber-50 p-3 ring-1 ring-amber-100">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-600">In progress</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-amber-700">{allTasks.filter((t) => t.status === 'inprogress').length}</p>
+          </div>
+          <div className="rounded-lg bg-emerald-50 p-3 ring-1 ring-emerald-100">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Completed</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-700">{allTasks.filter((t) => t.status === 'completed').length}</p>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Status legend</span>
+          <span className="inline-flex items-center gap-1.5 text-xs text-gray-600">
+            <span className="h-2 w-2 rounded-full bg-gray-400" />
+            Pending · {allTasks.filter((t) => t.status === 'pending').length}
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-xs text-gray-600">
+            <span className="h-2 w-2 rounded-full bg-amber-500" />
+            In Progress · {allTasks.filter((t) => t.status === 'inprogress').length}
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-xs text-gray-600">
+            <span className="h-2 w-2 rounded-full bg-brand-600" />
+            Completed · {allTasks.filter((t) => t.status === 'completed').length}
+          </span>
+        </div>
+      </div>
+
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h3 className="text-sm font-bold text-gray-900">Generate & Attendance for date</h3>
-            <p className="mt-1 text-xs text-gray-500">Pick a date to view who clocked in/out or was absent, then duplicate its tasks.</p>
+                        <h3 className="text-sm font-bold text-gray-900">Copy tasks</h3>
+            <p className="mt-1 text-xs text-gray-500">Pick a day to copy its tasks to another day.</p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <label className="text-xs font-medium text-gray-700">From
@@ -413,17 +430,13 @@ function CeoDashboard({ user }) {
             <label className="text-xs font-medium text-gray-700">To
               <input type="date" value={genTargetDate} onChange={(e)=>setGenTargetDate(e.target.value)} className="ml-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
             </label>
-            <label className="text-xs font-medium text-gray-700">Duplicate to
-              <input type="date" value={genDestDate} onChange={(e)=>setGenDestDate(e.target.value)} className="ml-1 rounded-lg border border-brand-300 bg-brand-50/40 px-2 py-1.5 text-sm" />
-            </label>
-            <button onClick={handleGenerateFromDate} className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-brand-700">Generate</button>
+            <button onClick={handleCopyTasks} className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-brand-700">Copy tasks</button>
           </div>
         </div>
         {genDate && genTargetDate && (
           <div className="mt-3 space-y-2">
             <p className="text-xs text-gray-500">
-              {genSourceTasks().length} task(s) between {genDate <= genTargetDate ? genDate : genTargetDate} and {genDate <= genTargetDate ? genTargetDate : genDate} will be generated
-              {(() => { const { offset } = genRange(); return offset !== 0 ? `, shifted ${offset > 0 ? '+' : ''}${offset} day(s)` : ' on the same dates' })()} — starting {genDestDate}.
+              {genSourceTasks().length} task(s) on {genDate} will be copied to {genTargetDate}.
             </p>
             {(() => {
               const punches = allAttendance.filter((p)=> (p.time||'').slice(0,10) === genDate)
@@ -484,18 +497,17 @@ function CeoDashboard({ user }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={()=>setGenConfirmOpen(false)}>
           <div className="absolute inset-0 bg-gray-900/50" />
           <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onClick={(e)=>e.stopPropagation()}>
-            <h3 className="text-base font-bold text-gray-900">Confirm generate tasks</h3>
+            <h3 className="text-base font-bold text-gray-900">Confirm copy tasks</h3>
             {(() => {
               const src = genSourceTasks()
-              const { lo, hi, offset } = genRange()
               return (
                 <>
-                  <p className="mt-1 text-sm text-gray-500">Generate <span className="font-semibold text-gray-900">{src.length} task(s)</span> from <span className="font-mono text-xs bg-gray-100 px-1 py-0.5 rounded">{lo}</span> → <span className="font-mono text-xs bg-gray-100 px-1 py-0.5 rounded">{hi}</span>, shifted <span className="font-semibold text-gray-900">{offset > 0 ? `+${offset}` : offset} day(s)</span> (starting <span className="font-mono text-xs bg-brand-50 px-1 py-0.5 rounded text-brand-700">{genDestDate}</span>)?</p>
+                  <p className="mt-1 text-sm text-gray-500">Copy <span className="font-semibold text-gray-900">{src.length} task(s)</span> from <span className="font-mono text-xs bg-gray-100 px-1 py-0.5 rounded">{genDate}</span> to <span className="font-mono text-xs bg-gray-100 px-1 py-0.5 rounded">{genTargetDate}</span>?</p>
                   <div className="mt-4 max-h-40 overflow-y-auto divide-y divide-gray-100 rounded-lg border border-gray-200 bg-gray-50">
                     {src.slice(0, 5).map((t) => (
                       <div key={t.id} className="px-3 py-2 text-xs">
                         <p className="font-medium text-gray-900 truncate">{t.title}</p>
-                        <p className="text-gray-500">{t.assignee} · {t.priority} · due {dueKey(t)} → {addDaysISO(dueKey(t), offset)}</p>
+                        <p className="text-gray-500">{t.assignee} · {t.priority} · due {dueKey(t)} → {genTargetDate}</p>
                       </div>
                     ))}
                     {src.length > 5 && <p className="px-3 py-2 text-center text-xs text-gray-400">+{src.length - 5} more</p>}
@@ -505,7 +517,7 @@ function CeoDashboard({ user }) {
             })()}
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={()=>setGenConfirmOpen(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={doGenerate} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Confirm &amp; Generate</button>
+              <button onClick={doCopyTasks} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Confirm &amp; Copy</button>
             </div>
           </div>
         </div>
@@ -832,3 +844,4 @@ export default function Dashboard() {
     </div>
   )
 }
+
