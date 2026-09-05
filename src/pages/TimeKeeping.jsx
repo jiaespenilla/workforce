@@ -5,6 +5,7 @@ import { getSystemTimeZone } from '../lib/systemSettings'
 import { getCompanyShifts } from '../lib/shifts'
 import { api, apiEnabled } from '../lib/api'
 import { SkeletonRows } from '../components/Skeleton'
+import Avatar from '../components/Avatar'
 
 function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
 function endOfDay(d) { const x = new Date(d); x.setHours(23, 59, 59, 999); return x }
@@ -504,6 +505,7 @@ return (
                         {view !== 'day' && (
                           <svg className={'h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ' + (isExpanded ? 'rotate-90' : '')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
                         )}
+                        <Avatar user={{ name: emp.name, initials: emp.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(), avatar: emp.avatar }} size="h-8 w-8 text-[10px]" />
                         <div>
                           <p className="font-medium text-gray-900">{emp.name}</p>
                           <p className="text-xs text-gray-500">{emp.companyName} · {emp.role || 'Unassigned'}</p>

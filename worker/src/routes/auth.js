@@ -67,8 +67,8 @@ export async function handle({ request, env, _url, path, method, claims }) {
       ? await env.DB.prepare('SELECT * FROM companies WHERE id = ?').bind(companyId).all().then((r) => r.results)
       : await env.DB.prepare('SELECT * FROM companies ORDER BY created_at DESC').all().then((r) => r.results)
     const employeeRows = companyId
-      ? await env.DB.prepare('SELECT * FROM employees WHERE company_id = ?').bind(companyId).all().then((r) => r.results)
-      : await env.DB.prepare('SELECT * FROM employees').all().then((r) => r.results)
+      ? await env.DB.prepare('SELECT e.*, u.avatar AS user_avatar FROM employees e LEFT JOIN users u ON lower(u.email) = lower(e.email) WHERE e.company_id = ?').bind(companyId).all().then((r) => r.results)
+      : await env.DB.prepare('SELECT e.*, u.avatar AS user_avatar FROM employees e LEFT JOIN users u ON lower(u.email) = lower(e.email)').all().then((r) => r.results)
     let taskRows = await env.DB.prepare('SELECT * FROM tasks ORDER BY id DESC').all().then((r) => r.results)
     if (companyId) {
       const own = await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(companyId).first()

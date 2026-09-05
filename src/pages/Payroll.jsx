@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api, apiEnabled } from '../lib/api'
 import { getActiveSettings } from '../lib/systemSettings'
 import { SkeletonRows } from '../components/Skeleton'
+import Avatar from '../components/Avatar'
 import {
   computePayrollRows, payrollTotals, periodRange, periodLabel, shiftPeriod,
   loadDeductions, saveDeductions, peso, fmtHours, openPayslipPrint,
@@ -317,8 +318,13 @@ export default function Payroll() {
                   {rows.map((r) => (
                     <tr key={r.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 sm:px-6">
-                        <div className="font-medium text-gray-900">{r.name}</div>
-                        <div className="text-xs text-gray-500">{r.role || 'Unassigned'}{r.companyName ? ' · ' + r.companyName : ''}</div>
+                        <div className="flex items-center gap-3">
+                          <Avatar user={{ name: r.name, initials: r.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(), avatar: r.avatar }} size="h-9 w-9 text-xs" />
+                          <div className="min-w-0">
+                            <div className="font-medium text-gray-900">{r.name}</div>
+                            <div className="text-xs text-gray-500">{r.role || 'Unassigned'}{r.companyName ? ' · ' + r.companyName : ''}</div>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-3 py-3">
                         {r.missing.length ? (

@@ -168,6 +168,7 @@ export function computePayrollRows({ employees, attendance, deductions, period }
       email: emp.email,
       role: emp.role,
       companyName: emp.companyName,
+      avatar: emp.avatar || null,
       payType: payType === 'monthly' || payType === 'hourly' ? payType : null,
       payRate: Number.isFinite(payRate) && payRate > 0 ? payRate : null,
       hours: round2(hours),
