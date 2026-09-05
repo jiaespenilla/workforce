@@ -163,4 +163,52 @@ export async function migrateAttendanceOvertime(env) {
   attendanceOvertimeMigrated = true
 }
 
+let employeePayMigrated = false
+// Payroll fields on employees — pay_type ('monthly' | 'hourly') and pay_rate
+// (PHP per month / per hour). NULL means "salary not configured yet" and the
+// Payroll page flags the employee until it is set.
+export async function migrateEmployeePay(env) {
+  if (employeePayMigrated) return
+  try {
+    await env.DB.prepare('SELECT pay_type, pay_rate FROM employees LIMIT 1').first()
+    employeePayMigrated = true
+    return
+  } catch {
+    // column missing — add it below
+  }
+  try {
+    await env.DB.prepare('ALTER TABLE employees ADD COLUMN pay_type TEXT').run()
+  } catch {}
+  try {
+    await env.DB.prepare('ALTER TABLE employees ADD COLUMN pay_rate REAL').run()
+  } catch {}
+  employeePayMigrated = true
+}
+
+let payrollRunsMigrated = false
+// Saved payroll runs — one row per executed run with the totals that were
+// disbursed plus a per-employee snapshot for audit/payslip reprinting.
+export async function migratePayrollRuns(env) {
+  if (payrollRunsMigrated) return
+  try {
+    await env.DB.batch([
+      env.DB.prepare(`CREATE TABLE IF NOT EXISTS payroll_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id TEXT,
+        frequency TEXT NOT NULL,
+        period_start TEXT NOT NULL,
+        period_end TEXT NOT NULL,
+        employee_count INTEGER NOT NULL DEFAULT 0,
+        gross REAL NOT NULL DEFAULT 0,
+        deductions REAL NOT NULL DEFAULT 0,
+        net REAL NOT NULL DEFAULT 0,
+        details_json TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`),
+      env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_payroll_runs_company ON payroll_runs (company_id)'),
+    ])
+  } catch {}
+  payrollRunsMigrated = true
+}
+
 export { COMPANY_SETTING_KEYS, GLOBAL_SETTINGS_SQL }

@@ -17,7 +17,7 @@ export function mapCompany(row, employees) {
     owner: row.owner_name ? { name: row.owner_name, title: row.owner_title, email: row.owner_email } : undefined,
     employees: employees
       .filter((e) => e.company_id === row.id)
-      .map((e) => ({ id: e.id, name: e.name, email: e.email, role: e.role, active: e.active !== 0, locationId: e.location_id || null, location: e.location || null })),
+      .map((e) => ({ id: e.id, name: e.name, email: e.email, role: e.role, active: e.active !== 0, locationId: e.location_id || null, location: e.location || null, payType: e.pay_type || null, payRate: e.pay_rate ?? null })),
   }
 }
 

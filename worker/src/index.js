@@ -5,13 +5,14 @@
 
 import { json, cors } from './lib/http.js'
 import { requireAuth } from './lib/auth.js'
-import { ensureSeed, migrateCompanySettings, migrateTaskColumns, migrateTaskAssigneeId, migrateAttendanceOvertime } from './lib/seed.js'
+import { ensureSeed, migrateCompanySettings, migrateTaskColumns, migrateTaskAssigneeId, migrateAttendanceOvertime, migrateEmployeePay, migratePayrollRuns } from './lib/seed.js'
 import * as publicRoutes from './routes/public.js'
 import * as authRoutes from './routes/auth.js'
 import * as settingsRoutes from './routes/settings.js'
 import * as companyRoutes from './routes/companies.js'
 import * as taskRoutes from './routes/tasks.js'
 import * as attendanceRoutes from './routes/attendance.js'
+import * as payrollRoutes from './routes/payroll.js'
 import * as credentialRoutes from './routes/credentials.js'
 import * as orgUnitRoutes from './routes/orgUnits.js'
 import * as kioskAdminRoutes from './routes/kioskAdmin.js'
@@ -28,6 +29,7 @@ const API_HANDLERS = [
   companyRoutes.handle,
   taskRoutes.handle,
   attendanceRoutes.handle,
+  payrollRoutes.handle,
   credentialRoutes.handle,
   orgUnitRoutes.handle,
   kioskAdminRoutes.handle,
@@ -53,6 +55,8 @@ async function ensureMigrations(env) {
         migrateTaskColumns(env),
         migrateTaskAssigneeId(env),
         migrateAttendanceOvertime(env),
+        migrateEmployeePay(env),
+        migratePayrollRuns(env),
       ])
     })().catch((e) => { migrationsPromise = null; throw e })
   }

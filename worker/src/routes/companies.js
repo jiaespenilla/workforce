@@ -72,12 +72,22 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
         }
         const body = await readJson(request)
         const locVal = body.locationId ?? body.location ?? null
+        // Payroll fields (49): pay_type 'monthly'|'hourly', pay_rate PHP.
+        // Sent as null to clear. Wrapped in try/catch so databases that have
+        // not run the employee-pay migration yet still update the basics.
+        const payType = body.payType === undefined ? null : (['monthly', 'hourly'].includes(String(body.payType)) ? String(body.payType) : null)
+        const payRate = body.payRate === undefined || body.payRate === null || body.payRate === '' ? null : Math.max(0, Number(body.payRate) || 0)
         try {
-          await env.DB.prepare('UPDATE employees SET name = COALESCE(?, name), role = COALESCE(?, role), active = COALESCE(?, active), location_id = COALESCE(?, location_id) WHERE id = ?')
-            .bind(body.name ?? null, body.role ?? null, body.active === undefined ? null : body.active ? 1 : 0, locVal, Number(m[1])).run()
+          await env.DB.prepare('UPDATE employees SET name = COALESCE(?, name), role = COALESCE(?, role), active = COALESCE(?, active), location_id = COALESCE(?, location_id), pay_type = ?, pay_rate = ? WHERE id = ?')
+            .bind(body.name ?? null, body.role ?? null, body.active === undefined ? null : body.active ? 1 : 0, locVal, payType, payRate, Number(m[1])).run()
         } catch {
-          await env.DB.prepare('UPDATE employees SET name = COALESCE(?, name), role = COALESCE(?, role), active = COALESCE(?, active) WHERE id = ?')
-            .bind(body.name ?? null, body.role ?? null, body.active === undefined ? null : body.active ? 1 : 0, Number(m[1])).run()
+          try {
+            await env.DB.prepare('UPDATE employees SET name = COALESCE(?, name), role = COALESCE(?, role), active = COALESCE(?, active), location_id = COALESCE(?, location_id) WHERE id = ?')
+              .bind(body.name ?? null, body.role ?? null, body.active === undefined ? null : body.active ? 1 : 0, locVal, Number(m[1])).run()
+          } catch {
+            await env.DB.prepare('UPDATE employees SET name = COALESCE(?, name), role = COALESCE(?, role), active = COALESCE(?, active) WHERE id = ?')
+              .bind(body.name ?? null, body.role ?? null, body.active === undefined ? null : body.active ? 1 : 0, Number(m[1])).run()
+          }
         }
         // Sync users.role when role changes (CEO vs Employee) — keep login correct
         if (body.role !== undefined) {

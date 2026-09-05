@@ -9,11 +9,17 @@ export async function handle({ request, env, url, path, method, claims }) {
   if (path === '/api/attendance' && method === 'GET') {
     const email = url.searchParams.get('email')
     const date = url.searchParams.get('date')
+    // Optional range filter (full ISO timestamps, lexicographic compare):
+    // from=2026-09-01T00:00:00.000Z&to=2026-09-15T23:59:59.999Z
+    const from = url.searchParams.get('from')
+    const to = url.searchParams.get('to')
     let sql = 'SELECT * FROM attendance'
     const params = []
     const conditions = []
     if (email) { conditions.push('email = ?'); params.push(email.toLowerCase()) }
     if (date) { conditions.push("time LIKE ?"); params.push(`${date}%`) }
+    if (from) { conditions.push('time >= ?'); params.push(from) }
+    if (to) { conditions.push('time <= ?'); params.push(to) }
     // Company accounts are ALWAYS restricted to their own company — even when
     // an explicit email is passed (prevents cross-tenant reads by email).
     const callerCompany = await callerCompanyId(env, claims)
