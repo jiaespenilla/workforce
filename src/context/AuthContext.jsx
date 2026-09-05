@@ -73,8 +73,14 @@ export function AuthProvider({ children }) {
   }, [user])
 
   // Update the signed-in user's profile (name / phone / avatar).
-  const updateProfile = (updates) => {
+  // Cloud mode: persisted to the server (PUT /api/profile) so the profile
+  // follows the account across devices. Throws on API failure so the caller
+  // can show an error; local mode keeps the localStorage behaviour.
+  const updateProfile = async (updates) => {
     if (!user) return
+    if (apiEnabled()) {
+      await api('/api/profile', { method: 'PUT', body: updates })
+    }
     const profiles = readProfiles()
     profiles[user.email] = { ...(profiles[user.email] || {}), ...updates }
     localStorage.setItem('uw_profiles', JSON.stringify(profiles))

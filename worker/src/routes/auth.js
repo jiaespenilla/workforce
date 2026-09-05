@@ -10,6 +10,37 @@ export async function handle({ request, env, _url, path, method, claims }) {
   /* me */
   if (path === '/api/me' && method === 'GET') return json({ email: claims.sub, name: claims.name, role: claims.role })
 
+  /* own profile (50) — read name/phone/avatar so it follows the account */
+  if (path === '/api/profile' && method === 'GET') {
+    const user = await env.DB.prepare('SELECT name, phone, avatar FROM users WHERE lower(email) = ?')
+      .bind(String(claims.sub).toLowerCase()).first()
+    if (!user) return json({ error: 'Account not found.' }, 404)
+    return json({ name: user.name, phone: user.phone || '', avatar: user.avatar || null })
+  }
+
+  /* update own profile (50) — persists across devices; keeps localStorage as cache */
+  if (path === '/api/profile' && method === 'PUT') {
+    const body = await readJson(request)
+    const name = String(body.name || '').trim().slice(0, 120)
+    const phone = body.phone === undefined || body.phone === null ? null : String(body.phone).trim().slice(0, 40)
+    const avatar = body.avatar === undefined ? null : (body.avatar ? String(body.avatar) : null)
+    if (avatar && avatar.length > 700000) return json({ error: 'Avatar image is too large (max ~500KB).' }, 400)
+    const user = await env.DB.prepare('SELECT id FROM users WHERE lower(email) = ?')
+      .bind(String(claims.sub).toLowerCase()).first()
+    if (!user) return json({ error: 'Account not found.' }, 404)
+    await env.DB.prepare('UPDATE users SET name = COALESCE(?, name), phone = ?, avatar = ? WHERE id = ?')
+      .bind(name || null, phone, avatar, user.id).run()
+    // Best-effort: keep the employee record's display name in sync (used by
+    // People/Payroll/TimeKeeping listings).
+    if (name) {
+      try {
+        await env.DB.prepare('UPDATE employees SET name = ? WHERE lower(email) = ?')
+          .bind(name, String(claims.sub).toLowerCase()).run()
+      } catch { /* employee row may not exist (platform admin) */ }
+    }
+    return json({ ok: true, name: name || undefined, phone, avatar })
+  }
+
   /* change own password (any authenticated user) */
   if (path === '/api/change-password' && method === 'POST') {
     const { currentPassword, newPassword } = await readJson(request)

@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { usePageTitle } from '../lib/documentMeta'
+import { api, apiEnabled } from '../lib/api'
 import Avatar from '../components/Avatar'
 import { AVATAR_PRESETS } from '../lib/avatarPresets'
 
@@ -13,6 +14,22 @@ export default function Profile() {
   const [phone, setPhone] = useState(user?.phone || '')
   const [avatar, setAvatar] = useState(user?.avatar || null)
   const [profileSaved, setProfileSaved] = useState(false)
+  const [profileError, setProfileError] = useState(null)
+  const [profileSaving, setProfileSaving] = useState(false)
+
+  // Cloud mode: load the persisted profile so it follows the account across
+  // devices (name/phone/avatar live in the users table, not just localStorage).
+  useEffect(() => {
+    if (!apiEnabled()) return
+    let cancelled = false
+    api('/api/profile').then((p) => {
+      if (cancelled) return
+      if (p.name) setName(p.name)
+      setPhone(p.phone || '')
+      setAvatar(p.avatar || null)
+    }).catch(() => { /* keep local values */ })
+    return () => { cancelled = true }
+  }, [])
 
   const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw] = useState('')
@@ -30,11 +47,19 @@ export default function Profile() {
 
   if (!user) return null
 
-  const saveProfile = (e) => {
+  const saveProfile = async (e) => {
     e.preventDefault()
-    updateProfile({ name: name.trim() || user.name, phone: phone.trim(), avatar })
-    setProfileSaved(true)
-    setTimeout(() => setProfileSaved(false), 3000)
+    setProfileError(null)
+    setProfileSaving(true)
+    try {
+      await updateProfile({ name: name.trim() || user.name, phone: phone.trim(), avatar })
+      setProfileSaved(true)
+      setTimeout(() => setProfileSaved(false), 3000)
+    } catch (err) {
+      setProfileError(err.message || 'Could not save your profile.')
+    } finally {
+      setProfileSaving(false)
+    }
   }
 
   const _pickAvatar = (file) => {
@@ -191,9 +216,10 @@ export default function Profile() {
         </div>
 
         <div className="mt-6 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-end">
+          {profileError && <span role="alert" className="inline-flex items-center rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 ring-1 ring-red-200 sm:mr-auto">{profileError}</span>}
           {profileSaved && <span className="inline-flex items-center justify-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200"><svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg> Profile updated</span>}
-          <button type="submit" className="w-full rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 sm:w-auto min-h-[44px]">
-            Save changes
+          <button type="submit" disabled={profileSaving} className="w-full rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto min-h-[44px]">
+            {profileSaving ? 'Saving…' : 'Save changes'}
           </button>
         </div>
       </form>

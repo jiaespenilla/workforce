@@ -13,6 +13,7 @@ export default function ShiftSchedules() {
   const [_loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(false)
   const [newShift, setNewShift] = useState({ name: '', start: '08:00', end: '17:00', open: false })
+  const [editingShift, setEditingShift] = useState(null)
 
   useEffect(() => {
     api('/api/companies').then((res) => {
@@ -38,9 +39,9 @@ export default function ShiftSchedules() {
     if (!newShift.name.trim()) return
     setData((d) => ({
       ...d,
-      shifts: [...d.shifts, { id: `sh-${Date.now()}`, name: newShift.name.trim(), start: newShift.start, end: newShift.end }],
+      shifts: [...d.shifts, { id: `sh-${Date.now()}`, name: newShift.name.trim(), start: newShift.start, end: newShift.end, open: !!newShift.open }],
     }))
-    setNewShift({ name: '', start: '08:00', end: '17:00' })
+    setNewShift({ name: '', start: '08:00', end: '17:00', open: false })
   }
 
   const removeShift = (id) => {
@@ -48,6 +49,18 @@ export default function ShiftSchedules() {
       const assignments = Object.fromEntries(Object.entries(d.assignments || {}).filter(([, sid]) => sid !== id))
       return { shifts: d.shifts.filter((s) => s.id !== id), assignments }
     })
+  }
+
+  // Inline shift editing (50) — rename or change times without re-creating.
+  const saveEditShift = () => {
+    if (!editingShift || !editingShift.name.trim()) return
+    setData((d) => ({
+      ...d,
+      shifts: d.shifts.map((s) => (s.id === editingShift.id
+        ? { ...s, name: editingShift.name.trim(), start: editingShift.start, end: editingShift.end, open: !!editingShift.open }
+        : s)),
+    }))
+    setEditingShift(null)
   }
 
   const _assign = (email, shiftId) => {
@@ -92,17 +105,40 @@ export default function ShiftSchedules() {
         <div className="mt-4 space-y-3">
           {(data.shifts || []).map((s) => (
             <div key={s.id} className="flex flex-col gap-3 rounded-xl border border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <span className="flex-1 text-sm font-semibold text-gray-900 sm:text-base">{s.name}</span>
-              <div className="flex items-center gap-2 self-start sm:self-auto">
-                {s.open ? (
-                  <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">Open shift · no fixed time</span>
-                ) : (
-                  <span className="rounded-full bg-brand-50 px-3 py-1.5 text-xs font-bold tabular-nums text-brand-700 ring-1 ring-brand-200">{s.start} – {s.end}</span>
-                )}
-                <button type="button" onClick={() => removeShift(s.id)} className="rounded-lg p-2.5 text-red-400 transition hover:bg-red-50 hover:text-red-600 min-h-[44px] min-w-[44px] flex items-center justify-center" title="Delete shift" aria-label={`Delete ${s.name}`}>
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                </button>
-              </div>
+              {editingShift && editingShift.id === s.id ? (
+                <>
+                  <div className="grid flex-1 gap-2 sm:grid-cols-4">
+                    <input value={editingShift.name} onChange={(e) => setEditingShift({ ...editingShift, name: e.target.value })} aria-label="Shift name" placeholder="Shift name" className="rounded-lg border border-brand-400 px-3 py-2 text-sm focus:outline-none min-h-[44px]" />
+                    <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 min-h-[44px]">
+                      <input type="checkbox" checked={!!editingShift.open} onChange={(e) => setEditingShift({ ...editingShift, open: e.target.checked })} className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+                      <span className="whitespace-nowrap">Open shift</span>
+                    </label>
+                    <input type="time" value={editingShift.start || ''} disabled={!!editingShift.open} onChange={(e) => setEditingShift({ ...editingShift, start: e.target.value })} aria-label="Start time" className="rounded-lg border border-brand-400 px-3 py-2 text-sm tabular-nums focus:outline-none disabled:bg-gray-100 min-h-[44px]" />
+                    <input type="time" value={editingShift.end || ''} disabled={!!editingShift.open} onChange={(e) => setEditingShift({ ...editingShift, end: e.target.value })} aria-label="End time" className="rounded-lg border border-brand-400 px-3 py-2 text-sm tabular-nums focus:outline-none disabled:bg-gray-100 min-h-[44px]" />
+                  </div>
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    <button type="button" onClick={saveEditShift} disabled={!editingShift.name.trim()} className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-40 min-h-[44px]">Save</button>
+                    <button type="button" onClick={() => setEditingShift(null)} className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 min-h-[44px]">Cancel</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className="flex-1 text-sm font-semibold text-gray-900 sm:text-base">{s.name}</span>
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    {s.open ? (
+                      <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">Open shift · no fixed time</span>
+                    ) : (
+                      <span className="rounded-full bg-brand-50 px-3 py-1.5 text-xs font-bold tabular-nums text-brand-700 ring-1 ring-brand-200">{s.start} – {s.end}</span>
+                    )}
+                    <button type="button" onClick={() => setEditingShift({ id: s.id, name: s.name, start: s.start, end: s.end, open: !!s.open })} className="rounded-lg p-2.5 text-gray-400 transition hover:bg-brand-50 hover:text-brand-600 min-h-[44px] min-w-[44px] flex items-center justify-center" title="Edit shift" aria-label={`Edit ${s.name}`}>
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                    </button>
+                    <button type="button" onClick={() => removeShift(s.id)} className="rounded-lg p-2.5 text-red-400 transition hover:bg-red-50 hover:text-red-600 min-h-[44px] min-w-[44px] flex items-center justify-center" title="Delete shift" aria-label={`Delete ${s.name}`}>
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ))}
           {(data.shifts || []).length === 0 && (

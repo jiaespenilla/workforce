@@ -211,4 +211,21 @@ export async function migratePayrollRuns(env) {
   payrollRunsMigrated = true
 }
 
+let userProfileMigrated = false
+// Profile fields on users (50) — phone + avatar persist server-side so the
+// profile follows the account across devices (was localStorage-only).
+export async function migrateUserProfile(env) {
+  if (userProfileMigrated) return
+  try {
+    await env.DB.prepare('SELECT phone, avatar FROM users LIMIT 1').first()
+    userProfileMigrated = true
+    return
+  } catch {
+    // column missing — add it below
+  }
+  try { await env.DB.prepare('ALTER TABLE users ADD COLUMN phone TEXT').run() } catch {}
+  try { await env.DB.prepare('ALTER TABLE users ADD COLUMN avatar TEXT').run() } catch {}
+  userProfileMigrated = true
+}
+
 export { COMPANY_SETTING_KEYS, GLOBAL_SETTINGS_SQL }
