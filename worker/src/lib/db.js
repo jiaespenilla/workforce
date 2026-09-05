@@ -49,12 +49,20 @@ export function safeParse(text) {
 
 export async function insertEmployee(env, companyId, emp) {
   const locId = emp.locationId || emp.location || null
+  // Payroll fields (49/50): pay_type 'monthly'|'hourly', pay_rate — optional at creation.
+  const payType = emp.payType && ['monthly', 'hourly'].includes(String(emp.payType)) ? String(emp.payType) : null
+  const payRate = emp.payRate === undefined || emp.payRate === null || emp.payRate === '' ? null : Math.max(0, Number(emp.payRate) || 0)
   try {
-    await env.DB.prepare('INSERT OR IGNORE INTO employees (company_id, name, email, role, active, location_id) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(companyId, emp.name || 'Unnamed', (emp.email || '').toLowerCase(), emp.role || 'Unassigned', emp.active === false ? 0 : 1, locId).run()
+    await env.DB.prepare('INSERT OR IGNORE INTO employees (company_id, name, email, role, active, location_id, pay_type, pay_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(companyId, emp.name || 'Unnamed', (emp.email || '').toLowerCase(), emp.role || 'Unassigned', emp.active === false ? 0 : 1, locId, payType, payRate).run()
   } catch {
-    await env.DB.prepare('INSERT OR IGNORE INTO employees (company_id, name, email, role, active) VALUES (?, ?, ?, ?, ?)')
-      .bind(companyId, emp.name || 'Unnamed', (emp.email || '').toLowerCase(), emp.role || 'Unassigned', emp.active === false ? 0 : 1).run()
+    try {
+      await env.DB.prepare('INSERT OR IGNORE INTO employees (company_id, name, email, role, active, location_id) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(companyId, emp.name || 'Unnamed', (emp.email || '').toLowerCase(), emp.role || 'Unassigned', emp.active === false ? 0 : 1, locId).run()
+    } catch {
+      await env.DB.prepare('INSERT OR IGNORE INTO employees (company_id, name, email, role, active) VALUES (?, ?, ?, ?, ?)')
+        .bind(companyId, emp.name || 'Unnamed', (emp.email || '').toLowerCase(), emp.role || 'Unassigned', emp.active === false ? 0 : 1).run()
+    }
   }
 }
 

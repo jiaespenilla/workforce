@@ -32,7 +32,7 @@ export default function People() {
   const [peopleLocationFilter, setPeopleLocationFilter] = useState('all')
   const canLocation = (a) => canAction(user?.perms, 'locations', a)
 
-  const formRef = useRef({ name: '', email: '', role: roleOptions[roleOptions.length - 1] || '', locationId: '' })
+  const formRef = useRef({ name: '', email: '', role: roleOptions[roleOptions.length - 1] || '', locationId: '', payType: '', payRate: '' })
   const [, forceRender] = useState(0)
   const form = formRef.current
 
@@ -41,15 +41,21 @@ export default function People() {
     let scoped = []
     try {
       const all = await api('/api/companies')
-      scoped = user?.companyName ? all.filter((c) => c.name === user.companyName) : all
-    } catch {
+      if (user?.companyName) {
+        // The API already scopes the list; this filter only narrows the view
+        // for local/admin contexts. Case-insensitive, with a safe fallback.
+        const match = all.filter((c) => String(c.name || '').toLowerCase() === String(user.companyName).toLowerCase())
+        scoped = match.length ? match : all
+      } else {
+        scoped = all
+      }
+      setError(null)
+    } catch (err) {
       scoped = []
+      setError(apiEnabled() ? (err.message || 'Could not load your team. Check your connection and try again.') : 'The People page needs the backend API (cloud mode) to load your team.')
     }
     setCompanies(scoped)
-    setCompanyId((prev) => prev || scoped[0]?.id || null)
-    if (scoped[0]?.id) {
-      try { setShiftsData(await getCompanyShifts(scoped[0].id)) } catch { /* ignore */ }
-    }
+    setCompanyId((prev) => (prev && scoped.some((c) => c.id === prev)) ? prev : scoped[0]?.id || null)
   }
 
   useEffect(() => { load() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [])
@@ -112,14 +118,19 @@ export default function People() {
     if (people.some((p) => p.email?.toLowerCase() === cleanEmail)) {
       return setError(`${cleanEmail} is already on this team.`)
     }
+    const payRateNum = Number(form.payRate)
+    if (form.payType && (!Number.isFinite(payRateNum) || payRateNum <= 0)) {
+      return setError('Enter a pay rate greater than 0 (or clear the pay type).')
+    }
 
     try {
       const locVal = form.locationId || ''
       const locPayload = locVal ? { locationId: locVal, location: companyLocations.find((l)=>l.id===locVal)?.name || locVal } : {}
+      const payPayload = form.payType ? { payType: form.payType, payRate: payRateNum } : {}
       if (apiEnabled()) {
         await api(`/api/companies/${company.id}/employees`, {
           method: 'POST',
-          body: { name: cleanName, email: cleanEmail, role: form.role || 'Unassigned', active: true, ...locPayload },
+          body: { name: cleanName, email: cleanEmail, role: form.role || 'Unassigned', active: true, ...locPayload, ...payPayload },
         })
       }
       await load()
@@ -128,6 +139,8 @@ export default function People() {
       form.email = ''
       form.role = roleOptions[roleOptions.length - 1] || ''
       form.locationId = ''
+      form.payType = ''
+      form.payRate = ''
       forceRender((n) => n + 1)
       setTimeout(() => setSavedName(null), 4000)
     } catch (err) {
@@ -137,11 +150,18 @@ export default function People() {
 
   const saveEdit = async (emp, updates) => {
     setError(null)
-    if (apiEnabled() && emp.id) {
-      await api(`/api/employees/${emp.id}`, { method: 'PUT', body: updates }).catch((err) => setError(err.message))
+    try {
+      if (apiEnabled() && emp.id) {
+        await api(`/api/employees/${emp.id}`, { method: 'PUT', body: updates })
+      }
+      await load()
+      setEditingId(null)
+      setSavedName((updates.name || emp.name) + ' updated.')
+      setTimeout(() => setSavedName(null), 4000)
+    } catch (err) {
+      // Keep the row open so the problem can be fixed.
+      setError(err.message || 'Could not save changes.')
     }
-    await load()
-    setEditingId(null)
   }
 
   const toggleStatus = async (emp) => {
@@ -225,6 +245,25 @@ export default function People() {
                   {companyLocations.map((l)=><option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>
                 {companyLocations.length===0 && <span className="mt-1 block text-[11px] text-amber-600">No locations — add in Companies → Locations</span>}
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium text-gray-700">Pay type (optional):</span>
+                <select value={form.payType} onChange={(e) => { form.payType = e.target.value; forceRender((n) => n + 1) }} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10">
+                  <option value="">Set later (excluded from payroll)</option>
+                  <option value="monthly">Monthly salary</option>
+                  <option value="hourly">Hourly rate</option>
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium text-gray-700">Pay rate (₱):</span>
+                <input
+                  type="number" min="0" step="0.01" inputMode="decimal"
+                  value={form.payRate}
+                  onChange={(e) => { form.payRate = e.target.value; forceRender((n) => n + 1) }}
+                  disabled={!form.payType}
+                  placeholder={form.payType === 'hourly' ? 'e.g. 95.50' : form.payType === 'monthly' ? 'e.g. 22000' : 'Choose a pay type first'}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm tabular-nums focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10 disabled:bg-gray-100"
+                />
               </label>
             </div>
             <div className="flex justify-end">
@@ -335,13 +374,13 @@ export default function People() {
               {editingId === emp.email ? (
                 <EditRow emp={emp} roleOptions={roleOptions} locations={companyLocations} onSave={(updates) => saveEdit(emp, updates)} onCancel={() => setEditingId(null)} />
               ) : (
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <Avatar user={{ name: emp.name, initials: emp.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(), avatar: emp.avatar }} size="h-10 w-10 text-xs" />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-40">
                     <p className="truncate text-sm font-semibold text-gray-900">{emp.name}</p>
-                    <p className="truncate text-xs text-gray-400">{emp.email}</p>
+                    <p className="truncate text-xs text-gray-400">{emp.email}<span className="sm:hidden"> · {emp.role || 'Unassigned'}</span></p>
                   </div>
-                  <span className={`hidden shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ring-1 sm:inline ${
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ring-1 ${
                     emp.active !== false ? 'bg-brand-50 text-brand-700 ring-brand-200' : 'bg-gray-100 text-gray-500 ring-gray-200'
                   }`}>
                     {emp.active !== false ? 'Active' : 'Inactive'}
@@ -358,7 +397,7 @@ export default function People() {
                     onChange={(e) => assignShift(emp.email, e.target.value)}
                     aria-label={`Shift for ${emp.name}`}
                     title="Assign shift"
-                    className="hidden w-36 rounded-lg border border-gray-300 px-2 py-1 text-xs focus:border-brand-500 focus:outline-none md:block"
+                    className="w-full rounded-lg border border-gray-300 px-2 py-1 text-xs focus:border-brand-500 focus:outline-none sm:w-36"
                   >
                     <option value="">No shift</option>
                     {(shiftsData.shifts || []).map((s) => (
@@ -406,6 +445,8 @@ function EditRow({ emp, roleOptions, locations = [], onSave, onCancel }) {
   const [name, setName] = useState(emp.name)
   const [role, setRole] = useState(emp.role)
   const [locationId, setLocationId] = useState(emp.locationId || emp.location || '')
+  const [payType, setPayType] = useState(emp.payType || '')
+  const [payRate, setPayRate] = useState(emp.payRate ?? '')
 
   // Resolve current location id to actual id if stored as name
   const resolvedLocationId = (() => {
@@ -414,31 +455,69 @@ function EditRow({ emp, roleOptions, locations = [], onSave, onCancel }) {
     return byName ? byName.id : locationId
   })()
 
+  const inputCls = 'mt-1 w-full rounded-md border border-brand-400 px-2 py-1.5 text-sm focus:outline-none'
+
   return (
     <form
-      onSubmit={(e) => { e.preventDefault(); const loc = locations.find((l)=>l.id===locationId); onSave({ name: name.trim() || emp.name, role, locationId: locationId || null, location: loc?.name || locationId || null }) }}
-      className="flex flex-wrap items-end gap-3"
+      onSubmit={(e) => {
+        e.preventDefault()
+        const loc = locations.find((l)=>l.id===locationId)
+        const rate = Number(payRate)
+        onSave({
+          name: name.trim() || emp.name,
+          role,
+          locationId: locationId || null,
+          location: loc ? loc.name : null,
+          payType: payType || null,
+          payRate: payType && Number.isFinite(rate) && rate > 0 ? rate : null,
+        })
+      }}
+      className="rounded-lg bg-gray-50/70 p-3"
     >
-      <label className="block min-w-[160px] flex-1 text-xs">
-        <span className="font-medium text-gray-500">Full name:</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} autoFocus className="mt-1 w-full rounded-md border border-brand-400 px-2 py-1.5 text-sm focus:outline-none" />
-      </label>
-      <label className="block w-32 text-xs">
-        <span className="font-medium text-gray-500">Role:</span>
-        <select value={role} onChange={(e) => setRole(e.target.value)} className="mt-1 w-full rounded-md border border-brand-400 px-2 py-1.5 text-sm focus:outline-none">
-          {(roleOptions.includes(role) || !role ? [...new Set([role, ...roleOptions].filter(Boolean))] : roleOptions).map((r) => <option key={r}>{r}</option>)}
-        </select>
-      </label>
-      <label className="block w-36 text-xs">
-        <span className="font-medium text-gray-500">Location:</span>
-        <select value={resolvedLocationId} onChange={(e) => setLocationId(e.target.value)} className="mt-1 w-full rounded-md border border-brand-400 px-2 py-1.5 text-sm focus:outline-none">
-          <option value="">No location</option>
-          {locations.map((l)=><option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
-      </label>
-      <div className="flex gap-2 pb-0.5">
-        <button type="submit" className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">Save</button>
-        <button type="button" onClick={onCancel} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <label className="block text-xs lg:col-span-2">
+          <span className="font-medium text-gray-500">Full name</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus className={'w-full ' + inputCls} />
+        </label>
+        <label className="block text-xs">
+          <span className="font-medium text-gray-500">Role</span>
+          <select value={role} onChange={(e) => setRole(e.target.value)} className={'w-full ' + inputCls}>
+            {(roleOptions.includes(role) || !role ? [...new Set([role, ...roleOptions].filter(Boolean))] : roleOptions).map((r) => <option key={r}>{r}</option>)}
+          </select>
+        </label>
+        <label className="block text-xs">
+          <span className="font-medium text-gray-500">Location</span>
+          <select value={resolvedLocationId} onChange={(e) => setLocationId(e.target.value)} className={'w-full ' + inputCls}>
+            <option value="">No location</option>
+            {locations.map((l)=><option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </label>
+        <div className="flex items-end gap-2">
+          <button type="submit" className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700">Save</button>
+          <button type="button" onClick={onCancel} className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-3 border-t border-gray-100 pt-3 sm:grid-cols-3">
+        <label className="block text-xs">
+          <span className="font-medium text-gray-500">Pay type</span>
+          <select value={payType} onChange={(e) => setPayType(e.target.value)} className={'w-full ' + inputCls}>
+            <option value="">None (excluded from payroll)</option>
+            <option value="monthly">Monthly salary</option>
+            <option value="hourly">Hourly rate</option>
+          </select>
+        </label>
+        <label className="block text-xs">
+          <span className="font-medium text-gray-500">Pay rate (₱{payType === 'hourly' ? '/hour' : payType === 'monthly' ? '/month' : ''})</span>
+          <input
+            type="number" min="0" step="0.01" inputMode="decimal"
+            value={payRate}
+            onChange={(e) => setPayRate(e.target.value)}
+            disabled={!payType}
+            placeholder={payType === 'hourly' ? 'e.g. 95.50' : payType === 'monthly' ? 'e.g. 22000' : '—'}
+            className={'w-full tabular-nums disabled:bg-gray-100 ' + inputCls}
+          />
+        </label>
+        <p className="self-end text-[11px] leading-snug text-gray-400">Email: {emp.email} — used for login and timekeeping; cannot be changed here.</p>
       </div>
     </form>
   )
