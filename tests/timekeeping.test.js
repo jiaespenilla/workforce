@@ -174,18 +174,18 @@ describe('CEO/admin exemption from clock-in requirement', () => {
     expect(isExemptEmployee({ role: 'Employee' })).toBe(false)
     expect(isExemptEmployee(null)).toBe(false)
   })
-  it('dayStatus shows Exempt on a past day without punches', () => {
-    expect(dayStatus([], shift, { isToday: false, isPast: true, exempt: true }).label).toBe('Exempt')
-    expect(dayStatus([], shift, { isToday: true, exempt: true }).label).toBe('Exempt')
+  it('dayStatus shows Not required on a past day without punches', () => {
+    expect(dayStatus([], shift, { isToday: false, isPast: true, exempt: true }).label).toBe('Not required')
+    expect(dayStatus([], shift, { isToday: true, exempt: true }).label).toBe('Not required')
   })
   it('dayStatus still reports real attendance when an exempt person has punches', () => {
     expect(dayStatus([{ type: 'in', time: AT_SHIFT_START }], shift, { isToday: true, exempt: true }).label).toBe('On time')
     expect(dayStatus([{ type: 'in', time: LATE }], shift, { isToday: true, exempt: true }).label).toBe('Late')
   })
-  it('summaryStatus shows Exempt for an exempt person with an empty past week', () => {
+  it('summaryStatus shows Not required for an exempt person with an empty past week', () => {
     const monday = lastWeekMondayLocal()
     const st = summaryStatus([], shift, monday, 'week', { exempt: true })
-    expect(st.label).toBe('Exempt')
+    expect(st.label).toBe('Not required')
     expect(st.cls).toBe('bg-violet-100 text-violet-700')
   })
   it('summaryStatus counts attendance normally for a non-exempt person with an empty past week', () => {

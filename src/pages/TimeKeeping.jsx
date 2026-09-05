@@ -163,7 +163,7 @@ export function shiftForEmployee(shiftData, email) {
 // Exempt = CEO/administrators are not required to clock in or out.
 export function dayStatus(punches, shift, { isToday, isPast, exempt } = {}) {
   if (exempt && !punches.length) {
-    return { label: 'Exempt', cls: 'bg-violet-100 text-violet-700' }
+    return { label: 'Not required', cls: 'bg-violet-100 text-violet-700' }
   }
   if (!shift || shift.open) {
     if (punches.length) return { label: 'Present', cls: 'bg-brand-100 text-brand-700' }
@@ -204,7 +204,7 @@ export function summaryStatus(allPunches, shift, anchor, view, { exempt } = {}) 
     if (punches.length) present++
   }
     if (!present) {
-    if (exempt && !missed) return { label: 'Exempt', cls: 'bg-violet-100 text-violet-700' }
+    if (exempt && !missed) return { label: 'Not required', cls: 'bg-violet-100 text-violet-700' }
     return { label: missed ? `${missed} missed` : 'No punches', cls: 'bg-gray-100 text-gray-500' }
   }
   if (shift && !shift.open) {
@@ -447,7 +447,7 @@ return (
             <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-brand-100 text-brand-700">On time</span>
             <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-amber-100 text-amber-700">Late</span>
             <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-emerald-100 text-emerald-700">Present</span>
-            <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-violet-100 text-violet-700">Exempt</span>
+            <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-violet-100 text-violet-700">Not required</span>
             <span className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium bg-gray-100 text-gray-500">Missed</span>
           </div>
         </div>
