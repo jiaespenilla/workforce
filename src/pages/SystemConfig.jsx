@@ -740,6 +740,17 @@ export default function SystemConfig() {
             Saved successfully
           </span>
         )}
+        {/* Quick access to the stand-alone kiosk (public route, opens in a new tab) */}
+        <a
+          href="/kiosk"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open the stand-alone time clock kiosk in a new tab"
+          className="inline-flex items-center gap-2 self-start rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-brand-400 hover:text-brand-700 sm:self-auto"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+          Open Kiosk
+        </a>
       </div>
 
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-[260px_1fr] xl:grid-cols-[280px_1fr]">
