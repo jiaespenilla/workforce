@@ -65,12 +65,18 @@ export function decideAction(punches, shift, now = new Date(), otGraceMinutes = 
     return (new Date(startTime).getTime() + (regularWorkMinutes + graceM) * 60000)
   }
 
-  // Open shift — flexible, no standard times: scans simply alternate.
+  // Open shift — flexible, no standard times. Alternation is based on the
+  // LAST punch overall (any day), NOT just today's: an afternoon clock-in
+  // followed by a next-morning scan must be a CLOCK-OUT (item 53), not a
+  // second clock-in. Overtime still uses clock-in + 8h + grace as the
+  // session end, which works across midnight.
   if (shift?.open) {
-    if (!lastToday) return { action: 'in', overtime: false, overtimeMinutes: 0 }
-    if (lastToday.type === 'in') {
-      const ot = now.getTime() >= openShiftEndMinutes(lastToday.time)
-      return { action: 'out', overtime: ot, overtimeMinutes: ot ? sessionMinutes(lastToday.time) : 0 }
+    const sortedAll = [...punches].sort((a, b) => new Date(a.time) - new Date(b.time))
+    const lastAny = sortedAll[sortedAll.length - 1]
+    if (!lastAny) return { action: 'in', overtime: false, overtimeMinutes: 0 }
+    if (lastAny.type === 'in') {
+      const ot = now.getTime() >= openShiftEndMinutes(lastAny.time)
+      return { action: 'out', overtime: ot, overtimeMinutes: ot ? sessionMinutes(lastAny.time) : 0 }
     }
     return { action: 'in', overtime: false, overtimeMinutes: 0 }
   }

@@ -39,6 +39,35 @@ describe('decideAction', () => {
     expect(decideAction([], openShift, noon).overtimeMinutes).toBe(0)
   })
 
+  it('open shift: next-day scan after an open clock-in is a CLOCK-OUT (53)', () => {
+    const openShift = { open: true }
+    // In yesterday 13:00, scan today 08:00 → 19h session, past 8h + 15m grace
+    // → the whole 19h session counts as overtime.
+    const r = decideAction(
+      [{ time: '2026-08-27T13:00:00', type: 'in' }],
+      openShift,
+      new Date('2026-08-28T08:00:00')
+    )
+    expect(r.action).toBe('out')
+    expect(r.overtime).toBe(true)
+    expect(r.overtimeMinutes).toBe(19 * 60)
+  })
+
+  it('open shift: next-day scan after a completed yesterday session is a CLOCK-IN', () => {
+    const openShift = { open: true }
+    const r = decideAction(
+      [
+        { time: '2026-08-27T13:00:00', type: 'in' },
+        { time: '2026-08-27T22:00:00', type: 'out' },
+      ],
+      openShift,
+      new Date('2026-08-28T08:00:00')
+    )
+    expect(r.action).toBe('in')
+    expect(r.overtime).toBe(false)
+    expect(r.overtimeMinutes).toBe(0)
+  })
+
   it('timed shift: first scan is in, second is out', () => {
     const shift = { start: '09:00', end: '18:00' }
     expect(decideAction([], shift, new Date('2026-08-28T08:55:00')).action).toBe('in')
