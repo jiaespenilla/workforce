@@ -112,17 +112,29 @@ export async function registerCredential(env, { response }) {
 
 /* ---------------- authentication (kiosk fingerprint scan) ---------------- */
 
-export async function buildAuthenticationOptions(env, { origin }) {
+export async function buildAuthenticationOptions(env, { origin, email }) {
   const url = new URL(origin || `https://${'localhost'}`)
   const rpID = url.hostname
+  let allowCredentials = undefined
+  if (email) {
+    // User-directed scan (shared kiosk, 55): only offer THAT employee's
+    // passkey so the OS never shows an account picker a stranger could
+    // select a wrong account from.
+    const cred = await env.DB.prepare('SELECT * FROM webauthn_credentials WHERE lower(email) = lower(?) LIMIT 1').bind(email).first()
+    if (!cred) throw new WebAuthnError(404, 'This employee has no fingerprint enrolled. Register it in Kiosk Setup first.')
+    allowCredentials = [{
+      id: cred.credential_id,
+      type: 'public-key',
+      transports: cred.transports ? JSON.parse(cred.transports) : [],
+    }]
+  }
   const options = await generateAuthenticationOptions({
     rpID,
     timeout: 120000,
     userVerification: 'required',
-    // No allowCredentials -> discoverable credentials: the device picks the
-    // fingerprint that resolves the person without them typing anything.
+    ...(allowCredentials ? { allowCredentials } : {}),
   })
-  await storeChallenge(env, options.challenge, 'authentication', null, rpID, origin)
+  await storeChallenge(env, options.challenge, 'authentication', email ? email.toLowerCase() : null, rpID, origin)
   return { ...options, rpID }
 }
 
@@ -135,6 +147,14 @@ export async function verifyAuthentication(env, { response }) {
   const rawId = response.rawId || response.id
   const cred = await env.DB.prepare('SELECT * FROM webauthn_credentials WHERE credential_id = ?').bind(rawId).first()
   if (!cred) throw new WebAuthnError(404, 'This device is not registered for fingerprint.')
+  // Shared-kiosk binding (55): when the scan was started for a specific
+  // employee (tile tap → allowCredentials), the asserted credential MUST
+  // belong to that employee. A different account's credential — e.g. picked
+  // from the OS account sheet — is rejected even though its signature is
+  // valid, because any enrolled finger unlocks the shared device.
+  if (stored.email && String(cred.email || '').toLowerCase() !== String(stored.email).toLowerCase()) {
+    throw new WebAuthnError(401, 'This fingerprint does not match the selected employee. Tap your own name and scan again.')
+  }
 
   const verification = await verifyAuthenticationResponse({
     response,

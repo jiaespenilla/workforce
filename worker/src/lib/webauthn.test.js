@@ -102,6 +102,41 @@ describe('webauthn: single shared kiosk device for ALL employees', () => {
     expect(env.runs.some((r) => r.sql.includes('UPDATE webauthn_credentials SET counter'))).toBe(true)
   })
 
+  it('rejects a credential bound to a different employee than the challenge (shared-kiosk anti-impersonation)', async () => {
+    // Challenge was issued for other@acme.com but the asserted credential
+    // belongs to emp@acme.com (e.g. wrong account picked in the OS sheet).
+    const env = mockEnv()
+    env.DB.prepare = (_sql) => ({
+      bind: (...args) => ({
+        first: async () => {
+          if (_sql.includes('webauthn_credentials WHERE credential_id')) {
+            return { credential_id: 'cred-1', public_key: b64urlFromInput('fake-key'), counter: 0, transports: '["internal"]', email: 'emp@acme.com' }
+          }
+          if (_sql.includes('webauthn_challenges')) {
+            return { challenge: args[0], kind: args[1], email: 'other@acme.com', rp_id: 'kiosk.example.com', origin: 'https://kiosk.example.com', expires_at: Date.now() + 60000 }
+          }
+          return null
+        },
+        run: async () => {},
+        all: async () => ({ results: [] }),
+      }),
+      first: async () => null,
+      run: async () => {},
+      all: async () => ({ results: [] }),
+    })
+    await expect(webauthn.verifyAuthentication(env, {
+      response: { response: { clientDataJSON: clientDataJSON('auth-challenge') }, rawId: 'cred-1', id: 'cred-1' },
+    })).rejects.toMatchObject({ status: 401 })
+  })
+
+  it('accepts when the asserted credential matches the bound challenge email', async () => {
+    const env = mockEnv()
+    const result = await webauthn.verifyAuthentication(env, {
+      response: { response: { clientDataJSON: clientDataJSON('auth-challenge') }, rawId: 'cred-1', id: 'cred-1' },
+    })
+    expect(result).toEqual({ email: 'emp@acme.com' })
+  })
+
   it('rejects an unknown credential with 404', async () => {
     const env = mockEnv({ credRow: null })
     await expect(webauthn.verifyAuthentication(env, {

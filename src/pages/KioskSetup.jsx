@@ -103,7 +103,7 @@ export default function KioskSetup() {
   const [pinStatus, setPinStatus] = useState(null) // {ok, msg}
   const [qrImg, setQrImg] = useState(null)
   const [qrCodeStr, setQrCodeStr] = useState(null)
-  const [_credError, setCredError] = useState(null)
+  const [credError, setCredError] = useState(null)
 
   // Keep credential company in sync when active list refreshes (cloud mode)
   useEffect(() => {
@@ -165,8 +165,20 @@ export default function KioskSetup() {
       await api('/api/webauthn/register', { method: 'POST', body: { email, companyId: credCompanyId, deviceId, response: reg } })
       setFpStatus('registered')
     } catch (err) {
-      setCredError('Biometric capture failed: ' + (err?.message || 'Unknown error'))
+      setCredError(friendlyBiometricError(err))
     }
+  }
+
+  // Translate raw WebAuthn / network failures into something actionable on a
+  // shared kiosk phone (previously these errors were silently swallowed).
+  function friendlyBiometricError(err) {
+    const name = err?.name || ''
+    const msg = err?.message || 'Unknown error'
+    if (name === 'NotAllowedError') return 'Biometric capture failed: the prompt was cancelled or timed out. Tap Capture and approve the fingerprint prompt within 2 minutes — one shared device can enroll every employee, one at a time.'
+    if (name === 'InvalidStateError') return 'Biometric capture failed: this device already holds a credential for this employee. Remove the old enrollment below, then capture again.'
+    if (name === 'NotSupportedError' || /not supported|platform/i.test(msg)) return 'Biometric capture failed: this device has no usable fingerprint sensor (or no screen lock is set). Use PIN or QR instead.'
+    if (/network|fetch|failed to fetch/i.test(msg)) return 'Biometric capture failed: could not reach the server. Check the connection and try again.'
+    return 'Biometric capture failed: ' + msg
   }
 
   // Remove the employee's fingerprint enrollment (55) — e.g. to clear a
@@ -366,10 +378,22 @@ export default function KioskSetup() {
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-semibold text-gray-900">Credential Registration</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Register each employee's fingerprint, PIN and QR badge. One kiosk device can serve every
-              employee — register each person's finger here, then the kiosk asks "Is this you?" before
-              recording their clock-in/out to avoid mix-ups on shared devices.
+              Register each employee's fingerprint, PIN and QR badge on this shared kiosk device.
+              At clock-in each person taps <span className="font-semibold">their own name tile</span> first —
+              the fingerprint scan is then locked to only their passkey, so one device can safely serve
+              the whole team with no mix-ups.
             </p>
+            {credError && (
+              <div role="alert" className="mt-3 flex items-start gap-2.5 rounded-xl bg-red-50 px-4 py-3 text-xs font-medium leading-relaxed text-red-700 ring-1 ring-red-200">
+                <svg className="mt-0.5 h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span className="flex-1">{credError}</span>
+                <button type="button" onClick={() => setCredError(null)} aria-label="Dismiss error" className="rounded-lg p-0.5 text-red-400 hover:bg-red-100 hover:text-red-600">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            )}
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <label className="block text-sm">
