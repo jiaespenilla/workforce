@@ -115,6 +115,11 @@ export default function Kiosk() {
   const [scanning, setScanning] = useState(false)
   const [pin, setPin] = useState('')
   const [pinMode, setPinMode] = useState(false)
+  // A successful biometric/PIN/QR match is shown for confirmation before the
+  // punch is recorded — with several employees sharing one device, this catches
+  // the wrong account from the OS picker before any damage is done (55).
+  const [pendingMatch, setPendingMatch] = useState(null)
+  const [confirming, setConfirming] = useState(false)
   const idleTimer = useRef(null)
 
   useEffect(() => {
@@ -131,6 +136,8 @@ export default function Kiosk() {
         setPin('')
         setPinMode(false)
         setAuthError(null)
+        setPendingMatch(null)
+        setConfirming(false)
       }, Math.max(config.idleTimeout, 10) * 1000)
     }
     resetIdle()
@@ -188,7 +195,7 @@ export default function Kiosk() {
       const auth = await startAuthentication({ optionsJSON: options })
       const match = await api('/api/webauthn/authentication', { method: 'POST', body: { response: auth } })
       if (match.companyId) setKioskCompanyId(match.companyId)
-      await recordPunch(match)
+      setPendingMatch(match)
     } catch (err) {
       setAuthError(err?.message || 'Fingerprint scan failed. Touch the sensor and try again.')
     } finally {
@@ -220,12 +227,26 @@ export default function Kiosk() {
         return false
       }
       if (match.companyId) setKioskCompanyId(match.companyId)
-      await recordPunch(match)
+      setPendingMatch(match)
       return true
     } finally {
       setScanning(false)
     }
   }
+
+  // Record the punch after the on-screen identity confirmation.
+  const confirmPunch = async () => {
+    if (!pendingMatch) return
+    setConfirming(true)
+    try {
+      await recordPunch(pendingMatch)
+      setPendingMatch(null)
+    } finally {
+      setConfirming(false)
+    }
+  }
+
+  const cancelPunch = () => setPendingMatch(null)
 
   // Automatic clock-in / clock-out based on the employee's assigned shift.
   const recordPunch = async (match) => {
@@ -377,6 +398,28 @@ export default function Kiosk() {
             Clock in / out · {methodLabel}
           </p>
 
+          {pendingMatch ? (
+            /* Identity confirmation — several employees share this device, so
+               double-check the matched person before recording the punch. */
+            <div className="w-full rounded-[2rem] bg-white px-6 py-8 text-center text-gray-900 shadow-2xl">
+              <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-600 text-xl font-bold text-white">
+                {pendingMatch.name ? pendingMatch.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase() : '?'}
+              </span>
+              <p className="mt-4 text-xl font-black tracking-wide">{pendingMatch.name}</p>
+              <p className="mt-1 text-sm text-gray-500">{pendingMatch.company || ''}</p>
+              <p className="mt-4 text-sm font-semibold text-gray-700">Is this you?</p>
+              <p className="mt-1 text-xs text-gray-400">Your clock-in or out will be recorded for this person.</p>
+              <div className="mt-6 flex flex-col gap-2">
+                <button type="button" disabled={confirming} onClick={confirmPunch} className="w-full rounded-2xl bg-emerald-600 py-3 text-base font-bold text-white shadow-lg transition hover:bg-emerald-700 active:scale-95 disabled:opacity-50">
+                  {confirming ? 'Recording…' : 'Confirm'}
+                </button>
+                <button type="button" onClick={cancelPunch} disabled={confirming} className="w-full rounded-2xl border border-gray-300 py-3 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 active:scale-95 disabled:opacity-50">
+                  That's not me
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
           {/* Fingerprint screen */}
           {config.method === 'fingerprint' && !pinMode && (
             <>
@@ -506,6 +549,9 @@ export default function Kiosk() {
                 </div>
               </details>
             </>
+          )}
+
+          </>
           )}
 
           {authError && (

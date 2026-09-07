@@ -46,19 +46,11 @@ export async function handle({ request, env, url, path, method, isAdmin }) {
     if (!email || !companyId || !response) return json({ error: 'email, companyId and response are required.' }, 400)
     try {
       const reg = await webAuthn.registerCredential(env, { response })
-      // One fingerprint per kiosk device (55): if THIS device already enrolled
-      // a different employee, refuse — otherwise the OS account picker lets
-      // one finger clock in/out as either person, so identity is ambiguous.
+      // One device can serve ALL employees (54/55) — multiple fingerprint
+      // credentials registered on the same kiosk are allowed. Each employee
+      // keeps a single credential (re-registering replaces theirs). device_id
+      // is recorded for auditing which kiosk enrolled the finger.
       let deviceIdNorm = deviceId ? String(deviceId).slice(0, 80) : null
-      if (deviceIdNorm) {
-        const other = await env.DB.prepare(
-          'SELECT w.email, e.name FROM webauthn_credentials w LEFT JOIN employees e ON lower(e.email) = w.email WHERE w.device_id = ? AND lower(w.email) != ? LIMIT 1'
-        ).bind(deviceIdNorm, reg.email.toLowerCase()).first()
-        if (other) {
-          const who = other.name || other.email
-          return json({ error: 'This kiosk already has a fingerprint enrolled for ' + who + '. One fingerprint per kiosk device — remove that enrollment first, or use PIN/QR for other employees.' }, 409)
-        }
-      }
       // Only one fingerprint credential per employee (simplest for a shared kiosk).
       await env.DB.prepare('DELETE FROM webauthn_credentials WHERE email = ?').bind(reg.email.toLowerCase()).run()
       await env.DB.prepare(

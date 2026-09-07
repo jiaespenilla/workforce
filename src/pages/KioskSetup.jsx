@@ -366,8 +366,9 @@ export default function KioskSetup() {
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-semibold text-gray-900">Credential Registration</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Register each employee's fingerprint, PIN and QR badge. On the kiosk, these credentials identify
-              who is clocking in — no name selection needed.
+              Register each employee's fingerprint, PIN and QR badge. One kiosk device can serve every
+              employee — register each person's finger here, then the kiosk asks "Is this you?" before
+              recording their clock-in/out to avoid mix-ups on shared devices.
             </p>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
