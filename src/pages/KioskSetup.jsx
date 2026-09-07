@@ -151,10 +151,18 @@ export default function KioskSetup() {
     const email = credEmail.toLowerCase()
     try {
       setCredError(null)
+      // Stable per-device id (54/55): lets the server enforce one fingerprint
+      // enrollment per kiosk, so the OS account picker can never offer two
+      // employees for the same finger.
+      let deviceId = localStorage.getItem('uw_kiosk_device_id')
+      if (!deviceId) {
+        deviceId = crypto.randomUUID ? crypto.randomUUID() : 'kiosk-' + Date.now() + '-' + Math.random().toString(36).slice(2)
+        localStorage.setItem('uw_kiosk_device_id', deviceId)
+      }
       const options = await api('/api/webauthn/register/options', { method: 'POST', body: { email, origin: window.location.origin } })
       // Triggers the platform biometric prompt (fingerprint / Face ID) on this device.
       const reg = await startRegistration({ optionsJSON: options })
-      await api('/api/webauthn/register', { method: 'POST', body: { email, companyId: credCompanyId, response: reg } })
+      await api('/api/webauthn/register', { method: 'POST', body: { email, companyId: credCompanyId, deviceId, response: reg } })
       setFpStatus('registered')
     } catch (err) {
       setCredError('Biometric capture failed: ' + (err?.message || 'Unknown error'))

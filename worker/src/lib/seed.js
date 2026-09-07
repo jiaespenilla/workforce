@@ -228,4 +228,22 @@ export async function migrateUserProfile(env) {
   userProfileMigrated = true
 }
 
+let webauthnDeviceMigrated = false
+// Track WHICH kiosk device enrolled each fingerprint credential (54/55).
+// One fingerprint per kiosk device — prevents two employees enrolling the
+// same finger on one kiosk, which makes the account picker ambiguous.
+export async function migrateWebAuthnDevice(env) {
+  if (webauthnDeviceMigrated) return
+  try {
+    await env.DB.prepare('SELECT device_id FROM webauthn_credentials LIMIT 1').first()
+    webauthnDeviceMigrated = true
+    return
+  } catch {
+    // column missing — add it below
+  }
+  try { await env.DB.prepare('ALTER TABLE webauthn_credentials ADD COLUMN device_id TEXT').run() } catch {}
+  try { await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_wcred_device ON webauthn_credentials (device_id)').run() } catch {}
+  webauthnDeviceMigrated = true
+}
+
 export { COMPANY_SETTING_KEYS, GLOBAL_SETTINGS_SQL }

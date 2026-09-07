@@ -42,15 +42,28 @@ export async function handle({ request, env, url, path, method, isAdmin }) {
   }
   if (path === '/api/webauthn/register' && method === 'POST') {
     if (!isAdmin) return json({ error: 'Administrator only.' }, 403)
-    const { email, companyId, response } = await readJson(request)
+    const { email, companyId, deviceId, response } = await readJson(request)
     if (!email || !companyId || !response) return json({ error: 'email, companyId and response are required.' }, 400)
     try {
       const reg = await webAuthn.registerCredential(env, { response })
+      // One fingerprint per kiosk device (55): if THIS device already enrolled
+      // a different employee, refuse — otherwise the OS account picker lets
+      // one finger clock in/out as either person, so identity is ambiguous.
+      let deviceIdNorm = deviceId ? String(deviceId).slice(0, 80) : null
+      if (deviceIdNorm) {
+        const other = await env.DB.prepare(
+          'SELECT w.email, e.name FROM webauthn_credentials w LEFT JOIN employees e ON lower(e.email) = w.email WHERE w.device_id = ? AND lower(w.email) != ? LIMIT 1'
+        ).bind(deviceIdNorm, reg.email.toLowerCase()).first()
+        if (other) {
+          const who = other.name || other.email
+          return json({ error: 'This kiosk already has a fingerprint enrolled for ' + who + '. One fingerprint per kiosk device — remove that enrollment first, or use PIN/QR for other employees.' }, 409)
+        }
+      }
       // Only one fingerprint credential per employee (simplest for a shared kiosk).
       await env.DB.prepare('DELETE FROM webauthn_credentials WHERE email = ?').bind(reg.email.toLowerCase()).run()
       await env.DB.prepare(
-        'INSERT INTO webauthn_credentials (email, company_id, credential_id, public_key, counter, transports) VALUES (?, ?, ?, ?, ?, ?)'
-      ).bind(reg.email.toLowerCase(), companyId, reg.credentialId, reg.publicKey, reg.counter, JSON.stringify(reg.transports || [])).run()
+        'INSERT INTO webauthn_credentials (email, company_id, credential_id, public_key, counter, transports, device_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).bind(reg.email.toLowerCase(), companyId, reg.credentialId, reg.publicKey, reg.counter, JSON.stringify(reg.transports || []), deviceIdNorm).run()
       return json({ ok: true, email: reg.email })
     } catch (err) {
       return json({ error: err.message || 'Biometric registration failed.' }, err.status || 400)

@@ -223,3 +223,27 @@ describe('aggregateWindow — weekly report columns', () => {
     expect(agg.total).toBe(0)
   })
 })
+describe('Open shifts � late is not applicable (54)', () => {
+  const openShift = { id: 'sh-open', name: 'Flexible', open: true }
+  // A mid-day clock-in would be Late on a timed shift � never on an open one.
+  const midDayPunch = [{ type: 'in', time: '2026-09-01T04:00:00.000Z' } // 12:00 Manila
+  ]
+  const monday = new Date(2026, 7, 31, 12, 0, 0) // Monday of the week containing Sep 1
+
+  it('dayStatus shows Present, never Late, for an open shift', () => {
+    const st = dayStatus(midDayPunch, openShift, { isToday: true })
+    expect(st.label).toBe('Present')
+    expect(st.label).not.toBe('Late')
+    expect(st.label).not.toBe('On time')
+  })
+
+  it('dayStatus shows Present for an open shift even with no shift object', () => {
+    expect(dayStatus(midDayPunch, null, { isToday: true }).label).toBe('Present')
+  })
+
+  it('summaryStatus counts present days, never late, for an open shift', () => {
+    const st = summaryStatus(midDayPunch, openShift, monday, 'week')
+    expect(st.label).not.toContain('late')
+    expect(st.cls).toBe('bg-brand-100 text-brand-700')
+  })
+})
