@@ -122,7 +122,6 @@ export default function App() {
 
           <Route element={<RequireRole role="administrator"><AdminLayout /></RequireRole>}>
             <Route path="/companies" element={<Companies />} />
-            <Route path="/tasks" element={<Tasks />} />
             <Route path="/settings" element={<SystemConfig />} />
             <Route path="/kiosk-setup" element={<KioskSetup />} />
             {/* Storage Setup — administrator-only (19); configured per active company */}
@@ -130,6 +129,10 @@ export default function App() {
           </Route>
 
           <Route path="/shifts" element={<PageGate perm="shifts"><ChromeByRole><ShiftSchedules /></ChromeByRole></PageGate>} />
+
+          {/* Single /tasks route for every role — one shared branch so the
+              router can never match a duplicate path and bounce home. */}
+          <Route path="/tasks" element={<PageGate perm="tasks"><ChromeByRole><Tasks /></ChromeByRole></PageGate>} />
 
           {/* Single /profile route — renders inside the right chrome for the user's role */}
           <Route
@@ -147,7 +150,6 @@ export default function App() {
           <Route element={<RequireRole roles={['employee', 'ceo']}><MaintenanceGate><Layout /></MaintenanceGate></RequireRole>}>
             <Route path="/" element={<PageGate perm="dashboard"><Dashboard /></PageGate>} />
             <Route path="/timekeeping" element={<PageGate perm="timekeeping"><TimeKeeping /></PageGate>} />
-            <Route path="/tasks" element={<PageGate perm="tasks"><Tasks /></PageGate>} />
             <Route path="/payroll" element={<PageGate perm="payroll"><Payroll /></PageGate>} />
                                     <Route path="/kiosk-credentials" element={<PageGate perm="kiosk"><KioskCredentials /></PageGate>} />
             <Route path="/people" element={<PageGate perm="employees"><People /></PageGate>} />
