@@ -13,7 +13,7 @@ import WelcomeIntro from './components/WelcomeIntro'
 const Login = lazy(() => import('./pages/Login'))
 const SystemConfig = lazy(() => import('./pages/SystemConfig'))
 const Companies = lazy(() => import('./pages/Companies'))
-const TaskMonitoring = lazy(() => import('./pages/TaskMonitoring'))
+
 const CompanyRegistration = lazy(() => import('./pages/CompanyRegistration'))
 const Kiosk = lazy(() => import('./pages/Kiosk'))
 const KioskSetup = lazy(() => import('./pages/KioskSetup'))
@@ -122,7 +122,7 @@ export default function App() {
 
           <Route element={<RequireRole role="administrator"><AdminLayout /></RequireRole>}>
             <Route path="/companies" element={<Companies />} />
-            <Route path="/task-monitoring" element={<TaskMonitoring />} />
+            <Route path="/tasks" element={<Tasks />} />
             <Route path="/settings" element={<SystemConfig />} />
             <Route path="/kiosk-setup" element={<KioskSetup />} />
             {/* Storage Setup — administrator-only (19); configured per active company */}
@@ -148,7 +148,6 @@ export default function App() {
             <Route path="/" element={<PageGate perm="dashboard"><Dashboard /></PageGate>} />
             <Route path="/timekeeping" element={<PageGate perm="timekeeping"><TimeKeeping /></PageGate>} />
             <Route path="/tasks" element={<PageGate perm="tasks"><Tasks /></PageGate>} />
-            <Route path="/task-monitoring" element={<PageGate perm="tasks"><TaskMonitoring /></PageGate>} />
             <Route path="/payroll" element={<PageGate perm="payroll"><Payroll /></PageGate>} />
                                     <Route path="/kiosk-credentials" element={<PageGate perm="kiosk"><KioskCredentials /></PageGate>} />
             <Route path="/people" element={<PageGate perm="employees"><People /></PageGate>} />

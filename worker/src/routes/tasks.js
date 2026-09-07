@@ -54,7 +54,7 @@ async function notifyTaskUpdate(env, task, actorEmail, verb) {
       await queueNotification(env, {
         to: r.email,
         subject: `Task ${verb}: ${task.title}`,
-        body: `${actorName} ${verb} a task.\n\nTitle: ${task.title}\nAssignee: ${task.assignee || '—'}\nPriority: ${task.priority || 'Medium'}\nDue: ${task.due || '—'}\nStatus: ${task.status || 'pending'}\n\nOpen Task Monitoring to review progress.`,
+        body: `${actorName} ${verb} a task.\n\nTitle: ${task.title}\nAssignee: ${task.assignee || '—'}\nPriority: ${task.priority || 'Medium'}\nDue: ${task.due || '—'}\nStatus: ${task.status || 'pending'}\n\nOpen Tasks to review progress.`,
       })
     }
   } catch { /* ignore — notifications must never break task writes */ }
