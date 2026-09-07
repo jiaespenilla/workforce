@@ -169,6 +169,20 @@ export default function KioskSetup() {
     }
   }
 
+  // Remove the employee's fingerprint enrollment (55) — e.g. to clear a
+  // duplicate so another employee can register on the same kiosk device.
+  const removeFingerprint = async () => {
+    if (!credEmail) return
+    if (!window.confirm('Remove the fingerprint enrollment for ' + credEmail + '? The kiosk will no longer accept this finger until it is re-registered.')) return
+    try {
+      setCredError(null)
+      await api('/api/webauthn/credentials/' + encodeURIComponent(credEmail.toLowerCase()), { method: 'DELETE' })
+      setFpStatus(null)
+    } catch (err) {
+      setCredError('Could not remove the enrollment: ' + (err?.message || 'Unknown error'))
+    }
+  }
+
   const savePin = async () => {
     if (!credEmail) return setCredError('Select an employee first.')
     if (pinInput.length < 4 || pinInput.length > 8) return setCredError('PIN must be 4–8 digits.')
@@ -385,7 +399,10 @@ export default function KioskSetup() {
                   {fpStatus === 'registered' ? (
                     <>
                       <p className="mt-2 text-xs font-medium text-brand-700">✓ Registered</p>
-                      <button type="button" onClick={registerFingerprint} className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">Re-capture</button>
+                      <div className="mt-2 flex gap-2">
+                        <button type="button" onClick={registerFingerprint} className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">Re-capture</button>
+                        <button type="button" onClick={removeFingerprint} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50">Remove</button>
+                      </div>
                     </>
                   ) : (
                     <>

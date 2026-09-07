@@ -75,6 +75,15 @@ export async function handle({ request, env, url, path, method, isAdmin }) {
     const row = await env.DB.prepare('SELECT credential_id FROM webauthn_credentials WHERE email = ?').bind(email).first()
     return json({ registered: !!row })
   }
+  {
+    const m = path.match(/^\/api\/webauthn\/credentials\/([^/]+)$/)
+    if (m && method === 'DELETE') {
+      if (!isAdmin) return json({ error: 'Administrator only.' }, 403)
+      const email = decodeURIComponent(m[1]).toLowerCase()
+      await env.DB.prepare('DELETE FROM webauthn_credentials WHERE lower(email) = ?').bind(email).run()
+      return json({ ok: true })
+    }
+  }
 
   return null
 }
