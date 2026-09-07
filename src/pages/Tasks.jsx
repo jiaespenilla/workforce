@@ -209,7 +209,7 @@ function MonitoringBoard() {
           className="w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-10 pr-9 text-sm transition placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
         />
         {taskQuery && (
-          <button type="button" onClick={() => setTaskQuery('')} aria-label="Clear task search" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+          <button type="button" onClick={() => setTaskQuery('')} aria-label="Clear task search" className="touch-44 absolute right-1 top-1/2 -translate-y-1/2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         )}
@@ -218,8 +218,8 @@ function MonitoringBoard() {
         <p className="text-xs text-gray-500">{visibleTasks.length} of {scopedTasks.length} tasks match “{taskQuery.trim()}”.</p>
       )}
 
-      {/* Task progress summary — accurate, computed from the live task list */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {/* Task progress summary — single column on phones so counts never squeeze */}
+      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         {[
           ['Total tasks', scopedTasks.length, 'bg-gray-50 text-gray-700'],
           ['Completed', counts.completed || 0, 'bg-emerald-50 text-emerald-700'],
@@ -334,11 +334,11 @@ function MonitoringBoard() {
                   </span>
                   <span className={`shrink-0 tabular-nums ${isOverdue ? 'font-semibold text-red-700' : ''}`}>Due {task.due || '—'}</span>
                 </div>
-                <div className="mt-2 flex items-center justify-between">
+                <div className="mt-2 flex items-center justify-between gap-2">
                   <button
                     type="button"
                     onClick={() => { setViewingTask(task); setNoteInput('') }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-gray-600 transition hover:border-brand-300 hover:text-brand-700"
+                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] font-semibold text-gray-600 transition hover:border-brand-300 hover:text-brand-700"
                   >
                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M8 10h8m-8 4h5m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     Progress{noteCount > 0 && <span className="rounded-full bg-brand-600 px-1.5 text-[10px] font-bold text-white">{noteCount}</span>}
@@ -347,7 +347,8 @@ function MonitoringBoard() {
                     <button
                       type="button"
                       onClick={() => deleteTask(task.id)}
-                      className="hidden text-[11px] font-medium text-red-500 hover:text-red-600 group-hover:block"
+                      aria-label={`Remove task ${task.title}`}
+                      className="inline-flex min-h-[44px] items-center text-[11px] font-medium text-red-500 hover:text-red-600 sm:hidden sm:group-hover:inline-flex"
                     >
                       Remove
                     </button>
@@ -442,7 +443,7 @@ function MonitoringBoard() {
                 <h3 className="truncate text-base font-bold text-gray-900">{viewingTask.title}</h3>
                 <p className="mt-0.5 truncate text-xs text-gray-500">{viewingTask.assignee} · Priority {viewingTask.priority} · Due {viewingTask.due || '—'}</p>
               </div>
-              <button onClick={() => setViewingTask(null)} aria-label="Close details" className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+              <button onClick={() => setViewingTask(null)} aria-label="Close details" className="touch-44 shrink-0 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600">
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -454,7 +455,7 @@ function MonitoringBoard() {
                   key={c.id}
                   type="button"
                   onClick={() => setTaskStatus(viewingTask.id, c.id)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${viewingTask.status === c.id ? 'bg-brand-600 text-white shadow-sm' : 'border border-gray-200 bg-white text-gray-600 hover:border-brand-300 hover:text-brand-700'}`}
+                  className={`inline-flex min-h-[44px] items-center rounded-full px-4 py-1.5 text-xs font-semibold transition ${viewingTask.status === c.id ? 'bg-brand-600 text-white shadow-sm' : 'border border-gray-200 bg-white text-gray-600 hover:border-brand-300 hover:text-brand-700'}`}
                 >
                   {c.label}
                 </button>
@@ -651,9 +652,9 @@ function EmployeeTasks({ name }) {
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
           <div className="relative min-w-0 flex-1 sm:flex-none">
             <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            <input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search tasks…" className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/10 sm:w-52" />
+            <input value={query} onChange={(e)=>setQuery(e.target.value)} type="search" placeholder="Search tasks…" aria-label="Search tasks" className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/10 sm:w-52" />
           </div>
-          <select value={priorityFilter} onChange={(e)=>setPriorityFilter(e.target.value)} className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-300 focus:outline-none">
+          <select value={priorityFilter} onChange={(e)=>setPriorityFilter(e.target.value)} aria-label="Filter by priority" className="min-h-[44px] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-300 focus:outline-none">
             <option value="all">All priorities</option>
             {Object.keys(priorityStyles).map((p)=><option key={p} value={p}>{p}</option>)}
           </select>
@@ -745,8 +746,8 @@ function EmployeeTasks({ name }) {
                 </div>
                 {col.id==='pending' && task.status==='pending' && (
                   <div className="mt-3 flex gap-2">
-                    <button onClick={()=>acceptTask(task.id)} className="flex-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">Accept</button>
-                    <button onClick={()=>declineTask(task.id)} className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">Decline</button>
+                    <button onClick={()=>acceptTask(task.id)} className="min-h-[44px] flex-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">Accept</button>
+                    <button onClick={()=>declineTask(task.id)} className="min-h-[44px] flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">Decline</button>
                   </div>
                 )}
                 {col.id==='inprogress' && (

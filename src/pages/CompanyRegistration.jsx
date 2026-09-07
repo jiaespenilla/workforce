@@ -279,7 +279,7 @@ export default function CompanyRegistration() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-brand-700 via-brand-600 to-emerald-500 px-4 py-8 sm:py-12">
+    <main className="min-h-screen bg-gradient-to-b from-brand-700 via-brand-600 to-emerald-500 px-4 py-8 sm:py-12">
       {legalView && (
         <LegalModal
           title={legalView === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
@@ -309,11 +309,11 @@ export default function CompanyRegistration() {
           return (
             <ol className="mb-5 flex items-center gap-1 rounded-2xl bg-white/10 p-2 ring-1 ring-white/20 backdrop-blur" aria-label="Registration progress">
               {steps.map(([label, done], i) => (
-                <li key={label} className="flex flex-1 items-center gap-2 px-2 py-1.5">
+                <li key={label} className="flex min-h-[44px] flex-1 items-center gap-1.5 px-1.5 py-1.5 sm:gap-2 sm:px-2" aria-current={done ? undefined : 'step'}>
                   <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${done ? 'bg-white text-brand-700' : 'bg-white/20 text-white'}`}>
                     {done ? '✓' : i + 1}
                   </span>
-                  <span className={`text-xs font-semibold ${done ? 'text-white' : 'text-emerald-50'}`}>{label}</span>
+                  <span className={`truncate text-xs font-semibold ${done ? 'text-white' : 'text-emerald-50'}`}>{label}</span>
                   {i < steps.length - 1 && <span className="ml-auto hidden h-px flex-1 bg-white/25 sm:block" aria-hidden="true" />}
                 </li>
               ))}
@@ -552,7 +552,8 @@ export default function CompanyRegistration() {
                 onChange={(e) => setAgree(e.target.checked)}
                 disabled={!bothDocsRead}
                 required
-                className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-brand-600 focus:ring-brand-500 disabled:opacity-40"
+                aria-label="I agree to the Terms and Privacy Policy"
+                className="mt-0.5 h-6 w-6 shrink-0 rounded border-gray-300 text-brand-600 focus:ring-brand-500 disabled:opacity-40"
               />
               <span>
                 I have read and agree to the{' '}
@@ -613,6 +614,6 @@ export default function CompanyRegistration() {
           <p className="text-center text-[11px] text-white/70">Secure registration • Encrypted • GDPR compliant</p>
         </form>
       </div>
-    </div>
+    </main>
   )
 }

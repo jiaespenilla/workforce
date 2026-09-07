@@ -43,12 +43,12 @@ function SalaryModal({ employee, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
       <form
         onSubmit={submit}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+        className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-6 shadow-2xl sm:max-w-md sm:rounded-2xl"
       >
         <h3 className="text-base font-bold text-gray-900">Set salary — {employee.name}</h3>
         <p className="mt-1 text-sm text-gray-500">This employee is missing pay details and is excluded from payroll totals until they are set.</p>
@@ -189,7 +189,7 @@ export default function Payroll() {
     }
   }
 
-  const navBtn = 'inline-flex items-center rounded-md px-2.5 py-1.5 text-sm text-gray-600 transition hover:bg-white hover:text-gray-900'
+  const navBtn = 'touch-44 inline-flex items-center rounded-md px-2.5 py-1.5 text-sm text-gray-600 transition hover:bg-white hover:text-gray-900'
 
   return (
     <div className="space-y-6">
@@ -228,13 +228,13 @@ export default function Payroll() {
           {FREQUENCIES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
         </select>
         <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1">
-          <button onClick={() => setAnchor((a) => shiftPeriod(a, frequency, -1))} className={navBtn} title="Previous period">
+          <button onClick={() => setAnchor((a) => shiftPeriod(a, frequency, -1))} className={navBtn} title="Previous period" aria-label="Previous pay period">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
           </button>
-          <button onClick={() => setAnchor(new Date())} className={'rounded-md px-3 py-1.5 text-sm font-medium transition ' + (period.start <= new Date() && period.end >= new Date() ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900')}>
+          <button onClick={() => setAnchor(new Date())} className={'inline-flex min-h-[44px] items-center rounded-md px-4 py-1.5 text-sm font-medium transition ' + (period.start <= new Date() && period.end >= new Date() ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900')}>
             Current
           </button>
-          <button onClick={() => setAnchor((a) => shiftPeriod(a, frequency, 1))} className={navBtn} title="Next period">
+          <button onClick={() => setAnchor((a) => shiftPeriod(a, frequency, 1))} className={navBtn} title="Next period" aria-label="Next pay period">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
           </button>
         </div>
@@ -253,7 +253,8 @@ export default function Payroll() {
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={'flex-1 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition ' + (tab === id ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-brand-50')}
+            aria-pressed={tab === id}
+            className={'min-h-[44px] flex-1 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition ' + (tab === id ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-brand-50')}
           >
             {label}
           </button>
@@ -262,8 +263,8 @@ export default function Payroll() {
 
       {tab === 'records' && (
         <>
-          {/* Actual money needed this period */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {/* Actual money needed this period — single column on phones so peso amounts never squeeze */}
+          <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-4">
             {[
               ['Employees on payroll', String(totals.employeeCount), 'text-gray-900', totals.missingCount > 0 ? totals.missingCount + ' need salary info' : 'All salary details set'],
               ['Gross payroll', peso(totals.gross), 'text-gray-900', fmtHours(totals.hours) + ' h + ' + fmtHours(totals.otHours) + ' h OT'],
@@ -285,7 +286,7 @@ export default function Payroll() {
               <p className="min-w-0 flex-1 text-sm text-amber-800">
                 <span className="font-semibold">{missingRows.length} employee(s) missing pay details</span> — excluded from totals until pay type and rate are set: {missingRows.slice(0, 4).map((r) => r.name).join(', ')}{missingRows.length > 4 ? '…' : ''}
               </p>
-              <button onClick={() => setSalaryFor(missingRows[0])} className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-600">
+              <button onClick={() => setSalaryFor(missingRows[0])} className="inline-flex min-h-[44px] items-center rounded-lg bg-amber-500 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-600">
                 Set salary
               </button>
             </div>
@@ -328,7 +329,7 @@ export default function Payroll() {
                       </td>
                       <td className="px-3 py-3">
                         {r.missing.length ? (
-                          <button onClick={() => setSalaryFor(r)} className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-200" title={'Missing: ' + r.missing.join(', ')}>
+                          <button onClick={() => setSalaryFor(r)} className="inline-flex min-h-[44px] items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-200" title={'Missing: ' + r.missing.join(', ')} aria-label={`Set salary for ${r.name}`}>
                             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
                             Set salary
                           </button>
@@ -348,9 +349,9 @@ export default function Payroll() {
                       <td className="px-3 py-3 text-right font-semibold tabular-nums text-brand-600">{r.missing.length ? '—' : peso(r.net)}</td>
                       <td className="px-4 py-3 text-right sm:px-6">
                         {r.missing.length ? (
-                          <button onClick={() => setSalaryFor(r)} className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100">Add info</button>
+                          <button onClick={() => setSalaryFor(r)} className="inline-flex min-h-[44px] items-center rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100">Add info</button>
                         ) : (
-                          <button onClick={() => { setSelected(r); setTab('payslips') }} className="rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100">
+                          <button onClick={() => { setSelected(r); setTab('payslips') }} className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100">
                             Payslip
                           </button>
                         )}
@@ -554,9 +555,9 @@ export default function Payroll() {
       )}
 
       {runConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => !savingRun && setRunConfirm(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={() => !savingRun && setRunConfirm(false)}>
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
-          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-6 shadow-2xl sm:max-w-md sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-base font-bold text-gray-900">Run payroll for {pLabel}?</h3>
             <p className="mt-1 text-sm text-gray-500">This saves a permanent snapshot to the payroll run history.</p>
             <div className="mt-4 space-y-1.5 rounded-lg bg-gray-50 p-4 text-sm">

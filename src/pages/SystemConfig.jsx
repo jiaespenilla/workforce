@@ -177,7 +177,7 @@ function RolesPanel({ roles, onAdd, onRename, onRemove, onTogglePerm }) {
                       type="button"
                       onClick={() => onRemove(i)}
                       title={members.length > 0 ? `${members.length} registered user(s) still use this role` : 'Delete role'}
-                      className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-red-500 shadow-sm transition hover:bg-red-50 hover:text-red-600 sm:ml-0"
+                      className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-lg border border-gray-200 bg-white text-red-500 shadow-sm transition hover:bg-red-50 hover:text-red-600 sm:ml-0"
                       aria-label={`Delete ${r.name || 'role'}`}
                     >
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -428,9 +428,9 @@ function StatusPanel({ settings }) {
       </div>
 
       {showReset && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={()=>!resetting && setShowReset(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={()=>!resetting && setShowReset(false)}>
           <div className="absolute inset-0 bg-gray-900/60" />
-          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onClick={(e)=>e.stopPropagation()}>
+          <div className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-6 shadow-xl sm:max-w-md sm:rounded-2xl" onClick={(e)=>e.stopPropagation()}>
             <h3 className="text-base font-bold text-gray-900">Confirm Reset — This cannot be undone</h3>
             <p className="mt-2 text-xs leading-relaxed text-gray-600">
               You are about to <span className="font-semibold text-red-700">permanently delete</span> all tenant data:
@@ -605,16 +605,16 @@ function VersionPanel({ settings, onSaved }) {
                 </p>
                 <p className="mt-0.5 text-xs text-gray-400">{h.date} · by {h.author}</p>
               </div>
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-1.5">
                 {editingId===h.id ? (
                   <>
-                    <button type="button" onClick={()=>saveEdit(h.id)} className="rounded-lg bg-brand-600 px-2 py-1 text-xs font-semibold text-white">Save</button>
-                    <button type="button" onClick={()=>setEditingId(null)} className="rounded-lg border border-gray-300 px-2 py-1 text-xs">Cancel</button>
+                    <button type="button" onClick={()=>saveEdit(h.id)} className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-600 px-3 py-1 text-xs font-semibold text-white">Save</button>
+                    <button type="button" onClick={()=>setEditingId(null)} className="inline-flex min-h-[44px] items-center rounded-lg border border-gray-300 px-3 py-1 text-xs">Cancel</button>
                   </>
                 ) : (
                   <>
-                    <button type="button" onClick={()=>startEdit(h)} className="rounded-lg border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">Edit</button>
-                    <button type="button" onClick={()=>handleDelete(h.id)} className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">Delete</button>
+                    <button type="button" onClick={()=>startEdit(h)} aria-label={`Edit version ${h.version}`} className="inline-flex min-h-[44px] items-center rounded-lg border border-gray-300 px-3 py-1 text-xs hover:bg-gray-50">Edit</button>
+                    <button type="button" onClick={()=>handleDelete(h.id)} aria-label={`Delete version ${h.version}`} className="inline-flex min-h-[44px] items-center rounded-lg border border-red-200 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">Delete</button>
                   </>
                 )}
               </div>

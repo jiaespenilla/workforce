@@ -139,7 +139,7 @@ export default function StorageSetup() {
               value={storageProvider}
               onChange={(e) => setStorageProvider(e.target.value)}
               disabled={loadingConfig}
-              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm disabled:opacity-60"
+              className="mt-1 min-h-[44px] w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm disabled:opacity-60"
             >
               <option value="d1">Built-in (D1 Data URL)</option>
               <option value="r2">Cloudflare R2 (workforce-documents)</option>
@@ -153,14 +153,16 @@ export default function StorageSetup() {
               onChange={(e) => setStorageFolderId(e.target.value)}
               placeholder="1AbC... from https://drive.google.com/drive/folders/..."
               disabled={storageProvider !== 'gdrive' || loadingConfig}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100"
+              autoComplete="off"
+              autoCapitalize="off"
+              className="mt-1 min-h-[44px] w-full rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100"
             />
           </label>
 
           <button
             disabled={storageSaving || loadingConfig}
             onClick={saveStorage}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           >
             {storageSaving ? 'Saving…' : 'Save Storage'}
           </button>

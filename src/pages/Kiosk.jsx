@@ -309,13 +309,13 @@ export default function Kiosk() {
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {!deviceToken ? (
-          <button type="button" onClick={() => { setPairOpen(true); setPairError(null) }} className="rounded-full bg-amber-400 px-4 py-2 text-sm font-semibold text-gray-900 shadow hover:bg-amber-300">Pair device</button>
+          <button type="button" onClick={() => { setPairOpen(true); setPairError(null) }} className="inline-flex min-h-[44px] items-center rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-gray-900 shadow hover:bg-amber-300">Pair device</button>
         ) : (
           <span className="hidden items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-emerald-50 sm:inline-flex">
             <span className="h-2 w-2 rounded-full bg-emerald-300" /> Paired
           </span>
         )}
-        <Link to="/" className="rounded-full bg-white/15 px-4 py-2 text-sm font-medium hover:bg-white/25">Exit kiosk</Link>
+        <Link to="/" className="inline-flex min-h-[44px] items-center rounded-full bg-white/15 px-5 py-2 text-sm font-medium hover:bg-white/25">Exit kiosk</Link>
       </div>
     </header>
   )
@@ -489,6 +489,10 @@ export default function Kiosk() {
                     placeholder="Badge code"
                     aria-label="Badge code"
                     autoComplete="off"
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    inputMode="text"
+                    enterKeyHint="go"
                     className="w-full rounded-xl border-0 px-4 py-3 text-center font-mono text-sm text-gray-900 focus:outline-none focus:ring-4 focus:ring-white/40"
                   />
                   <button
@@ -514,7 +518,7 @@ export default function Kiosk() {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold text-gray-900">Not recognized</p>
                 <p className="mt-0.5 text-xs leading-relaxed text-gray-600">{authError}</p>
-                <button type="button" onClick={() => setAuthError(null)} className="mt-1.5 text-xs font-semibold text-brand-700 hover:text-brand-800">
+                <button type="button" onClick={() => setAuthError(null)} className="mt-1.5 inline-flex min-h-[44px] items-center text-xs font-semibold text-brand-700 hover:text-brand-800">
                   Try again
                 </button>
               </div>

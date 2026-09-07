@@ -184,17 +184,17 @@ export default function Layout({ children }) {
 
   return (
     <div className="min-h-screen bg-gray-100/60">
-      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 lg:px-8">
-        <div className="flex items-center gap-3">
-          <button className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 lg:hidden" onClick={() => setOpen(!open)} aria-label="Toggle menu">
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-2 border-b border-gray-200 bg-white px-3 sm:px-4 lg:px-8">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <button className="touch-44 shrink-0 rounded-lg text-gray-500 hover:bg-gray-100 lg:hidden" onClick={() => setOpen(!open)} aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open}>
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d={open ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'} />
             </svg>
           </button>
-          {getSystemIcon() ? <img src={getSystemIcon()} alt="" className="h-8 w-8 rounded-lg bg-white object-contain p-0.5 ring-1 ring-gray-200" /> : <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 font-bold text-sm text-white">{brandLetter}</div>}
-          <div className="leading-tight">
-            <p className="text-sm font-semibold text-gray-900">{settings.name}</p>
-            <p className="text-[11px] text-gray-500">{user?.companyName || 'Workforce Management Suite'}</p>
+          <span className="shrink-0">{getSystemIcon() ? <img src={getSystemIcon()} alt="" className="h-8 w-8 rounded-lg bg-white object-contain p-0.5 ring-1 ring-gray-200" /> : <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 font-bold text-sm text-white">{brandLetter}</div>}</span>
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-sm font-semibold text-gray-900">{settings.name}</p>
+            <p className="truncate text-[11px] text-gray-500">{user?.companyName || 'Workforce Management Suite'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2.5">
@@ -204,7 +204,7 @@ export default function Layout({ children }) {
             </span>
           )}
           <NotificationBell />
-          <button onClick={() => navigate('/profile')} className="flex items-center gap-2.5 rounded-full p-0.5 pr-2 transition hover:bg-gray-100">
+          <button onClick={() => navigate('/profile')} aria-label="Open my profile" className="touch-44 flex items-center gap-2.5 rounded-full p-0.5 pr-2 transition hover:bg-gray-100">
             <div className="hidden text-right leading-tight sm:block">
               <p className="text-xs font-semibold text-gray-800">{user?.name}</p>
               <p className="text-[11px] text-gray-500">{user?.roleLabel}</p>

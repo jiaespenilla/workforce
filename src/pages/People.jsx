@@ -319,12 +319,12 @@ export default function People() {
                   <>
                     <span className="min-w-0 flex-1 basis-full text-sm font-medium text-gray-900 sm:basis-auto">{loc.name}</span>
                     {inUse && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">In use</span>}
-                    {canLocation('edit') && <button type="button" onClick={()=>{setEditingLocId(loc.id); setEditingLocName(loc.name); setLocError('')}} className="rounded-lg border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">Edit</button>}
+                    {canLocation('edit') && <button type="button" onClick={()=>{setEditingLocId(loc.id); setEditingLocName(loc.name); setLocError('')}} aria-label={`Rename location ${loc.name}`} className="inline-flex min-h-[44px] items-center rounded-lg border border-gray-300 px-3 py-1 text-xs hover:bg-gray-50">Edit</button>}
                     {canLocation('delete') && <button type="button" onClick={async()=>{
                       if(!canLocation('delete')) return setLocError('Deleting locations is restricted for your role.')
                       if(inUse){ setLocError(`Cannot delete "${loc.name}" — ${people.filter((e)=>(e.locationId||e.location)===loc.id || (e.location||'').toLowerCase()===loc.name.toLowerCase()).length} employee(s) use it. Reassign them first.`); return}
                       try{ await removeCompanyLocation(company.id, loc.id, people); setCompanyLocations((p)=>p.filter((l)=>l.id!==loc.id)); setLocError('')}catch(err){setLocError(err.message)}
-                    }} className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">Delete</button>}
+                    }} aria-label={`Delete location ${loc.name}`} className="inline-flex min-h-[44px] items-center rounded-lg border border-red-200 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">Delete</button>}
                   </>
                 )}
               </div>
@@ -350,19 +350,19 @@ export default function People() {
         <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative flex-1 sm:max-w-xs">
             <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            <input value={peopleQuery} onChange={(e)=>setPeopleQuery(e.target.value)} placeholder="Search name or email…" className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/10" />
+            <input value={peopleQuery} onChange={(e)=>setPeopleQuery(e.target.value)} type="search" placeholder="Search name or email…" aria-label="Search people" className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/10" />
           </div>
           <div className="flex flex-wrap gap-2">
-            <select value={peopleStatusFilter} onChange={(e)=>setPeopleStatusFilter(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium focus:border-brand-300 focus:outline-none">
+            <select value={peopleStatusFilter} onChange={(e)=>setPeopleStatusFilter(e.target.value)} aria-label="Filter by status" className="min-h-[44px] rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium focus:border-brand-300 focus:outline-none">
               <option value="all">All status</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
-            <select value={peopleRoleFilter} onChange={(e)=>setPeopleRoleFilter(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium focus:border-brand-300 focus:outline-none">
+            <select value={peopleRoleFilter} onChange={(e)=>setPeopleRoleFilter(e.target.value)} aria-label="Filter by role" className="min-h-[44px] rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium focus:border-brand-300 focus:outline-none">
               <option value="all">All roles</option>
               {[...new Set(people.map((p)=>p.role).filter(Boolean))].map((r)=><option key={r} value={r}>{r}</option>)}
             </select>
-            <select value={peopleLocationFilter} onChange={(e)=>setPeopleLocationFilter(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium focus:border-brand-300 focus:outline-none">
+            <select value={peopleLocationFilter} onChange={(e)=>setPeopleLocationFilter(e.target.value)} aria-label="Filter by location" className="min-h-[44px] rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium focus:border-brand-300 focus:outline-none">
               <option value="all">All locations</option>
               {companyLocations.map((l)=><option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
@@ -397,7 +397,7 @@ export default function People() {
                     onChange={(e) => assignShift(emp.email, e.target.value)}
                     aria-label={`Shift for ${emp.name}`}
                     title="Assign shift"
-                    className="w-full rounded-lg border border-gray-300 px-2 py-1 text-xs focus:border-brand-500 focus:outline-none sm:w-36"
+                    className="min-h-[44px] w-full rounded-lg border border-gray-300 px-2 py-1 text-xs focus:border-brand-500 focus:outline-none sm:w-36"
                   >
                     <option value="">No shift</option>
                     {(shiftsData.shifts || []).map((s) => (
@@ -406,7 +406,7 @@ export default function People() {
                   </select>
                   <div className="flex shrink-0 items-center gap-1">
                     {can('delete') && (
-                      <button type="button" onClick={() => toggleStatus(emp)} title={emp.active !== false ? 'Set inactive' : 'Set active'} className="rounded-lg p-2 text-gray-400 transition hover:bg-brand-50 hover:text-brand-600">
+                      <button type="button" onClick={() => toggleStatus(emp)} title={emp.active !== false ? 'Set inactive' : 'Set active'} aria-label={emp.active !== false ? `Set ${emp.name} inactive` : `Set ${emp.name} active`} className="touch-44 rounded-lg text-gray-400 transition hover:bg-brand-50 hover:text-brand-600">
                         {emp.active !== false ? (
                           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" /></svg>
                         ) : (
@@ -415,12 +415,12 @@ export default function People() {
                       </button>
                     )}
                     {can('edit') && (
-                      <button type="button" onClick={() => setEditingId(emp.email)} title="Edit" className="rounded-lg p-2 text-gray-400 transition hover:bg-brand-50 hover:text-brand-600">
+                      <button type="button" onClick={() => setEditingId(emp.email)} title="Edit" aria-label={`Edit ${emp.name}`} className="touch-44 rounded-lg text-gray-400 transition hover:bg-brand-50 hover:text-brand-600">
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                       </button>
                     )}
                     {can('delete') && (
-                      <button type="button" onClick={() => deleteEmployee(emp)} title="Remove" className="rounded-lg p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-600">
+                      <button type="button" onClick={() => deleteEmployee(emp)} title="Remove" aria-label={`Remove ${emp.name}`} className="touch-44 rounded-lg text-gray-400 transition hover:bg-red-50 hover:text-red-600">
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       </button>
                     )}

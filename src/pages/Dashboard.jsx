@@ -180,17 +180,17 @@ function TaskProgressModal({ task, onClose, onStatusChange }) {
   const nextLabel = task.status === 'inprogress' ? 'Mark as completed' : null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-gray-900/50" />
-      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="h-1.5 w-full bg-gradient-to-r from-brand-600 to-emerald-400" />
+      <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="h-1.5 w-full shrink-0 bg-gradient-to-r from-brand-600 to-emerald-400" />
 
-        <div className="flex items-start justify-between gap-3 px-6 pt-5">
-          <div>
+        <div className="flex items-start justify-between gap-3 overflow-y-auto px-6 pt-5">
+          <div className="min-w-0">
             <h3 className="text-lg font-bold leading-snug text-gray-900">{task.title}</h3>
-            <p className="mt-1 text-xs text-gray-500">Assigned to: <span className="font-medium text-gray-700">{task.assignee}</span></p>
+            <p className="mt-1 truncate text-xs text-gray-500">Assigned to: <span className="font-medium text-gray-700">{task.assignee}</span></p>
           </div>
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+          <button onClick={onClose} aria-label="Close task details" className="touch-44 shrink-0 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -218,7 +218,7 @@ function TaskProgressModal({ task, onClose, onStatusChange }) {
                         </svg>
                       ) : i + 1}
                     </span>
-                    <span className={`whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide ${done ? 'text-brand-700' : 'text-gray-400'}`}>
+                    <span className={`max-w-[76px] truncate text-center text-[9px] font-semibold uppercase tracking-wide sm:max-w-none sm:whitespace-nowrap sm:text-[10px] ${done ? 'text-brand-700' : 'text-gray-400'}`} title={STATUS_LABELS[status]}>
                       {STATUS_LABELS[status]}
                     </span>
                   </div>
@@ -466,7 +466,7 @@ function CeoDashboard({ user }) {
               <p className="text-xs font-bold text-red-700">Overdue · {overdueTasks.length}</p>
               <div className="mt-2 max-h-28 space-y-1 overflow-y-auto">
                 {overdueTasks.slice(0, 6).map((t)=> (
-                  <button key={t.id} type="button" onClick={()=>setViewingTask(t)} className="block w-full truncate rounded px-1 py-0.5 text-left text-xs text-red-800 hover:bg-red-100">
+                  <button key={t.id} type="button" onClick={()=>setViewingTask(t)} className="block min-h-[44px] w-full truncate rounded px-2 py-1 text-left text-xs text-red-800 hover:bg-red-100">
                     <span className="font-semibold">{t.title}</span> <span className="text-red-500">· {t.assignee} · due {dueKey(t)}</span>
                   </button>
                 ))}
@@ -478,7 +478,7 @@ function CeoDashboard({ user }) {
               <p className="text-xs font-bold text-amber-700">Due soon (3 days) · {dueSoonTasks.length}</p>
               <div className="mt-2 max-h-28 space-y-1 overflow-y-auto">
                 {dueSoonTasks.slice(0, 6).map((t)=> (
-                  <button key={t.id} type="button" onClick={()=>setViewingTask(t)} className="block w-full truncate rounded px-1 py-0.5 text-left text-xs text-amber-800 hover:bg-amber-100">
+                  <button key={t.id} type="button" onClick={()=>setViewingTask(t)} className="block min-h-[44px] w-full truncate rounded px-2 py-1 text-left text-xs text-amber-800 hover:bg-amber-100">
                     <span className="font-semibold">{t.title}</span> <span className="text-amber-600">· {t.assignee} · due {dueKey(t)}</span>
                   </button>
                 ))}
@@ -498,10 +498,10 @@ function CeoDashboard({ user }) {
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <label className="text-xs font-medium text-gray-700">From
-              <input type="date" value={genStartDate} onChange={(e)=>{ setGenStartDate(e.target.value); if(!genEndDate) setGenEndDate(e.target.value); setGenResult(null) }} className="ml-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
+              <input type="date" value={genStartDate} onChange={(e)=>{ setGenStartDate(e.target.value); if(!genEndDate) setGenEndDate(e.target.value); setGenResult(null) }} className="ml-1 min-h-[44px] rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
             </label>
             <label className="text-xs font-medium text-gray-700">To
-              <input type="date" value={genEndDate} onChange={(e)=>{ setGenEndDate(e.target.value); setGenResult(null) }} className="ml-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
+              <input type="date" value={genEndDate} onChange={(e)=>{ setGenEndDate(e.target.value); setGenResult(null) }} className="ml-1 min-h-[44px] rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
             </label>
             {(genStartDate || genEndDate) && (
               <button onClick={()=>{ setGenStartDate(''); setGenEndDate(''); setGenResult(null) }} className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50">Clear</button>
@@ -663,7 +663,7 @@ function CeoDashboard({ user }) {
                 <h2 className="truncate text-base font-bold text-gray-900">{selected.name}'s Tasks</h2>
                 <p className="truncate text-xs text-gray-400">{selected.role}</p>
               </div>
-              <button onClick={() => setSelectedEmail(null)} aria-label="Close panel" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+              <button onClick={() => setSelectedEmail(null)} aria-label="Close employee panel" className="touch-44 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>

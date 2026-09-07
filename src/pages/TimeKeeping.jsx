@@ -230,17 +230,17 @@ function PeriodNavigator({ anchor, view, onAnchor }) {
     : view === 'week'
       ? `Week of ${startOfWeek(anchor).toLocaleDateString([], { month: 'short', day: 'numeric' })}`
       : anchor.toLocaleDateString([], { month: 'long', year: 'numeric' })
-  const navBtn = 'inline-flex items-center rounded-md px-2.5 py-1.5 text-sm text-gray-600 transition hover:bg-white hover:text-gray-900'
+  const navBtn = 'touch-44 inline-flex items-center rounded-md px-2.5 py-1.5 text-sm text-gray-600 transition hover:bg-white hover:text-gray-900'
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
-        <button onClick={() => onAnchor(addDays(anchor, -step))} className={navBtn} title="Previous">
+      <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1">
+        <button onClick={() => onAnchor(addDays(anchor, -step))} className={navBtn} title="Previous period" aria-label="Previous period">
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
         </button>
-        <button onClick={() => onAnchor(new Date())} className={'rounded-md px-3 py-1.5 text-sm font-medium transition ' + (isCurrent ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900')}>
+        <button onClick={() => onAnchor(new Date())} className={'inline-flex min-h-[44px] items-center rounded-md px-4 py-1.5 text-sm font-medium transition ' + (isCurrent ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-900')}>
           Today
         </button>
-        <button onClick={() => onAnchor(addDays(anchor, step))} className={navBtn} title="Next">
+        <button onClick={() => onAnchor(addDays(anchor, step))} className={navBtn} title="Next period" aria-label="Next period">
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
         </button>
       </div>
@@ -253,7 +253,7 @@ function PeriodNavigator({ anchor, view, onAnchor }) {
           onAnchor(new Date(y, m - 1, d))
         }}
         aria-label="Jump to date"
-        className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm text-gray-700 focus:border-brand-500 focus:outline-none"
+        className="min-h-[44px] rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm text-gray-700 focus:border-brand-500 focus:outline-none"
       />
       <span className="hidden text-sm font-semibold text-gray-700 sm:inline">{label}</span>
     </div>
@@ -348,7 +348,7 @@ function CeoTimeKeeping() {
 
   const tabs = (kind) => kind === 'period'
     ? (['day', 'week', 'month'].map((v) => (
-        <button key={v} onClick={() => setView(v)} className={'rounded-md px-3 py-1.5 text-sm font-medium capitalize transition ' + (view === v ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900')}>
+        <button key={v} onClick={() => setView(v)} aria-pressed={view === v} className={'inline-flex min-h-[44px] items-center rounded-md px-4 py-1.5 text-sm font-medium capitalize transition ' + (view === v ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900')}>
           {v}
         </button>
       )))
@@ -356,7 +356,7 @@ function CeoTimeKeeping() {
         ['table', 'Table', 'M3 8h18M3 12h18M3 16h18'],
         ['calendar', 'Calendar', 'M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7H3v12a2 2 0 002 2z'],
       ].map(([k, label, icon]) => (
-        <button key={k} onClick={() => setLayout(k)} disabled={k === 'calendar' && view !== 'month' || loading} title={k === 'calendar' && view !== 'month' ? 'Available in Month view' : label} className={'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ' + (layout === k ? 'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700')}>
+        <button key={k} onClick={() => setLayout(k)} disabled={k === 'calendar' && view !== 'month' || loading} title={k === 'calendar' && view !== 'month' ? 'Available in Month view' : label} aria-label={label} aria-pressed={layout === k} className={'inline-flex min-h-[44px] items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ' + (layout === k ? 'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700')}>
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d={icon} /></svg>
           <span className="hidden sm:inline">{label}</span>
         </button>
@@ -396,12 +396,13 @@ return (
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              type="search"
               placeholder="Search employee, shift…"
               aria-label="Search timesheet"
               className="w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-10 pr-9 text-sm transition placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
             />
             {query && (
-              <button type="button" onClick={() => setQuery('')} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+              <button type="button" onClick={() => setQuery('')} aria-label="Clear search" className="touch-44 absolute right-1 top-1/2 -translate-y-1/2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             )}
@@ -982,7 +983,7 @@ return (
                 ['table', 'Table', 'M3 8h18M3 12h18M3 16h18'],
                 ['calendar', 'Calendar', 'M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7H3v12a2 2 0 002 2z'],
               ].map(([k, label, icon]) => (
-                <button key={k} onClick={() => setLayout(k)} disabled={k === 'calendar' && view !== 'month' || (loading)} title={k === 'calendar' && view !== 'month' ? 'Available in Month view' : label} className={'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ' + (layout === k ? 'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700')}>
+                <button key={k} onClick={() => setLayout(k)} disabled={k === 'calendar' && view !== 'month' || (loading)} title={k === 'calendar' && view !== 'month' ? 'Available in Month view' : label} aria-label={label} aria-pressed={layout === k} className={'inline-flex min-h-[44px] items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ' + (layout === k ? 'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700')}>
                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d={icon} /></svg>
                   <span className="hidden sm:inline">{label}</span>
                 </button>

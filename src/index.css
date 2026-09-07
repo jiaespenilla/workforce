@@ -40,12 +40,51 @@ input[type='date']:disabled {
   cursor: not-allowed;
 }
 
-/* Prevent iOS Safari auto-zoom when focusing small inputs (20) */
+/* Prevent iOS Safari auto-zoom when focusing small inputs (20).
+   Body text stays compact by design; tappable form fields render at 16px
+   on phones so typing never triggers auto-zoom. */
 @media (max-width: 640px) {
   input,
   select,
   textarea {
     font-size: 16px !important;
+  }
+}
+
+/* Mobile hardening (61): no page-level horizontal scroll at 320px,
+   fast taps (no 300ms delay / double-tap zoom on buttons), no grey
+   tap flash, safe-area padding for notched phones. */
+html, body {
+  overflow-x: clip;
+}
+@supports not (overflow: clip) {
+  html, body { overflow-x: hidden; }
+}
+button, a, [role='button'] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
+}
+
+/* Minimum 44×44px touch target for icon-only controls (iOS HIG).
+   Apply `touch-44` to icon buttons so thumbs can hit them reliably. */
+.touch-44 {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Respect users who prefer reduced motion (WCAG 2.1 AA). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

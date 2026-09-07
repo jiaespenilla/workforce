@@ -114,10 +114,10 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-gray-900/50" />
       <div
-        className="relative max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-xl"
+        className="relative max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col gap-3 border-b border-gray-100 p-4 sm:flex-row sm:items-start sm:gap-4 sm:p-6">
@@ -152,7 +152,7 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
                 Edit
               </button>
             )}
-            <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-600">
+            <button onClick={onClose} aria-label="Close company details" className="touch-44 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-600">
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -213,10 +213,12 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
               <button
                 type="button"
                 onClick={() => onToggleActive(company.id)}
-                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${company.active !== false ? 'bg-brand-600' : 'bg-gray-300'}`}
-                aria-pressed={company.active !== false}
+                className={`relative h-8 w-14 shrink-0 rounded-full transition-colors ${company.active !== false ? 'bg-brand-600' : 'bg-gray-300'}`}
+                role="switch"
+                aria-checked={company.active !== false}
+                aria-label={`Company status, currently ${company.active !== false ? 'active' : 'inactive'}`}
               >
-                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${company.active !== false ? 'left-[22px]' : 'left-0.5'}`} />
+                <span className={`absolute top-1.5 h-5 w-5 rounded-full bg-white shadow transition-all ${company.active !== false ? 'left-8' : 'left-1'}`} />
               </button>
             </div>
           </div>
@@ -364,6 +366,8 @@ function CompanyDetailsModal({ company, onClose, onToggleActive, onToggleEmploye
                         type="button"
                         onClick={() => onToggleEmployee(company.id, emp.email)}
                         title="Toggle employee status"
+                        aria-label={`Toggle status for ${emp.name}, currently ${emp.active !== false ? 'active' : 'inactive'}`}
+                        className="inline-flex min-h-[44px] items-center rounded-lg"
                       >
                         <StatusPill on={emp.active !== false} />
                       </button>
@@ -502,7 +506,7 @@ function CompanyCard({ company, onView, onApprove, onReject }) {
             <button
               type="button"
               onClick={() => onView(company.id)}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 min-h-[36px]"
+              className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.543 7-1.274 4.057-5.064 7-9.543 7-4.478 0-8.268-2.943-9.543-7z" /></svg>
               View details
@@ -514,14 +518,14 @@ function CompanyCard({ company, onView, onApprove, onReject }) {
                   <button
                     type="button"
                     onClick={() => onApprove(company)}
-                    className="flex-1 rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white hover:bg-brand-700 sm:flex-none min-h-[36px]"
+                    className="flex-1 rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white hover:bg-brand-700 sm:flex-none min-h-[44px]"
                   >
                     Approve
                   </button>
                   <button
                     type="button"
                     onClick={() => onReject(company)}
-                    className="flex-1 rounded-lg border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 sm:flex-none min-h-[36px]"
+                    className="flex-1 rounded-lg border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 sm:flex-none min-h-[44px]"
                   >
                     Reject
                   </button>
@@ -785,7 +789,7 @@ export default function Companies() {
             ['approved', 'Approved'],
             ['rejected', 'Rejected'],
           ].map(([val, label])=>(
-            <button key={val} type="button" onClick={()=>setStatusFilter(val)} className={`shrink-0 snap-start rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition min-h-[32px] ${statusFilter===val ? 'bg-brand-600 text-white ring-brand-600' : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50'}`}>{label}</button>
+            <button key={val} type="button" onClick={()=>setStatusFilter(val)} className={`shrink-0 snap-start rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition min-h-[44px] ${statusFilter===val ? 'bg-brand-600 text-white ring-brand-600' : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50'}`}>{label}</button>
           ))}
         </div>
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
@@ -795,7 +799,7 @@ export default function Companies() {
             ['active', 'Active'],
             ['inactive', 'Inactive'],
           ].map(([val, label])=>(
-            <button key={val} type="button" onClick={()=>setActiveFilter(val)} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition min-h-[32px] ${activeFilter===val ? 'bg-brand-600 text-white ring-brand-600' : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50'}`}>{label}</button>
+            <button key={val} type="button" onClick={()=>setActiveFilter(val)} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition min-h-[44px] ${activeFilter===val ? 'bg-brand-600 text-white ring-brand-600' : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50'}`}>{label}</button>
           ))}
           {(statusFilter!=='all' || activeFilter!=='all' || query) && (
             <button type="button" onClick={()=>{setStatusFilter('all'); setActiveFilter('all'); setQuery('')}} className="shrink-0 text-xs font-medium text-brand-600 hover:text-brand-700">Clear</button>
@@ -843,9 +847,9 @@ export default function Companies() {
       )}
 
       {approving && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setApproving(null)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={() => setApproving(null)}>
           <div className="absolute inset-0 bg-gray-900/50" />
-          <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:max-w-md sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="h-1.5 w-full bg-gradient-to-r from-brand-600 to-emerald-400" />
             <div className="px-6 py-5">
               <div className="flex items-start gap-3">
@@ -896,9 +900,9 @@ export default function Companies() {
       )}
 
       {rejecting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setRejecting(null)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={() => setRejecting(null)}>
           <div className="absolute inset-0 bg-gray-900/50" />
-          <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:max-w-md sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="border-b border-gray-100 px-6 py-4">
               <h3 className="text-base font-bold text-gray-900">Reject registration</h3>
               <p className="mt-0.5 text-xs text-gray-500">
@@ -930,9 +934,9 @@ export default function Companies() {
       )}
 
       {deactivateConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setDeactivateConfirm(null)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={() => setDeactivateConfirm(null)}>
           <div className="absolute inset-0 bg-gray-900/50" />
-          <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:max-w-md sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="px-6 py-5">
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">

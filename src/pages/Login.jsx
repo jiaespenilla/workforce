@@ -73,7 +73,7 @@ export default function Login() {
     'mt-1.5 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 placeholder-gray-400 transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10'
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <main className="flex min-h-screen bg-gray-50">
       {/* Brand panel — desktop only, one message + what the platform does */}
       <div className="relative hidden w-[44%] shrink-0 flex-col justify-between overflow-hidden bg-gradient-to-br from-brand-800 via-brand-600 to-emerald-500 p-10 lg:flex xl:p-12">
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10" aria-hidden="true" />
@@ -145,6 +145,9 @@ export default function Login() {
                   required
                   placeholder="you@company.com or admin username"
                   autoComplete="username"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
                   disabled={submitting}
                   className={`${inputCls} disabled:opacity-60`}
                 />
@@ -168,7 +171,7 @@ export default function Login() {
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                     title={showPassword ? 'Hide password' : 'Show password'}
-                    className="absolute right-2.5 top-1/2 min-h-[36px] min-w-[36px] -translate-y-1/2 rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                    className="touch-44 absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
                   >
                     {showPassword ? (
                       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
@@ -223,6 +226,6 @@ export default function Login() {
           </p>
         </div>
       </div>
-    </div>
+    </main>
   )
 }

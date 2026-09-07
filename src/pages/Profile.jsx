@@ -201,6 +201,9 @@ export default function Profile() {
             <input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
               placeholder="+63 917 000 0000"
               className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10 min-h-[44px]"
             />
@@ -245,7 +248,7 @@ export default function Profile() {
                 autoComplete="current-password"
                 className="w-full rounded-lg border border-gray-300 px-3 py-3 pr-10 text-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10 min-h-[44px]"
               />
-              <button type="button" onClick={()=>setShowCurrent(!showCurrent)} aria-label={showCurrent ? 'Hide' : 'Show'} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><Eye on={showCurrent} /></button>
+              <button type="button" onClick={()=>setShowCurrent(!showCurrent)} aria-label={showCurrent ? 'Hide current password' : 'Show current password'} className="touch-44 absolute right-1 top-1/2 -translate-y-1/2 rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600"><Eye on={showCurrent} /></button>
             </div>
           </label>
           <label className="block text-sm">
@@ -260,7 +263,7 @@ export default function Profile() {
                 autoComplete="new-password"
                 className="w-full rounded-lg border border-gray-300 px-3 py-3 pr-10 text-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10 min-h-[44px]"
               />
-              <button type="button" onClick={()=>setShowNew(!showNew)} aria-label={showNew ? 'Hide' : 'Show'} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><Eye on={showNew} /></button>
+              <button type="button" onClick={()=>setShowNew(!showNew)} aria-label={showNew ? 'Hide new password' : 'Show new password'} className="touch-44 absolute right-1 top-1/2 -translate-y-1/2 rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600"><Eye on={showNew} /></button>
             </div>
           </label>
           <label className="block text-sm">
@@ -275,7 +278,7 @@ export default function Profile() {
                 autoComplete="new-password"
                 className="w-full rounded-lg border border-gray-300 px-3 py-3 pr-10 text-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10 min-h-[44px]"
               />
-              <button type="button" onClick={()=>setShowConfirm(!showConfirm)} aria-label={showConfirm ? 'Hide' : 'Show'} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><Eye on={showConfirm} /></button>
+              <button type="button" onClick={()=>setShowConfirm(!showConfirm)} aria-label={showConfirm ? 'Hide password confirmation' : 'Show password confirmation'} className="touch-44 absolute right-1 top-1/2 -translate-y-1/2 rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600"><Eye on={showConfirm} /></button>
             </div>
           </label>
         </div>

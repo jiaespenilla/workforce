@@ -167,8 +167,8 @@ export default function ShiftSchedules() {
       {notice && <p className="rounded-lg bg-brand-50 px-4 py-3 text-xs font-medium text-brand-800 ring-1 ring-brand-200">{notice}</p>}
       {error && <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-xs font-medium text-red-700 ring-1 ring-red-200">{error}</p>}
 
-      {/* Summary â€” at-a-glance schedule health */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      {/* Summary â€” single column on phones so values never squeeze */}
+      <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-4">
         {[
           ['Shifts defined', String((data.shifts || []).length), 'All shifts of ' + (company?.name || 'this company')],
           ['Assigned', String(employees.length - unassigned.length), 'employees with a shift'],
@@ -340,7 +340,7 @@ export default function ShiftSchedules() {
                       <Avatar user={{ name: e.name, initials: e.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(), avatar: e.avatar }} size="h-9 w-9 text-xs" />
                       <div className="min-w-0 flex-1 basis-40">
                         <p className="truncate text-sm font-semibold text-gray-900">{e.name}</p>
-                        <p className="truncate text-xs text-gray-400">{e.role || 'Unassigned'}{shift ? ' · ' + shift.name : ''}</p>
+                        <p className="truncate text-xs text-gray-400">{e.role || 'Unassigned'}{shift ? ' ï¿½ ' + shift.name : ''}</p>
                       </div>
                       <select
                         value={assignedId}
@@ -350,7 +350,7 @@ export default function ShiftSchedules() {
                       >
                         <option value="">No shift</option>
                         {(data.shifts || []).map((s) => (
-                          <option key={s.id} value={s.id}>{s.open ? s.name + ' (open)' : s.name + ' · ' + s.start + '–' + s.end}</option>
+                          <option key={s.id} value={s.id}>{s.open ? s.name + ' (open)' : s.name + ' ï¿½ ' + s.start + 'ï¿½' + s.end}</option>
                         ))}
                       </select>
                     </div>
@@ -369,7 +369,7 @@ export default function ShiftSchedules() {
         )}
       </section>
 
-      {/* Overtime grace — full width on mobile */}
+      {/* Overtime grace ï¿½ full width on mobile */}
       <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
         <h2 className="text-base font-bold text-gray-900 sm:text-lg">Overtime</h2>
         <p className="mt-1 text-sm leading-relaxed text-gray-500">
@@ -396,11 +396,11 @@ export default function ShiftSchedules() {
           </span>
         ) : (
           <span className="text-xs leading-relaxed text-gray-500 sm:text-sm">
-            {dirty ? 'Unsaved changes — save to apply them to kiosk punches.' : 'Changes apply to kiosk punches immediately.'}
+            {dirty ? 'Unsaved changes ï¿½ save to apply them to kiosk punches.' : 'Changes apply to kiosk punches immediately.'}
           </span>
         )}
         <button type="button" onClick={save} disabled={!dirty || loading || saving} className="w-full rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-md hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto min-h-[44px]">
-          {saving ? 'Saving…' : (dirty ? 'Save schedules' : 'Changes saved')}
+          {saving ? 'Savingï¿½' : (dirty ? 'Save schedules' : 'Changes saved')}
         </button>
       </div>
     </div>
