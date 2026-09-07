@@ -42,10 +42,18 @@ export default function NotificationBell() {
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  const visible = notifications.filter((n) => {
-    const to = (n.to || '').toLowerCase()
-    return to === (user?.email || '').toLowerCase() || (user?.role === 'administrator' && to === ADMIN_RECIPIENT.toLowerCase())
-  })
+  // Newest first — defensive re-sort so the inbox never depends on fetch order.
+  const visible = notifications
+    .filter((n) => {
+      const to = (n.to || '').toLowerCase()
+      return to === (user?.email || '').toLowerCase() || (user?.role === 'administrator' && to === ADMIN_RECIPIENT.toLowerCase())
+    })
+    .sort((a, b) => {
+      const ta = new Date(a.createdAt || 0).getTime() || 0
+      const tb = new Date(b.createdAt || 0).getTime() || 0
+      if (tb !== ta) return tb - ta
+      return (b.id || 0) > (a.id || 0) ? 1 : -1
+    })
   const unreadCount = visible.filter((n) => new Date(n.createdAt).getTime() > readAt).length
 
   const toggle = () => {
@@ -124,8 +132,9 @@ export default function NotificationBell() {
                     {n.subject}
                   </p>
                   <p className="mt-1 line-clamp-2 whitespace-pre-line text-[11px] leading-relaxed text-gray-400">{n.body}</p>
-                  <p className="mt-1 text-[10px] uppercase tracking-wide text-gray-300">
-                    {new Date(n.createdAt).toLocaleString([], { timeZone: getSystemTimeZone(), month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  <p className="mt-1.5 flex items-center justify-between gap-2 text-[10px] tabular-nums text-gray-400">
+                    <span>{new Date(n.createdAt).toLocaleDateString([], { timeZone: getSystemTimeZone(), month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    <span>{new Date(n.createdAt).toLocaleTimeString([], { timeZone: getSystemTimeZone(), hour: '2-digit', minute: '2-digit' })}</span>
                   </p>
                 </button>
               )

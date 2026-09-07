@@ -1,9 +1,20 @@
 export const ADMIN_RECIPIENT = 'jiaespenilla@gmail.com'
 
+// Newest first — explicit sort by creation time so the list never depends on
+// whatever order the server or localStorage happens to return.
+function sortNewest(list) {
+  return [...list].sort((a, b) => {
+    const ta = new Date(a.createdAt || 0).getTime() || 0
+    const tb = new Date(b.createdAt || 0).getTime() || 0
+    if (tb !== ta) return tb - ta
+    return (b.id || 0) > (a.id || 0) ? 1 : -1
+  })
+}
+
 export function loadNotifications() {
   try {
     const stored = JSON.parse(localStorage.getItem('uw_notifications'))
-    return Array.isArray(stored) ? stored.slice().reverse() : []
+    return Array.isArray(stored) ? sortNewest(stored) : []
   } catch {
     return []
   }
@@ -25,10 +36,10 @@ export async function fetchNotifications() {
       if (welcomeLocal.length) {
         const serverKeys = new Set(server.map((s) => `${(s.subject||'').toLowerCase()}|${(s.to||'').toLowerCase()}`))
         const extras = welcomeLocal.filter((l) => !serverKeys.has(`${(l.subject||'').toLowerCase()}|${(l.to||'').toLowerCase()}`))
-        if (extras.length) return [...server, ...extras].slice().reverse()
+        if (extras.length) return sortNewest([...server, ...extras])
       }
     } catch {}
-    return server.slice().reverse()
+    return sortNewest(server)
   } catch {
     return loadNotifications()
   }

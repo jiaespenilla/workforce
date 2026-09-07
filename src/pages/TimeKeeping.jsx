@@ -355,7 +355,6 @@ function CeoTimeKeeping() {
     : ([
         ['table', 'Table', 'M3 8h18M3 12h18M3 16h18'],
         ['calendar', 'Calendar', 'M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7H3v12a2 2 0 002 2z'],
-        ['compact', 'Compact', 'M4 6h16M4 10h16M4 14h10M4 18h10'],
       ].map(([k, label, icon]) => (
         <button key={k} onClick={() => setLayout(k)} disabled={k === 'calendar' && view !== 'month' || loading} title={k === 'calendar' && view !== 'month' ? 'Available in Month view' : label} className={'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ' + (layout === k ? 'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700')}>
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d={icon} /></svg>
@@ -633,88 +632,7 @@ return (
             <p className="mt-3 text-center text-[11px] text-gray-400">Calendar shows how many employees clocked in each day in {cursor.toLocaleDateString([], { month: 'long', year: 'numeric' })}.</p>
           </div>
         )}
-        {layout === 'compact' && (loading ? <SkeletonRows rows={6} page="Time Keeping" /> : (
-          <div className="divide-y divide-gray-100">
-            {visibleEmployees.map((emp) => {
-              const vp = windowed(emp.email)
-              const shift = shiftForEmployee(shiftsByCompany[emp.companyId], emp.email)
-              const exempt = isExemptEmployee(emp)
-              const agg = aggregateWindow(vp)
-              const days = new Set(vp.map((p) => systemDateKey(p.time))).size
-              const st = view === 'day'
-                ? dayStatus(vp, shift, { isToday: sameDay(cursor, new Date()), isPast: cursor.getTime() < startOfDay(new Date()).getTime(), exempt })
-                : summaryStatus(allFor(emp.email), shift, cursor, view, { exempt })
-              const sub = view === 'day'
-                ? (vp.length + ' punches · ' + (agg.total ? agg.total.toFixed(1) + 'h' : 'No hours'))
-                : (days + ' day(s) · ' + vp.length + ' punches · ' + (agg.total ? agg.total.toFixed(1) + 'h total' : 'No hours'))
-              const isExpanded = expandedEmail === emp.email
-              const detailDays = view === 'day'
-                ? []
-                : (view === 'week' ? windowDays(cursor, 'week') : [...new Set(vp.map((p) => systemDateKey(p.time)))].sort().map((k) => new Date(k + 'T12:00:00')))
-              return (
-                <div key={emp.companyId + '-' + emp.email}>
-                <button
-                  type="button"
-                  onClick={() => view !== 'day' && setExpandedEmail(isExpanded ? null : emp.email)}
-                  disabled={view === 'day'}
-                  className={'flex w-full items-center justify-between px-4 py-3 text-left hover:bg-gray-50 ' + (view !== 'day' ? 'cursor-pointer' : '') + (isExpanded ? ' bg-brand-50/40' : '')}
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    {view !== 'day' && (
-                      <svg className={'h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ' + (isExpanded ? 'rotate-90' : '')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-                    )}
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900">{emp.name} <span className="text-xs text-gray-400">· {emp.companyName}{shift ? ' · ' + (shift.open ? 'Open' : (shift.name || shift.start + '–' + shift.end)) : ''}</span></p>
-                      <p className="text-xs text-gray-500">{sub}</p>
-                    </div>
-                  </div>
-                  <span className={'ml-2 shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ' + st.cls}>{st.label}</span>
-                </button>
-                {isExpanded && view !== 'day' && (
-                  <div className="border-t border-gray-100 bg-gray-50/60 px-4 py-2">
-                    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-                      <table className="w-full min-w-[480px] text-left text-xs">
-                        <thead className="bg-gray-50 text-[10px] uppercase tracking-wide text-gray-400">
-                          <tr>
-                            <th className="px-3 py-1.5">Date</th>
-                            <th className="px-3 py-1.5">In</th>
-                            <th className="px-3 py-1.5">Out</th>
-                            <th className="px-3 py-1.5 text-right">Hrs</th>
-                            <th className="px-3 py-1.5">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {detailDays.map((d, i) => {
-                            const key = systemDateKey(d)
-                            const dayPunches = vp.filter((p) => systemDateKey(p.time) === key).sort((a, b) => new Date(a.time) - new Date(b.time))
-                            const firstIn = dayPunches.find((p) => p.type === 'in')
-                            const lastOut = [...dayPunches].reverse().find((p) => p.type === 'out')
-                            const hrs = hoursForDay(dayPunches)
-                            const dst = dayStatus(dayPunches, shift, { isToday: sameDay(d, new Date()), isPast: d.getTime() < startOfDay(new Date()).getTime(), exempt })
-                            return (
-                              <tr key={key + '-' + i} className={dayPunches.length ? '' : 'opacity-60'}>
-                                <td className="px-3 py-1.5 font-medium text-gray-800">{d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td>
-                                <td className="px-3 py-1.5 tabular-nums text-gray-600">{firstIn ? fmtClock(firstIn.time) : '—'}</td>
-                                <td className="px-3 py-1.5 tabular-nums text-gray-600">{lastOut ? fmtClock(lastOut.time) : '—'}</td>
-                                <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">{hrs ? hrs.toFixed(1) + 'h' : '—'}</td>
-                                <td className="px-3 py-1.5"><span className={'inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ' + dst.cls}>{dst.label}</span></td>
-                              </tr>
-                            )
-                          })}
-                          {detailDays.length === 0 && (
-                            <tr><td colSpan={5} className="px-3 py-3 text-center text-gray-400">No punches in this period.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-                </div>
-              )
-            })}
-            {visibleEmployees.length === 0 && <p className="p-6 text-center text-xs text-gray-400">{q ? 'No employees match "' + query.trim() + '".' : 'No active employees.'}</p>}
-          </div>
-        ))}
+
 
 {selectedDate && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSelectedDate(null)}>
@@ -1063,7 +981,6 @@ return (
               {[
                 ['table', 'Table', 'M3 8h18M3 12h18M3 16h18'],
                 ['calendar', 'Calendar', 'M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7H3v12a2 2 0 002 2z'],
-                ['compact', 'Compact', 'M4 6h16M4 10h16M4 14h10M4 18h10'],
               ].map(([k, label, icon]) => (
                 <button key={k} onClick={() => setLayout(k)} disabled={k === 'calendar' && view !== 'month' || (loading)} title={k === 'calendar' && view !== 'month' ? 'Available in Month view' : label} className={'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ' + (layout === k ? 'bg-white text-brand-700 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:text-gray-700')}>
                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d={icon} /></svg>
@@ -1150,24 +1067,6 @@ return (
             <p className="mt-3 text-center text-[11px] text-gray-400">{cursor.toLocaleDateString([], { month: 'long', year: 'numeric' })} — use the arrows or date picker above to change the month.</p>
           </div>
         )}
-        {layout === 'compact' && (
-          <div className="divide-y divide-gray-100">
-            {timesheetRows.map((d, idx) => (
-              <div key={d.day + '-' + d.date + '-' + idx} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
-                <div className="flex items-center gap-3">
-                  <span className={'flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold ' + (d.hours ? 'bg-brand-100 text-brand-700' : 'bg-gray-100 text-gray-500')}>{d.day.slice(0, 2)}</span>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{d.day} · {d.date}</p>
-                    <p className="text-xs text-gray-500">{d.in || '—'} → {d.out || '—'} · {d.hours ? d.hours.toFixed(1) + 'h' : 'No hours'}</p>
-                  </div>
-                </div>
-                <span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + d.status.cls}>{d.status.label}</span>
-              </div>
-            ))}
-            {timesheetRows.length === 0 && <p className="p-6 text-center text-xs text-gray-400">No days in this period.</p>}
-          </div>
-        )}
-
 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-6 py-3 text-sm">
           <span className="text-gray-500">
             {view === 'day' ? 'Daily' : view === 'week' ? 'Weekly' : 'Monthly'} total · {shift ? (shift.open ? 'Open shift' : shift.start + '–' + shift.end) : 'No shift assigned'}

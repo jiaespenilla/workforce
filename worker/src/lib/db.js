@@ -21,6 +21,17 @@ export function mapCompany(row, employees) {
   }
 }
 
+function parseNotes(raw) {
+  if (Array.isArray(raw)) return raw.filter((n) => n && typeof n === 'object')
+  if (!raw) return []
+  try {
+    const v = JSON.parse(raw)
+    return Array.isArray(v) ? v.filter((n) => n && typeof n === 'object') : []
+  } catch {
+    return []
+  }
+}
+
 export function mapTask(row) {
   return {
     id: row.id,
@@ -32,6 +43,7 @@ export function mapTask(row) {
     priority: row.priority,
     due: row.due,
     status: row.status,
+    notes: parseNotes(row.notes),
   }
 }
 

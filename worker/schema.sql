@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   priority TEXT DEFAULT 'Medium',
   due TEXT,
   status TEXT DEFAULT 'pending',
+  notes TEXT,                       -- JSON array of work-progress notes [{at, by, text}]
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_assignee_email ON tasks (assignee_email);

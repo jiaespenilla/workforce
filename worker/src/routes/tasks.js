@@ -106,6 +106,30 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
       if (callerCompany && !(await taskInCompany(env, Number(m[1]), callerCompany))) {
         return json({ error: 'Not authorized to modify this task.' }, 403)
       }
+      // Work progress notes (57): client sends the full array; the server
+      // sanitizes, stamps and caps it. Only the assignee, their managers,
+      // CEO or admin may add notes.
+      if (body.notes !== undefined) {
+        if (!Array.isArray(body.notes)) return json({ error: 'notes must be an array.' }, 400)
+        const row0 = await env.DB.prepare('SELECT assignee_email FROM tasks WHERE id = ?').bind(Number(m[1])).first()
+        if (!row0) return json({ error: 'Task not found.' }, 404)
+        const mine = String(row0.assignee_email || '').toLowerCase() === String(claims.sub || '').toLowerCase()
+        if (!isAdmin && claims.role !== 'ceo' && !mine) return json({ error: 'Not authorized to add notes to this task.' }, 403)
+        const actorRow = await env.DB.prepare('SELECT name FROM users WHERE lower(email) = ?').bind(String(claims.sub || '').toLowerCase()).first()
+        const actorName = actorRow?.name || claims.sub
+        const clean = body.notes.slice(-50).map((n) => ({
+          at: n?.at || new Date().toISOString(),
+          by: String(n?.by || actorName || 'Someone').slice(0, 80),
+          text: String(n?.text || '').slice(0, 1000),
+        })).filter((n) => n.text.trim())
+        try {
+          await env.DB.prepare('UPDATE tasks SET notes = ? WHERE id = ?').bind(JSON.stringify(clean), Number(m[1])).run()
+        } catch {
+          return json({ error: 'Notes are not supported by this database yet. Try again in a moment.' }, 500)
+        }
+        const row = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(Number(m[1])).first()
+        return json(mapTask(row))
+      }
       // If assignee string is being updated, also refresh normalized columns
       if (body.assignee !== undefined) {
         const { assigneeEmail, assigneeCompanyId, assigneeId } = await resolveAssignee(env, body.assignee)

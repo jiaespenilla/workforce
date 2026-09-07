@@ -246,4 +246,19 @@ export async function migrateWebAuthnDevice(env) {
   webauthnDeviceMigrated = true
 }
 
+let taskNotesMigrated = false
+// Work progress notes on tasks (57) — JSON array of {at, by, text}.
+export async function migrateTaskNotes(env) {
+  if (taskNotesMigrated) return
+  try {
+    await env.DB.prepare('SELECT notes FROM tasks LIMIT 1').first()
+    taskNotesMigrated = true
+    return
+  } catch {
+    // column missing — add it below
+  }
+  try { await env.DB.prepare('ALTER TABLE tasks ADD COLUMN notes TEXT').run() } catch {}
+  taskNotesMigrated = true
+}
+
 export { COMPANY_SETTING_KEYS, GLOBAL_SETTINGS_SQL }
