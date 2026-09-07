@@ -378,10 +378,8 @@ export default function KioskSetup() {
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-semibold text-gray-900">Credential Registration</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Register each employee's fingerprint, PIN and QR badge on this shared kiosk device.
-              At clock-in each person taps <span className="font-semibold">their own name tile</span> first —
-              the fingerprint scan is then locked to only their passkey, so one device can safely serve
-              the whole team with no mix-ups.
+              Register each employee's fingerprint, PIN and QR badge. On the kiosk, one tap on the
+              fingerprint sensor identifies who is clocking in — no name selection needed.
             </p>
             {credError && (
               <div role="alert" className="mt-3 flex items-start gap-2.5 rounded-xl bg-red-50 px-4 py-3 text-xs font-medium leading-relaxed text-red-700 ring-1 ring-red-200">

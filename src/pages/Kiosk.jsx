@@ -115,9 +115,6 @@ export default function Kiosk() {
   const [scanning, setScanning] = useState(false)
   const [pin, setPin] = useState('')
   const [pinMode, setPinMode] = useState(false)
-  // Employees with an enrolled fingerprint on this kiosk — used to render
-  // "Who's clocking in?" tiles so the scan binds to ONE passkey (55).
-  const [fpUsers, setFpUsers] = useState([])
   const idleTimer = useRef(null)
 
   useEffect(() => {
@@ -178,24 +175,17 @@ export default function Kiosk() {
   }
 
   /* Real biometric (fingerprint / Face ID) scan via the device's platform
-     authenticator. Passing `email` directs the OS to ONLY that employee's
-     passkey — no account picker, no wrong-account selection (55). */
-  const fingerprintScan = async (email) => {
+     authenticator. No name selection — the scan itself identifies who is
+     clocking in/out from their enrolled fingerprint. */
+  const fingerprintScan = async () => {
     setAuthError(null)
     setScanning(true)
     try {
       if (!apiEnabled()) { setAuthError('Fingerprint scanning requires the cloud API.'); return }
-      if (!email) { setAuthError('Choose your name below first.'); return }
-      const options = await api('/api/webauthn/authentication/options', { method: 'POST', body: { origin: window.location.origin, email } })
+      const options = await api('/api/webauthn/authentication/options', { method: 'POST', body: { origin: window.location.origin } })
       // Triggers the OS biometric prompt (fingerprint / Face ID) on the device.
       const auth = await startAuthentication({ optionsJSON: options })
       const match = await api('/api/webauthn/authentication', { method: 'POST', body: { response: auth } })
-      // Belt-and-braces: the server already binds the challenge to this email,
-      // but never punch a different account than the tapped tile.
-      if (String(match.email || '').toLowerCase() !== String(email).toLowerCase()) {
-        setAuthError('Wrong account — the scan did not match the name you tapped. Tap your own name and try again.')
-        return
-      }
       if (match.companyId) setKioskCompanyId(match.companyId)
       await recordPunch(match)
     } catch (err) {
@@ -235,20 +225,6 @@ export default function Kiosk() {
       setScanning(false)
     }
   }
-
-  // Load the employees with an enrolled fingerprint for this kiosk's company.
-  const loadFpUsers = async () => {
-    if (!apiEnabled() || !deviceToken) return
-    try {
-      const res = await api('/api/kiosk/fingerprint-users', { headers: { 'X-Kiosk-Token': deviceToken } })
-      setFpUsers(Array.isArray(res) ? res : (res.data || []))
-    } catch {
-      setFpUsers([])
-    }
-  }
-
-  // Reload fingerprint tiles when the device pairs or the company is detected.
-  useEffect(() => { loadFpUsers() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [deviceToken, kioskCompanyId])
 
   // Automatic clock-in / clock-out based on the employee's assigned shift.
   const recordPunch = async (match) => {
@@ -400,80 +376,33 @@ export default function Kiosk() {
             Clock in / out · {methodLabel}
           </p>
 
-          {/* Fingerprint screen */}
+          {/* Fingerprint screen — tap the sensor; the scan identifies who is clocking in/out. */}
           {config.method === 'fingerprint' && !pinMode && (
             <>
-            {fpUsers.length > 1 ? (
-              /* Shared kiosk — pick your name; the scan binds to only your
-                 passkey so the OS never offers a wrong account (55). */
-              <div className="w-full">
-                <div className="text-center">
-                  <p className="text-lg font-semibold">Who's clocking in?</p>
-                  <p className="mt-1 text-sm text-emerald-100">Tap your name, then scan your fingerprint.</p>
-                </div>
-                <div className="mt-4 grid w-full grid-cols-2 gap-3">
-                  {fpUsers.map((u) => (
-                    <button
-                      key={u.email}
-                      type="button"
-                      disabled={scanning}
-                      onClick={() => fingerprintScan(u.email)}
-                      className="flex min-h-[92px] flex-col items-center justify-center gap-2 rounded-3xl bg-white/15 px-4 py-4 shadow-xl ring-1 ring-white/25 transition hover:scale-105 hover:bg-white/25 active:scale-95 disabled:opacity-60"
-                    >
-                      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-sm font-black text-brand-700">
-                        {u.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()}
-                      </span>
-                      <span className="max-w-full truncate text-sm font-bold text-white">{u.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : fpUsers.length === 1 ? (
-              <>
-                <button
-                  type="button"
-                  disabled={scanning}
-                  onClick={() => fingerprintScan(fpUsers[0].email)}
-                  aria-label="Touch the sensor to clock in or out"
-                  className="animate-pulse-slow flex h-44 w-44 transform flex-col items-center justify-center gap-2 rounded-full bg-white/15 shadow-2xl ring-4 ring-white/40 transition hover:scale-105 hover:bg-white/25 active:scale-95 disabled:opacity-70 sm:h-48 sm:w-48"
-                >
-                  {scanning
-                    ? <svg className="h-16 w-16 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" /><path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
-                    : <FingerprintGlyph className="h-20 w-20" />}
-                </button>
-                <div className="text-center">
-                  <p className="text-lg font-semibold">
-                    {scanning ? 'Identifying…' : 'Touch the sensor'}
-                  </p>
-                  <p className="mt-1 text-sm text-emerald-100">
-                    {scanning ? 'Hold still while we match your fingerprint.' : 'Clock in or out for ' + fpUsers[0].name + '.'}
-                  </p>
-                </div>
-              </>
-            ) : !deviceToken ? (
-              <div className="w-full rounded-3xl bg-white/10 px-5 py-5 text-center ring-1 ring-white/25">
-                <p className="text-sm font-semibold text-white">Pair this device first</p>
-                <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-emerald-100">
-                  This kiosk isn't linked to a company yet, so employee names can't load. Tap <span className="font-bold text-white">Pair device</span> above and paste the token from Kiosk Setup.
+              <button
+                type="button"
+                disabled={scanning}
+                onClick={() => fingerprintScan()}
+                aria-label="Touch the sensor to clock in or out"
+                className="animate-pulse-slow flex h-44 w-44 transform flex-col items-center justify-center gap-2 rounded-full bg-white/15 shadow-2xl ring-4 ring-white/40 transition hover:scale-105 hover:bg-white/25 active:scale-95 disabled:opacity-70 sm:h-48 sm:w-48"
+              >
+                {scanning
+                  ? <svg className="h-16 w-16 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" /><path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
+                  : <FingerprintGlyph className="h-20 w-20" />}
+              </button>
+              <div className="text-center">
+                <p className="text-lg font-semibold">
+                  {scanning ? 'Identifying…' : 'Touch the sensor to clock in / out'}
                 </p>
-                <button type="button" onClick={() => { setPairOpen(true); setPairError(null) }} className="mt-3 rounded-xl bg-amber-400 px-5 py-2.5 text-sm font-bold text-gray-900 shadow hover:bg-amber-300">
-                  Pair device now
-                </button>
+                <p className="mt-1 text-sm text-emerald-100">
+                  {scanning ? 'Hold still while we match your fingerprint.' : 'Your fingerprint identifies you automatically.'}
+                </p>
               </div>
-            ) : (
-              <div className="w-full rounded-3xl bg-white/10 px-5 py-4 text-center ring-1 ring-white/25">
-                <p className="text-sm font-semibold text-white">No fingerprint registered yet</p>
-                <p className="mt-1 text-xs text-emerald-100">Ask the administrator to register fingerprints in Kiosk Setup. PIN and QR still work below if enabled.</p>
-              </div>
-            )}
 
               {config.pinFallback && (
-                <div className="flex rounded-full bg-black/20 p-1 ring-1 ring-white/25" role="group" aria-label="Identification method">
-                  <span className="rounded-full bg-white px-4 py-1.5 text-xs font-bold text-brand-700">Fingerprint</span>
-                  <button type="button" onClick={() => setPinMode(true)} className="rounded-full px-4 py-1.5 text-xs font-semibold text-emerald-50 hover:text-white">
-                    PIN
-                  </button>
-                </div>
+                <button type="button" onClick={() => setPinMode(true)} className="text-sm font-medium text-emerald-100 underline hover:text-white">
+                  Use PIN instead
+                </button>
               )}
             </>
           )}
