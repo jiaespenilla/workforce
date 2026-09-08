@@ -636,15 +636,15 @@ return (
 
 
 {selectedDate && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSelectedDate(null)}>
+          <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={() => setSelectedDate(null)}>
             <div className="absolute inset-0 bg-gray-900/50" />
-            <div className="relative flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
                 <div>
                   <h3 className="text-sm font-bold text-gray-900">{new Date(selectedDate).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</h3>
                   <p className="text-xs text-gray-500">{attendance.filter((p) => systemDateKey(p.time) === selectedDate).length} punches · {new Set(attendance.filter((p) => systemDateKey(p.time) === selectedDate).map((p) => p.email)).size} employees</p>
                 </div>
-                <button onClick={() => setSelectedDate(null)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                <button onClick={() => setSelectedDate(null)} aria-label="Close" className="touch-44 rounded-lg text-gray-400 hover:bg-gray-100"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
               </div>
               <div className="flex-1 divide-y divide-gray-100 overflow-y-auto">
                 {visibleEmployees.map((emp) => {
@@ -670,7 +670,7 @@ return (
                 )}
               </div>
               <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-3">
-                <button onClick={() => setSelectedDate(null)} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
+                <button onClick={() => setSelectedDate(null)} className="min-h-[44px] rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
                 <button onClick={() => {
                   const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')
                   const dayRows = attendance.filter((p) => systemDateKey(p.time) === selectedDate)
@@ -684,7 +684,7 @@ return (
                   }).filter(Boolean).join('')
                   const html = '<html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;font-size:12px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#ecfdf5}</style></head><body><h2>Attendance — ' + esc(selectedDate) + '</h2><p>' + dayRows.length + ' punches, ' + new Set(dayRows.map((p) => p.email)).size + ' employees</p><table><thead><tr><th>Employee</th><th>Company</th><th>Clock In</th><th>Hours</th><th>Status</th></tr></thead><tbody>' + (rows || '<tr><td colspan=5>No records</td></tr>') + '</tbody></table></body></html>'
                   const win = window.open('', '_blank'); if (win) { win.document.write(html); win.document.close(); win.focus(); win.print() }
-                }} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Export PDF</button>
+                }} className="min-h-[44px] rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Export PDF</button>
               </div>
             </div>
           </div>
@@ -728,9 +728,9 @@ return (
             const win = window.open('', '_blank'); if (win) { win.document.write(html); win.document.close(); win.focus(); win.print() }
           }
           return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setReportOpen(false)}>
+            <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={() => setReportOpen(false)}>
               <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
-              <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="bg-gradient-to-br from-brand-800 via-brand-600 to-emerald-500 px-5 py-5 text-white sm:px-6">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -738,7 +738,7 @@ return (
                       <h3 className="mt-1 text-lg font-bold sm:text-xl">Week of {weekLabel}</h3>
                       <p className="mt-1 text-xs text-emerald-50">{rows.length} employee(s) with logs · {tz} · Generated {generatedAt}</p>
                     </div>
-                    <button onClick={() => setReportOpen(false)} aria-label="Close report" className="rounded-lg bg-white/15 p-1.5 text-white hover:bg-white/25"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                    <button onClick={() => setReportOpen(false)} aria-label="Close report" className="touch-44 rounded-lg bg-white/15 text-white hover:bg-white/25"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {[
@@ -797,8 +797,8 @@ return (
                 <div className="flex flex-col gap-2 border-t border-gray-100 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-[11px] text-gray-400">Tip: print to PDF for a CEO-ready copy with signature lines.</p>
                   <div className="flex justify-end gap-2">
-                    <button onClick={() => setReportOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
-                    <button onClick={printReport} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-700">
+                    <button onClick={() => setReportOpen(false)} className="min-h-[44px] rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
+                    <button onClick={printReport} className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-brand-700">
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                       Print / Save PDF
                     </button>

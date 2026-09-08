@@ -780,7 +780,7 @@ function EmployeeTasks({ name }) {
                 <h3 className="truncate text-base font-bold text-gray-900">{detailTask.title}</h3>
                 <p className="mt-1 truncate text-xs text-gray-500">Due {detailTask.due || '—'} · {detailTask.priority}</p>
               </div>
-              <button onClick={()=>setDetailTask(null)} aria-label="Close details" className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+              <button onClick={()=>setDetailTask(null)} aria-label="Close details" className="touch-44 shrink-0 rounded-lg text-gray-400 hover:bg-gray-100"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
             </div>
             {notesList(detailTask.notes).length > 0 && (
               <div className="mt-4">

@@ -70,7 +70,7 @@ export default function NotificationBell() {
         type="button"
         onClick={toggle}
         aria-label={`Notifications${unreadCount ? ` (${unreadCount} unread)` : ''}`}
-        className="relative rounded-lg p-2 text-gray-500 transition hover:bg-gray-100"
+        className="relative touch-44 rounded-lg text-gray-500 transition hover:bg-gray-100"
       >
         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 00-4-5.7V5a2 2 0 10-4 0v.3A6 6 0 006 11v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />

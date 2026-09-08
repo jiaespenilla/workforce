@@ -321,9 +321,9 @@ export default function Kiosk() {
   )
 
   const pairModal = pairOpen && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setPairOpen(false)}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={() => setPairOpen(false)}>
       <div className="absolute inset-0 bg-gray-900/60" />
-      <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 text-gray-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="relative max-h-[92vh] w-full max-w-sm overflow-y-auto rounded-t-2xl bg-white p-6 text-gray-900 shadow-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-base font-bold">Pair this kiosk</h3>
         <p className="mt-1 text-xs leading-relaxed text-gray-500">
           Paste the device token from <span className="font-semibold">Kiosk Setup</span>. Pairing links this screen to your company so punches are recorded.
@@ -344,8 +344,8 @@ export default function Kiosk() {
           <p role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700 ring-1 ring-red-200">{pairError}</p>
         )}
         <div className="mt-4 flex justify-end gap-2">
-          <button type="button" onClick={() => setPairOpen(false)} className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
-          <button type="button" onClick={pairDevice} disabled={!pairInput.trim() || pairing} className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-brand-700 disabled:opacity-50">
+          <button type="button" onClick={() => setPairOpen(false)} className="min-h-[44px] rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+          <button type="button" onClick={pairDevice} disabled={!pairInput.trim() || pairing} className="min-h-[44px] rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-brand-700 disabled:opacity-50">
             {pairing ? 'Verifying…' : 'Pair kiosk'}
           </button>
         </div>

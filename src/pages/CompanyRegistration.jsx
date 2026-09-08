@@ -11,15 +11,15 @@ const _NOTIFICATION_RECIPIENT = 'jiaespenilla@gmail.com'
 
 function LegalModal({ title, content, onConfirm, onClose }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-gray-900/50" />
       <div
-        className="relative flex max-h-[80vh] w-full max-w-xl flex-col rounded-2xl bg-white shadow-xl"
+        className="relative flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <h3 className="text-base font-bold text-gray-900">{title}</h3>
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+          <button onClick={onClose} aria-label="Close" className="touch-44 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -27,8 +27,8 @@ function LegalModal({ title, content, onConfirm, onClose }) {
         </div>
         <div className="overflow-y-auto whitespace-pre-line px-6 py-4 text-sm leading-relaxed text-gray-600">{content}</div>
         <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-3">
-          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
-          <button onClick={onConfirm} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+          <button onClick={onClose} className="min-h-[44px] rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
+          <button onClick={onConfirm} className="min-h-[44px] rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
             I have read and understood
           </button>
         </div>
