@@ -36,7 +36,7 @@ domain modules under `worker/src/routes/`:
 | `routes/orgUnits.js` | org units CRUD |
 | `routes/kioskAdmin.js` | kiosk device tokens, WebAuthn registration |
 | `routes/notifications.js` | notification inbox |
-| `routes/admin.js` | tenant data reset |
+| `routes/admin.js` | tenant data reset, user account listing, reset user password to default |
 
 Shared helpers live in `worker/src/lib/` (`kiosk.js`, `pagination.js`,
 `crypto.js`, `db.js`, `seed.js`, …). Public routes always run **before** the
