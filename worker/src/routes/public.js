@@ -180,6 +180,13 @@ export async function handle({ request, env, url, path, method }) {
         'SELECT e.name, e.company_id, c.name AS company FROM employees e JOIN companies c ON c.id = e.company_id WHERE lower(e.email) = ? AND e.active = 1 AND c.active = 1'
       ).bind(String(email).toLowerCase()).first()
       if (!emp) return json({ error: 'Account not found or inactive.' }, 404)
+      // When the fingerprint scan happens on a paired kiosk, the employee must
+      // belong to that kiosk's company — otherwise the punch would be rejected
+      // later anyway. Fail here with a clear message.
+      const tokenCompany = await kioskTokenCompanyId(env, kioskTokenFrom(request))
+      if (tokenCompany && String(emp.company_id || '') !== String(tokenCompany)) {
+        return json({ error: 'This employee belongs to a different company than this kiosk is paired with.' }, 403)
+      }
       return json({ email, name: emp.name, role: 'employee', company: emp.company, companyId: emp.company_id, method: 'fingerprint' })
     } catch (err) {
       return json({ error: err.message || 'Fingerprint verification failed.' }, err.status || 401)
@@ -225,6 +232,13 @@ export async function handle({ request, env, url, path, method }) {
       return json({ error: 'Invalid credential method.' }, 400)
     }
     if (!match) return json({ error: 'Not recognized. Please register your credential first.' }, 404)
+    // A kiosk is paired to one company — credentials from other companies must
+    // not punch here (the punch endpoint would reject them anyway, but failing
+    // here gives the kiosk a clear message instead of a silent punch loss).
+    const tokenCompany = await kioskTokenCompanyId(env, kioskTokenFrom(request))
+    if (tokenCompany && String(match.company_id || '') !== String(tokenCompany)) {
+      return json({ error: 'This employee belongs to a different company than this kiosk is paired with.' }, 403)
+    }
     const emp = await env.DB.prepare('SELECT name, company_id FROM employees WHERE email = ?').bind(match.email).first()
     const company = await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(emp.company_id).first()
     return json({ email: match.email, name: emp.name, role: 'employee', company: company?.name || '', companyId: emp.company_id })

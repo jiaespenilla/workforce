@@ -185,7 +185,9 @@ export default function Kiosk() {
       const options = await api('/api/webauthn/authentication/options', { method: 'POST', body: { origin: window.location.origin } })
       // Triggers the OS biometric prompt (fingerprint / Face ID) on the device.
       const auth = await startAuthentication({ optionsJSON: options })
-      const match = await api('/api/webauthn/authentication', { method: 'POST', body: { response: auth } })
+      // Pass the kiosk device token so the server can reject credentials from
+      // a different company with a clear message (instead of losing the punch).
+      const match = await api('/api/webauthn/authentication', { method: 'POST', body: { response: auth }, headers: deviceToken ? { 'X-Kiosk-Token': deviceToken } : {} })
       if (match.companyId) setKioskCompanyId(match.companyId)
       await recordPunch(match)
     } catch (err) {
@@ -201,21 +203,17 @@ export default function Kiosk() {
     setAuthError(null)
     setScanning(true)
     try {
+      if (!apiEnabled()) { setAuthError('PIN / QR identification requires the cloud API.'); return false }
       let match = null
-      if (import.meta.env.VITE_API_URL) {
-        try {
-          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/kiosk/identify`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ method, value }),
-          })
-          if (res.ok) match = await res.json()
-        } catch {
-          match = null
-        }
-      }
-      if (!match) {
-        setAuthError('Credential not recognized. Register it in Kiosk Setup first.')
+      try {
+        match = await api('/api/kiosk/identify', {
+          method: 'POST',
+          body: { method, value },
+          headers: deviceToken ? { 'X-Kiosk-Token': deviceToken } : {},
+        })
+      } catch (e) {
+        // Surface the server's reason (not recognized, wrong company, rate limit…)
+        setAuthError(e?.message || 'Credential not recognized. Register it in Kiosk Setup first.')
         return false
       }
       if (match.companyId) setKioskCompanyId(match.companyId)
@@ -263,12 +261,19 @@ export default function Kiosk() {
       time: nowDate.toISOString(),
     }
 
+    let punchError = null
     if (apiEnabled()) {
-      await api('/api/attendance', {
-        method: 'POST',
-        body: { email: match.email, company_id: match.companyId || company_id_by_name(match), type: action, time: nowDate.toISOString(), overtime: !!overtime, overtimeMinutes },
-        headers: deviceToken ? { 'X-Kiosk-Token': deviceToken } : {},
-      }).catch(() => {})
+      // Never swallow punch failures — a rejected punch must show as an error,
+      // otherwise the employee believes they clocked in but nothing is saved.
+      try {
+        await api('/api/attendance', {
+          method: 'POST',
+          body: { email: match.email, company_id: match.companyId || company_id_by_name(match), type: action, time: nowDate.toISOString(), overtime: !!overtime, overtimeMinutes },
+          headers: deviceToken ? { 'X-Kiosk-Token': deviceToken } : {},
+        })
+      } catch (e) {
+        punchError = e?.message || 'Could not reach the server — the punch was not saved. Try again.'
+      }
     } else {
       // merge back to global uw_punches
       try {
@@ -276,6 +281,16 @@ export default function Kiosk() {
         all.push({ ...punchRecord, overtime: !!overtime, overtimeMinutes })
         localStorage.setItem('uw_punches', JSON.stringify(all))
       } catch { localStorage.setItem('uw_punches', JSON.stringify([{ ...punchRecord, overtime: !!overtime, overtimeMinutes }])) }
+    }
+
+    if (punchError) {
+      setResult({
+        error: punchError,
+        name: match.name,
+        time: nowDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      })
+      setTimeout(() => setResult(null), 10000) // give time to read the error
+      return
     }
 
     setResult({
@@ -536,16 +551,21 @@ export default function Kiosk() {
   }
 
   /* ---------- Automatic punch result screen ---------- */
+  const punchFailed = !!(result && result.error)
   const clockedIn = result.action === 'in'
   return (
-    <div className={`flex min-h-screen flex-col p-4 text-white sm:p-6 ${clockedIn ? 'bg-gradient-to-b from-emerald-700 via-brand-600 to-emerald-500' : 'bg-gradient-to-b from-slate-800 via-slate-700 to-brand-800'}`}>
+    <div className={`flex min-h-screen flex-col p-4 text-white sm:p-6 ${punchFailed ? 'bg-gradient-to-b from-red-800 via-red-600 to-amber-500' : clockedIn ? 'bg-gradient-to-b from-emerald-700 via-brand-600 to-emerald-500' : 'bg-gradient-to-b from-slate-800 via-slate-700 to-brand-800'}`}>
       {header}
       {pairModal}
 
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-5 px-2 py-6 sm:gap-6 sm:py-8">
         <div className="flex w-full flex-col items-center gap-3 rounded-[2rem] bg-white px-5 py-8 text-center text-gray-900 shadow-2xl sm:gap-4 sm:px-10 sm:py-10">
-          <span className={`flex h-20 w-20 items-center justify-center rounded-full text-white shadow-xl ${clockedIn ? 'bg-emerald-500' : 'bg-slate-700'}`} aria-hidden="true">
-            {clockedIn ? (
+          <span className={`flex h-20 w-20 items-center justify-center rounded-full text-white shadow-xl ${punchFailed ? 'bg-red-500' : clockedIn ? 'bg-emerald-500' : 'bg-slate-700'}`} aria-hidden="true">
+            {punchFailed ? (
+              <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            ) : clockedIn ? (
               <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -556,28 +576,39 @@ export default function Kiosk() {
             )}
           </span>
           <div>
-            <p className={`text-3xl font-black tracking-wide sm:text-4xl ${clockedIn ? 'text-emerald-700' : 'text-slate-800'}`}>
-              {clockedIn ? 'Welcome!' : 'Goodbye!'}
+            <p className={`text-3xl font-black tracking-wide sm:text-4xl ${punchFailed ? 'text-red-700' : clockedIn ? 'text-emerald-700' : 'text-slate-800'}`}>
+              {punchFailed ? 'Punch not saved' : clockedIn ? 'Welcome!' : 'Goodbye!'}
             </p>
             <p className="mt-1 text-sm font-semibold uppercase tracking-[0.18em] text-gray-400">
-              Clocked {clockedIn ? 'in' : 'out'}
+              {punchFailed ? 'Clock-in failed' : `Clocked ${clockedIn ? 'in' : 'out'}`}
             </p>
           </div>
-          {result.action === 'out' && result.overtime && (
-            <span className="rounded-full bg-amber-100 px-4 py-1 text-xs font-extrabold uppercase tracking-widest text-amber-800 ring-1 ring-amber-300">
-              Overtime{result.overtimeMinutes ? ` · +${Math.floor(result.overtimeMinutes / 60)}h${result.overtimeMinutes % 60 ? ` ${result.overtimeMinutes % 60}m` : ''}` : ''}
-            </span>
+          {punchFailed ? (
+            <>
+              <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium leading-relaxed text-red-800 ring-1 ring-red-200" role="alert">
+                {result.error}
+              </p>
+              <p className="text-xs leading-relaxed text-gray-500">
+                Your attendance was <span className="font-semibold">not recorded</span>. Ask the administrator to check the kiosk pairing if this keeps happening.
+              </p>
+            </>
+          ) : (
+            result.action === 'out' && result.overtime && (
+              <span className="rounded-full bg-amber-100 px-4 py-1 text-xs font-extrabold uppercase tracking-widest text-amber-800 ring-1 ring-amber-300">
+                Overtime{result.overtimeMinutes ? ` · +${Math.floor(result.overtimeMinutes / 60)}h${result.overtimeMinutes % 60 ? ` ${result.overtimeMinutes % 60}m` : ''}` : ''}
+              </span>
+            )
           )}
           <div>
             <p className="truncate text-lg font-bold">{result.name}</p>
             <p className="mt-0.5 text-sm tabular-nums text-gray-500">
-              {now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })} · {result.time}{result.shiftName ? ` · ${result.shiftName}` : ''}
+              {now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })} · {result.time}{!punchFailed && result.shiftName ? ` · ${result.shiftName}` : ''}
             </p>
           </div>
           {/* Auto-return countdown */}
           <div className="w-full" aria-hidden="true">
             <div className="h-1 overflow-hidden rounded-full bg-gray-100">
-              <div key={result.time} className="h-full rounded-full bg-gradient-to-r from-brand-500 to-emerald-400" style={{ animation: 'shrink-bar 6s linear forwards' }} />
+              <div key={result.time} className="h-full rounded-full bg-gradient-to-r from-brand-500 to-emerald-400" style={{ animation: `shrink-bar ${punchFailed ? 10 : 6}s linear forwards` }} />
             </div>
             <p className="mt-1.5 text-[11px] text-gray-400">Returning to the clock-in screen…</p>
           </div>
