@@ -44,6 +44,54 @@ function notesList(notes) {
   return []
 }
 
+/* ---------- Work log timer (63) ---------- */
+// A task timer is running when workStartedAt is set. Elapsed time shown is
+// always: stored finished-session seconds + the live running session.
+export function workRunning(t) {
+  return !!t?.workStartedAt
+}
+export function workElapsedMs(t, now) {
+  return (t?.workSeconds || 0) * 1000 + (workRunning(t) ? Math.max(0, now - new Date(t.workStartedAt).getTime()) : 0)
+}
+export function fmtHMS(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m ${String(sec).padStart(2, '0')}s`
+  if (m > 0) return `${m}m ${String(sec).padStart(2, '0')}s`
+  return `${sec}s`
+}
+// Compact form for card badges: "2h 05m" / "8m" / "<1m".
+export function fmtWorked(ms) {
+  const mins = Math.floor(Math.max(0, ms) / 60000)
+  if (mins >= 60) return `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}m`
+  if (mins > 0) return `${mins}m`
+  return '<1m'
+}
+// Ticks every second while at least one timer in view is running.
+function useTicker(active) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!active) return undefined
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [active])
+  return now
+}
+// Offline/local-mode timer transition (server does the same computation).
+function applyLocalTimer(task, action) {
+  if (action === 'start') return { ...task, workStartedAt: new Date().toISOString() }
+  const end = Date.now()
+  const seconds = task.workStartedAt ? Math.max(0, Math.round((end - new Date(task.workStartedAt).getTime()) / 1000)) : 0
+  return {
+    ...task,
+    workSeconds: (task.workSeconds || 0) + seconds,
+    workStartedAt: null,
+    workLog: [...(task.workLog || []), { start: task.workStartedAt, end: new Date(end).toISOString(), seconds }],
+  }
+}
+
 export default function Tasks() {
   usePageTitle('Tasks')
   const { user } = useAuth()
@@ -65,6 +113,8 @@ function MonitoringBoard() {
   const [viewingTask, setViewingTask] = useState(null)
   const [noteInput, setNoteInput] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
+  // Live clock for work-log timers — only ticks while a session is running.
+  const now = useTicker(tasks.some(workRunning))
   useEffect(() => {
     api('/api/companies')
       .then((res) => {
@@ -324,6 +374,12 @@ function MonitoringBoard() {
                     {isOverdue && <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">Overdue</span>}
                     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${priorityStyles[task.priority]}`}>{task.priority}</span>
                   </span>
+                  {((task.workSeconds || 0) > 0 || workRunning(task)) && (
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${workRunning(task) ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-gray-100 text-gray-600'}`}>
+                      {workRunning(task) && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />}
+                      ⏱ {fmtWorked(workElapsedMs(task, now))}
+                    </span>
+                  )}
                 </div>
                 <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
                   <span className="flex min-w-0 items-center gap-1.5">
@@ -385,6 +441,7 @@ function MonitoringBoard() {
               <th className="hidden px-5 py-2 sm:table-cell">Role</th>
               <th className="px-5 py-2">Status</th>
               <th className="px-5 py-2">Task progress</th>
+              <th className="px-5 py-2">Time on tasks</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -421,11 +478,14 @@ function MonitoringBoard() {
                     </div>
                     <p className="mt-1 text-[11px] text-gray-500 tabular-nums">{done}/{assigned.length} completed · {active} open</p>
                   </td>
+                  <td className="px-5 py-3 tabular-nums text-gray-700">
+                    {fmtHMS(assigned.reduce((sum, t) => sum + workElapsedMs(t, now), 0))}
+                  </td>
                 </tr>
               )
             })}
             {shownStaff.length === 0 && (
-              <tr><td colSpan={5} className="px-5 py-8 text-center text-xs text-gray-400">No staff found — add employees in People.</td></tr>
+              <tr><td colSpan={6} className="px-5 py-8 text-center text-xs text-gray-400">No staff found — add employees in People.</td></tr>
             )}
           </tbody>
         </table>
@@ -460,6 +520,34 @@ function MonitoringBoard() {
                   {c.label}
                 </button>
               ))}
+            </div>
+
+            {/* Work log (63) — time consumption and sessions for this task */}
+            <div className="px-5 pt-3 sm:px-6">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gray-50 px-3.5 py-2.5 ring-1 ring-gray-100">
+                <span className="flex items-center gap-2 text-xs font-semibold text-gray-700">
+                  <span className={`h-2 w-2 rounded-full ${workRunning(viewingTask) ? 'animate-pulse bg-emerald-500' : 'bg-gray-300'}`} />
+                  {workRunning(viewingTask) ? 'Working now' : 'Time consumed'}
+                </span>
+                <span className="text-sm font-bold tabular-nums text-gray-900">{fmtHMS(workElapsedMs(viewingTask, now))}</span>
+              </div>
+              {(viewingTask.workLog || []).length > 0 && (
+                <div className="mt-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Work sessions ({viewingTask.workLog.length})</p>
+                  <ol className="mt-1.5 space-y-1">
+                    {[...viewingTask.workLog].reverse().map((s, i) => (
+                      <li key={i} className="flex flex-wrap items-baseline justify-between gap-1 rounded-lg bg-white px-3 py-1.5 text-[11px] ring-1 ring-gray-100">
+                        <span className="tabular-nums text-gray-500">
+                          {s.start ? new Date(s.start).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                          {' → '}
+                          {s.end ? new Date(s.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </span>
+                        <span className="font-semibold tabular-nums text-gray-800">{fmtHMS((s.seconds || 0) * 1000)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
@@ -532,6 +620,25 @@ function EmployeeTasks({ name }) {
   const [workNotes, setWorkNotes] = useState('')
   const [attachName, setAttachName] = useState('')
   const [attachData, setAttachData] = useState(null)
+  // Live clock for work-log timers — only ticks while a session is running.
+  const now = useTicker(tasks.some(workRunning))
+
+  // Work-log timer (63) — start/stop the assignee's session. The server
+  // computes and stores elapsed time; falls back to local state when offline.
+  const setWorkTimer = async (task) => {
+    const action = workRunning(task) ? 'stop' : 'start'
+    if (apiEnabled()) {
+      try {
+        const updated = await api(`/api/tasks/${task.id}/work-log/${action}`, { method: 'POST' })
+        setTasks((ts) => ts.map((t) => (t.id === task.id ? { ...t, ...updated } : t)))
+        setDetailTask((d) => (d && d.id === task.id ? { ...d, ...updated } : d))
+        return
+      } catch { /* offline — apply locally below */ }
+    }
+    const local = applyLocalTimer(task, action)
+    setTasks((ts) => ts.map((t) => (t.id === task.id ? local : t)))
+    setDetailTask((d) => (d && d.id === task.id ? local : d))
+  }
 
   useEffect(() => {
     if (apiEnabled()) {
@@ -743,6 +850,12 @@ function EmployeeTasks({ name }) {
                       {notesList(task.notes).length} note{notesList(task.notes).length !== 1 ? 's' : ''}
                     </span>
                   )}
+                  {((task.workSeconds || 0) > 0 || workRunning(task)) && (
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${workRunning(task) ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-gray-100 text-gray-600'}`}>
+                      {workRunning(task) && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />}
+                      ⏱ {fmtWorked(workElapsedMs(task, now))}
+                    </span>
+                  )}
                 </div>
                 {col.id==='pending' && task.status==='pending' && (
                   <div className="mt-3 flex gap-2">
@@ -751,10 +864,27 @@ function EmployeeTasks({ name }) {
                   </div>
                 )}
                 {col.id==='inprogress' && (
-                  <div className="mt-3">
-                    <button onClick={()=>openDetail(task)} className="w-full rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100">View / Attach</button>
-                    {task.attachName && <p className="mt-1 text-[11px] text-emerald-600">📎 {task.attachName}</p>}
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 ring-1 ring-gray-100">
+                      <span className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-700">
+                        <span className={`h-2 w-2 rounded-full ${workRunning(task) ? 'animate-pulse bg-emerald-500' : 'bg-gray-300'}`} />
+                        {workRunning(task) ? 'Working now' : 'Timer stopped'}
+                      </span>
+                      <span className="tabular-nums text-[11px] font-bold text-gray-900">{fmtHMS(workElapsedMs(task, now))}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={()=>setWorkTimer(task)} className={`min-h-[44px] flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-white ${workRunning(task) ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}>
+                        {workRunning(task) ? 'Stop work' : 'Start work'}
+                      </button>
+                      <button onClick={()=>openDetail(task)} className="min-h-[44px] flex-1 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100">View / Attach</button>
+                    </div>
+                    {task.attachName && <p className="text-[11px] text-emerald-600">📎 {task.attachName}</p>}
                   </div>
+                )}
+                {col.id==='completed' && (
+                  <p className="mt-2 rounded-lg bg-gray-50 px-3 py-1.5 text-[11px] font-semibold tabular-nums text-gray-700 ring-1 ring-gray-100">
+                    Time consumed: {fmtHMS(workElapsedMs(task, now))}
+                  </p>
                 )}
                 {col.id==='completed' && task.attachName && <p className="mt-2 text-[11px] text-emerald-600">📎 {task.attachName}</p>}
                 {task.status!=='declined' && col.id!=='pending' && <p className="mt-2 text-[11px] text-gray-400">Drag to move →</p>}
@@ -781,6 +911,39 @@ function EmployeeTasks({ name }) {
                 <p className="mt-1 truncate text-xs text-gray-500">Due {detailTask.due || '—'} · {detailTask.priority}</p>
               </div>
               <button onClick={()=>setDetailTask(null)} aria-label="Close details" className="touch-44 shrink-0 rounded-lg text-gray-400 hover:bg-gray-100"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
+            {/* Work log timer (63) — start/stop work sessions on this task */}
+            <div className="mt-4 rounded-xl bg-gray-50 px-3.5 py-3 ring-1 ring-gray-100">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 text-xs font-semibold text-gray-700">
+                  <span className={`h-2 w-2 rounded-full ${workRunning(detailTask) ? 'animate-pulse bg-emerald-500' : 'bg-gray-300'}`} />
+                  {workRunning(detailTask) ? 'Working now' : 'Time consumed'}
+                </span>
+                <span className="text-sm font-bold tabular-nums text-gray-900">{fmtHMS(workElapsedMs(detailTask, now))}</span>
+              </div>
+              {detailTask.status !== 'completed' && detailTask.status !== 'declined' && (
+                <button
+                  type="button"
+                  onClick={() => setWorkTimer(detailTask)}
+                  className={`mt-2 min-h-[44px] w-full rounded-lg px-3 py-2 text-xs font-semibold text-white transition ${workRunning(detailTask) ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}
+                >
+                  {workRunning(detailTask) ? 'Stop work' : 'Start work'}
+                </button>
+              )}
+              {(detailTask.workLog || []).length > 0 && (
+                <ol className="mt-2 space-y-1">
+                  {[...detailTask.workLog].reverse().map((s, i) => (
+                    <li key={i} className="flex flex-wrap items-baseline justify-between gap-1 rounded-lg bg-white px-3 py-1.5 text-[11px] ring-1 ring-gray-100">
+                      <span className="tabular-nums text-gray-500">
+                        {s.start ? new Date(s.start).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                        {' → '}
+                        {s.end ? new Date(s.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                      </span>
+                      <span className="font-semibold tabular-nums text-gray-800">{fmtHMS((s.seconds || 0) * 1000)}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
             </div>
             {notesList(detailTask.notes).length > 0 && (
               <div className="mt-4">

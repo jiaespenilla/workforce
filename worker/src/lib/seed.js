@@ -261,4 +261,26 @@ export async function migrateTaskNotes(env) {
   taskNotesMigrated = true
 }
 
+let taskWorkLogMigrated = false
+// Work log timer (63) — accumulated seconds, the running session's start
+// timestamp and a JSON session history [{start, end, seconds}] per task.
+export async function migrateTaskWorkLog(env) {
+  if (taskWorkLogMigrated) return
+  try {
+    await env.DB.prepare('SELECT work_seconds FROM tasks LIMIT 1').first()
+    taskWorkLogMigrated = true
+    return
+  } catch {
+    // columns missing — add them below
+  }
+  for (const ddl of [
+    'ALTER TABLE tasks ADD COLUMN work_seconds INTEGER DEFAULT 0',
+    'ALTER TABLE tasks ADD COLUMN work_started_at TEXT',
+    'ALTER TABLE tasks ADD COLUMN work_log TEXT',
+  ]) {
+    try { await env.DB.prepare(ddl).run() } catch {}
+  }
+  taskWorkLogMigrated = true
+}
+
 export { COMPANY_SETTING_KEYS, GLOBAL_SETTINGS_SQL }

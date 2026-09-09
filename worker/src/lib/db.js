@@ -44,6 +44,21 @@ export function mapTask(row) {
     due: row.due,
     status: row.status,
     notes: parseNotes(row.notes),
+    // Work log timer (63): accumulated seconds, running session start and
+    // the session history [{start, end, seconds}].
+    workSeconds: row.work_seconds || 0,
+    workStartedAt: row.work_started_at || null,
+    workLog: safeParseArray(row.work_log),
+  }
+}
+
+// Parse a JSON column that must hold an array (work log sessions).
+export function safeParseArray(text) {
+  try {
+    const v = JSON.parse(text)
+    return Array.isArray(v) ? v : []
+  } catch {
+    return []
   }
 }
 

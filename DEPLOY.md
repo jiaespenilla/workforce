@@ -30,7 +30,7 @@ domain modules under `worker/src/routes/`:
 | `routes/auth.js` | `/api/me`, `/api/change-password`, `/api/bootstrap` |
 | `routes/settings.js` | global + per-company settings, roles CRUD |
 | `routes/companies.js` | companies + employees management |
-| `routes/tasks.js` | tasks CRUD (with `assignee_id`/`assignee_email` normalization) |
+| `routes/tasks.js` | tasks CRUD (with `assignee_id`/`assignee_email` normalization), work-log timer start/stop (63) |
 | `routes/attendance.js` | authenticated punch history / punches |
 | `routes/credentials.js` | QR / fingerprint / PIN credential management |
 | `routes/orgUnits.js` | org units CRUD |

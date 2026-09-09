@@ -59,6 +59,9 @@ CREATE TABLE IF NOT EXISTS tasks (
   due TEXT,
   status TEXT DEFAULT 'pending',
   notes TEXT,                       -- JSON array of work-progress notes [{at, by, text}]
+  work_seconds INTEGER DEFAULT 0,   -- work log (63): accumulated timer seconds from finished sessions
+  work_started_at TEXT,             -- work log (63): running session start (ISO) when the timer is active
+  work_log TEXT,                    -- work log (63): JSON array of sessions [{start, end, seconds}]
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_assignee_email ON tasks (assignee_email);

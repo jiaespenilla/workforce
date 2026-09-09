@@ -2,7 +2,7 @@
 
 import { json, readJson } from '../lib/http.js'
 import { callerCompanyId } from '../lib/auth.js'
-import { mapTask, queueNotification } from '../lib/db.js'
+import { mapTask, queueNotification, safeParseArray } from '../lib/db.js'
 import { parsePagination, paginate } from '../lib/pagination.js'
 
 // Resolve normalized assignee columns (email / company_id / employee id)
@@ -94,6 +94,54 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
       const result = await env.DB.prepare('INSERT INTO tasks (title, assignee, priority, due, status) VALUES (?, ?, ?, ?, ?)')
         .bind(t.title, t.assignee, t.priority || 'Medium', t.due || null, t.status || 'pending').run()
       return json(mapTask({ id: result.meta.last_row_id, ...t, status: t.status || 'pending' }), 201)
+    }
+  }
+
+  /* work log timer (63) — the assignee starts/stops a session on their task;
+     elapsed time is computed server-side and accumulated per session. */
+  {
+    const m = path.match(/^\/api\/tasks\/(\d+)\/work-log\/(start|stop)$/)
+    if (m && method === 'POST') {
+      const task = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(Number(m[1])).first()
+      if (!task) return json({ error: 'Task not found.' }, 404)
+      // Only the assignee runs their own work timer.
+      const me = String(claims.sub || '').toLowerCase()
+      if (String(task.assignee_email || '').toLowerCase() !== me) {
+        return json({ error: 'Only the assignee can run this task timer.' }, 403)
+      }
+      const action = m[2]
+      const log = safeParseArray(task.work_log)
+      let seconds = Math.max(0, Number(task.work_seconds || 0))
+      let startedAt = task.work_started_at || null
+      let statusChanged = false
+      if (action === 'start') {
+        if (startedAt) return json({ error: 'Timer is already running for this task.' }, 409)
+        startedAt = new Date().toISOString()
+        // Starting the timer moves a pending task into progress.
+        if (task.status === 'pending') {
+          statusChanged = true
+          task.status = 'inprogress'
+        }
+      } else {
+        if (!startedAt) return json({ error: 'Timer is not running for this task.' }, 409)
+        const end = new Date()
+        const sessionSeconds = Math.max(0, Math.round((end.getTime() - new Date(startedAt).getTime()) / 1000))
+        seconds += sessionSeconds
+        log.push({ start: startedAt, end: end.toISOString(), seconds: sessionSeconds })
+        startedAt = null
+      }
+      try {
+        // Keep the stored session history bounded (last 100 sessions).
+        await env.DB.prepare('UPDATE tasks SET work_seconds = ?, work_started_at = ?, work_log = ? WHERE id = ?')
+          .bind(Math.round(seconds), startedAt, JSON.stringify(log.slice(-100)), task.id).run()
+        if (statusChanged) {
+          await env.DB.prepare('UPDATE tasks SET status = ? WHERE id = ?').bind('inprogress', task.id).run()
+        }
+      } catch {
+        return json({ error: 'Work log is not supported by this database yet. Try again in a moment.' }, 500)
+      }
+      const row = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(task.id).first()
+      return json(mapTask(row))
     }
   }
 

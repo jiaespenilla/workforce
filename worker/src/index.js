@@ -5,7 +5,7 @@
 
 import { json, cors } from './lib/http.js'
 import { requireAuth } from './lib/auth.js'
-import { ensureSeed, migrateCompanySettings, migrateTaskColumns, migrateTaskAssigneeId, migrateAttendanceOvertime, migrateEmployeePay, migratePayrollRuns, migrateUserProfile, migrateWebAuthnDevice, migrateTaskNotes } from './lib/seed.js'
+import { ensureSeed, migrateCompanySettings, migrateTaskColumns, migrateTaskAssigneeId, migrateAttendanceOvertime, migrateEmployeePay, migratePayrollRuns, migrateUserProfile, migrateWebAuthnDevice, migrateTaskNotes, migrateTaskWorkLog } from './lib/seed.js'
 import * as publicRoutes from './routes/public.js'
 import * as authRoutes from './routes/auth.js'
 import * as settingsRoutes from './routes/settings.js'
@@ -60,6 +60,7 @@ async function ensureMigrations(env) {
         migrateUserProfile(env),
         migrateWebAuthnDevice(env),
         migrateTaskNotes(env),
+        migrateTaskWorkLog(env),
       ])
     })().catch((e) => { migrationsPromise = null; throw e })
   }
