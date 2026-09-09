@@ -93,3 +93,4 @@ Open `https://<your-pages-url>/kiosk` on the phone → browser menu →
 |---|---|---|
 | `VITE_API_URL` | Frontend build env / `.env` | URL of the Worker API |
 | `AUTH_SECRET` | Worker secret (`wrangler secret put AUTH_SECRET`) | Signs login tokens |
+| `DEFAULT_EMPLOYEE_PASSWORD` | Worker secret (`wrangler secret bulk`) | Default password applied by admin password-reset and new-employee accounts (currently `P@ssw0rd2026!`); users are forced to change it at next sign-in |

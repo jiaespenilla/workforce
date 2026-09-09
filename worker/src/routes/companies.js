@@ -1,6 +1,6 @@
 // Company and employee endpoints — listing, updates, people management.
 
-import { DEFAULT_EMPLOYEE_PASSWORD } from '../lib/constants.js'
+import { getDefaultEmployeePassword } from '../lib/constants.js'
 import { json, readJson } from '../lib/http.js'
 import { callerCompanyId } from '../lib/auth.js'
 import { mapCompany, insertEmployee, ensureUser } from '../lib/db.js'
@@ -56,7 +56,7 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
       const emp = await readJson(request)
       await insertEmployee(env, m[1], emp)
       const roleForUser = (emp.role || '').trim().toLowerCase() === 'ceo' ? 'ceo' : 'employee'
-      await ensureUser(env, emp.email, emp.name, roleForUser, DEFAULT_EMPLOYEE_PASSWORD)
+      await ensureUser(env, emp.email, emp.name, roleForUser, getDefaultEmployeePassword(env))
       return json({ ok: true }, 201)
     }
   }

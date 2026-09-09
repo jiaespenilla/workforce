@@ -5,7 +5,7 @@ describe('kiosk config', () => {
   it('returns expected defaults', () => {
     const cfg = getDefaultKioskConfig()
     expect(cfg.method).toBe('fingerprint')
-    expect(cfg.pinFallback).toBe(true)
+    expect(cfg.pinFallback).toBe(false)
     expect(cfg.pinLength).toBe(4)
     expect(cfg.idleTimeout).toBe(60)
     expect(cfg.site).toBe('')

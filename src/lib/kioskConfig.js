@@ -7,7 +7,7 @@ const KEY = 'uw_kiosk_configs'
 
 const DEFAULTS = {
   method: 'fingerprint',
-  pinFallback: true,
+  pinFallback: false, // (66) PIN is optional per company — enabled when they require it
   requireReAuth: false,
   pinLength: 4,
   lockoutAttempts: 5,

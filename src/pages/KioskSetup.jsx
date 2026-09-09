@@ -256,6 +256,8 @@ export default function KioskSetup() {
 
   const inputCls = 'mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10'
   const systemName = getActiveSettings().name
+  // (66) PIN is optional per company — shown as fallback only when enabled.
+  const pinFallbackEnabled = config.method === 'fingerprint' && !!config.pinFallback
 
   return (
     <form onSubmit={save} className="space-y-6 px-1 sm:px-0">
@@ -344,7 +346,7 @@ export default function KioskSetup() {
                 <label className="flex cursor-pointer items-center justify-between gap-4 p-4">
                   <span>
                     <span className="block text-sm font-medium text-gray-900">Allow PIN fallback</span>
-                    <span className="block text-xs text-gray-500">Permit PIN entry when the fingerprint sensor is unavailable or fails.</span>
+                    <span className="block text-xs text-gray-500">PIN is optional — enable it only if this company needs a fallback when the fingerprint sensor is unavailable.</span>
                   </span>
                   <input
                     type="checkbox"
@@ -369,25 +371,32 @@ export default function KioskSetup() {
                 </label>
               </div>
             )}
-            {config.method === 'pin' && (
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm">
-                  <span className="font-medium text-gray-700">PIN length:</span>
-                  <select value={String(config.pinLength)} onChange={(e) => update('pinLength', Number(e.target.value))} className={inputCls}>
-                    <option value="4">4 digits</option>
-                    <option value="6">6 digits</option>
-                  </select>
-                </label>
-                <label className="block text-sm">
-                  <span className="font-medium text-gray-700">Lockout after failed attempts:</span>
-                  <select value={String(config.lockoutAttempts)} onChange={(e) => update('lockoutAttempts', Number(e.target.value))} className={inputCls}>
-                    <option value="3">3 attempts</option>
-                    <option value="5">5 attempts</option>
-                    <option value="0">No lockout</option>
-                  </select>
-                </label>
-              </div>
-            )}
+{(config.method === 'pin' || pinFallbackEnabled) && (
+  <>
+    <p className="mt-4 text-xs leading-relaxed text-gray-500">
+      {config.method === 'pin'
+        ? 'PIN sign-in settings for kiosk devices.'
+        : 'Fingerprint fallback — these apply when an employee chooses “Use PIN instead”.'}
+    </p>
+    <div className="mt-2 grid gap-4 sm:grid-cols-2">
+      <label className="block text-sm">
+        <span className="font-medium text-gray-700">PIN length:</span>
+        <select value={String(config.pinLength)} onChange={(e) => update('pinLength', Number(e.target.value))} className={inputCls}>
+          <option value="4">4 digits</option>
+          <option value="6">6 digits</option>
+        </select>
+      </label>
+      <label className="block text-sm">
+        <span className="font-medium text-gray-700">Lockout after failed attempts:</span>
+        <select value={String(config.lockoutAttempts)} onChange={(e) => update('lockoutAttempts', Number(e.target.value))} className={inputCls}>
+          <option value="3">3 attempts</option>
+          <option value="5">5 attempts</option>
+          <option value="0">No lockout</option>
+        </select>
+      </label>
+    </div>
+  </>
+)}
             {config.method === 'qr' && (
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <label className="block text-sm">
@@ -556,55 +565,87 @@ export default function KioskSetup() {
 
         <aside className="self-start lg:sticky lg:top-24">
           <p className="mb-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500">Live Preview</p>
-          <Preview method={config.method} systemName={systemName} site={config.site} />
+          <Preview
+            method={config.method}
+            systemName={systemName}
+            site={config.site}
+            pinLength={config.pinLength || 4}
+            pinFallback={pinFallbackEnabled}
+            requireReAuth={!!config.requireReAuth}
+          />
         </aside>
       </div>
     </form>
   )
 }
 
-function Preview({ method, systemName, site }) {
+function Preview({ method, systemName, site, pinLength = 4, pinFallback = false, requireReAuth = false }) {
+  const [now, setNow] = useState(new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const methodLabel = method === 'pin' ? 'PIN code' : method === 'qr' ? 'QR badge' : 'Fingerprint'
   return (
     <div className="mx-auto w-56 rounded-[2rem] border border-gray-200 bg-gray-900 p-2 shadow-xl">
       <div className="mx-auto mb-1 h-1.5 w-16 rounded-full bg-gray-700" />
-      <div className="flex h-96 flex-col items-center justify-between rounded-[1.6rem] bg-gradient-to-b from-brand-600 to-emerald-500 px-4 py-6 text-white">
-        <div className="text-center">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-100">{systemName}</p>
-          {site && <p className="mt-0.5 text-[9px] text-emerald-100/80">{site}</p>}
+      <div className="flex h-[26rem] flex-col overflow-hidden rounded-[1.6rem] bg-gradient-to-b from-brand-800 via-brand-600 to-emerald-500 px-4 py-4 text-white">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-sm font-black text-brand-600">
+            {(systemName || 'U').charAt(0).toUpperCase()}
+          </span>
+          <span className="min-w-0 leading-tight">
+            <span className="block truncate text-[11px] font-bold">{systemName}</span>
+            <span className="block truncate text-[9px] font-medium text-emerald-100">Time Kiosk{site ? ` · ${site}` : ''}</span>
+          </span>
         </div>
-        <div className="flex flex-col items-center gap-3">
+        <div className="mt-3 text-center">
+          <p className="text-2xl font-black tabular-nums tracking-tight drop-shadow-lg">
+            {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </p>
+          <p className="mt-0.5 text-[9px] font-medium text-emerald-100">
+            {now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
+          </p>
+        </div>
+        <div className="flex flex-1 flex-col items-center justify-center gap-3">
+          <span className="rounded-full bg-white/15 px-3.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-emerald-50 ring-1 ring-white/25">
+            Clock in / out · {methodLabel}
+          </span>
           {method === 'fingerprint' && (
             <>
-              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white/15 ring-2 ring-white/40">
-                <svg className="h-14 w-14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+              <span className="flex h-20 w-20 items-center justify-center rounded-full bg-white/15 ring-4 ring-white/40">
+                <svg className="h-11 w-11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2 12a10 10 0 0 1 18-6M21.8 16c.2-2 .131-5.354 0-6M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2M8.65 22c.21-.66.45-1.32.57-2M9 6.8a6 6 0 0 1 9 5.2v2M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4M14 13.12c0 2.38 0 6.38-1 8.88" />
                 </svg>
-              </div>
-              <p className="text-xs font-medium text-emerald-100">Touch the sensor to sign in</p>
+              </span>
+              <p className="text-center text-[10px] font-semibold text-emerald-50">Touch the sensor to clock in / out</p>
+              {pinFallback && <span className="text-[9px] font-medium text-emerald-100 underline">Use PIN instead</span>}
             </>
           )}
           {method === 'pin' && (
             <>
-              <div className="flex gap-2">
-                {[0, 1, 2, 3].map((i) => <span key={i} className="h-3.5 w-3.5 rounded-full bg-white/30 ring-1 ring-white/50" />)}
+              <div className="flex gap-1.5">
+                {Array.from({ length: pinLength }).map((_, i) => <span key={i} className="h-2.5 w-2.5 rounded-full bg-white/30 ring-1 ring-white/50" />)}
               </div>
-              <div className="grid w-44 grid-cols-3 gap-1.5">
-                {['1','2','3','4','5','6','7','8','','0','OK'].map((k, i) => (
-                  <span key={i} className={`rounded-lg py-2 text-center text-xs font-semibold ${k === 'OK' ? 'bg-gray-900/40 text-white' : k ? 'bg-white/15 ring-1 ring-white/25' : ''}`}>{k}</span>
+              <div className="grid w-36 grid-cols-3 gap-1">
+                {['1','2','3','4','5','6','7','8','9','C','0','OK'].map((k, i) => (
+                  <span key={i} className={`rounded-md py-1 text-center text-[9px] font-semibold ${k === 'OK' ? 'bg-white text-brand-700' : k === 'C' ? 'bg-gray-900/30 text-white' : 'bg-white/15 ring-1 ring-white/25'}`}>{k}</span>
                 ))}
               </div>
+              <p className="text-center text-[9px] text-emerald-100">Enter your PIN · {pinLength} digits</p>
             </>
           )}
           {method === 'qr' && (
             <>
-              <svg viewBox="0 0 21 21" className="h-32 w-32 rounded-xl bg-white p-2 fill-gray-900">
-                <path d="M0 0h7v7H0zM2 2v3h3V2zM14 0h7v7h-7zM16 2v3h3V2zM0 14h7v7H0zM2 16v3h3v-3zM10 0h2v2h-2zM10 4h2v2h-2zM4 10h2v2H4zM8 8h2v2H8zM12 10h2v2h-2zM10 14h2v2h-2zM14 14h2v2h-2zM18 14h2v2h-2zM16 10h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z"/>
+              <svg viewBox="0 0 21 21" className="h-24 w-24 rounded-lg bg-white p-1.5 text-gray-900" aria-hidden="true">
+                <path fill="currentColor" d="M0 0h7v7H0zM2 2v3h3V2zM14 0h7v7h-7zM16 2v3h3V2zM0 14h7v7H0zM2 16v3h3v-3zM10 0h2v2h-2zM10 4h2v2h-2zM4 10h2v2H4zM8 8h2v2H8zM12 10h2v2h-2zM10 14h2v2h-2zM14 14h2v2h-2zM18 14h2v2h-2zM16 10h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z" />
               </svg>
-              <p className="text-xs font-medium text-emerald-100">Scan your employee QR badge</p>
+              <p className="text-[10px] font-semibold text-emerald-50">Scan your employee QR badge</p>
             </>
           )}
         </div>
-        <div className="w-full rounded-lg bg-white/10 py-2 text-center text-[10px] font-medium text-emerald-100 ring-1 ring-white/20">
+        {requireReAuth && <p className="mb-1.5 text-center text-[8px] text-emerald-100/90">Re-auth required after checkout</p>}
+        <div className="w-full rounded-lg bg-white/10 py-1.5 text-center text-[9px] font-semibold text-emerald-100 ring-1 ring-white/20">
           Check In / Check Out
         </div>
       </div>

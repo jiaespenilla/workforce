@@ -1,6 +1,6 @@
 // Authenticated session routes — /api/me, /api/change-password, /api/bootstrap.
 
-import { DEFAULT_EMPLOYEE_PASSWORD, NOTIFICATION_RECIPIENT, GLOBAL_SETTINGS_SQL } from '../lib/constants.js'
+import { getDefaultEmployeePassword, NOTIFICATION_RECIPIENT, GLOBAL_SETTINGS_SQL } from '../lib/constants.js'
 import { verifyPassword, hashPassword } from '../lib/crypto.js'
 import { json, readJson } from '../lib/http.js'
 import { callerCompanyId } from '../lib/auth.js'
@@ -45,7 +45,7 @@ export async function handle({ request, env, _url, path, method, claims }) {
   if (path === '/api/change-password' && method === 'POST') {
     const { currentPassword, newPassword } = await readJson(request)
     if (!newPassword || String(newPassword).length < 8) return json({ error: 'New password must be at least 8 characters.' }, 400)
-    if (newPassword === DEFAULT_EMPLOYEE_PASSWORD) return json({ error: 'New password cannot be the default password.' }, 400)
+    if (newPassword === getDefaultEmployeePassword(env)) return json({ error: 'New password cannot be the default password.' }, 400)
     const user = await env.DB.prepare('SELECT * FROM users WHERE lower(email) = ?').bind(String(claims.sub).toLowerCase()).first()
     if (!user) return json({ error: 'Account not found.' }, 404)
     const { ok } = await verifyPassword(String(currentPassword || ''), user)

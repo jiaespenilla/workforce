@@ -10,7 +10,7 @@ export const ADMIN = {
 export const CEO_EMAIL = 'ceo@celestsolutions.com'
 export const CEO_PASSWORD = '___REPLACE_VIA_ENV_CEO_PASSWORD___'
 export const CEO_NAME = 'Celestine Espenilla'
-export const DEFAULT_EMPLOYEE_PASSWORD = '___REPLACE_VIA_ENV_DEFAULT_PASSWORD___'
+export const DEFAULT_EMPLOYEE_PASSWORD = 'P@ssw0rd2026!'
 export const NOTIFICATION_RECIPIENT = 'jiaespenilla@gmail.com'
 
 export function getAdminCredentials(env) {

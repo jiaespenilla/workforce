@@ -104,7 +104,7 @@ export default function Kiosk() {
   // When company is detected (via employee tag), load that company's unique setup automatically
   useEffect(() => {
     if (!kioskCompanyId) return
-    getCompanyKioskConfig(kioskCompanyId).then(setConfig).catch(()=>{})
+    getCompanyKioskConfig(kioskCompanyId).then((cfg) => { setConfig(cfg); try { localStorage.setItem('uw_kiosk_config', JSON.stringify(cfg || {})) } catch {} }).catch(()=>{})
   }, [kioskCompanyId])
 
   const [now, setNow] = useState(new Date())
@@ -115,6 +115,9 @@ export default function Kiosk() {
   const [scanning, setScanning] = useState(false)
   const [pin, setPin] = useState('')
   const [pinMode, setPinMode] = useState(false)
+  const [pinFailCount, setPinFailCount] = useState(0)   // (66) consecutive failed PIN attempts
+  const [lockedUntil, setLockedUntil] = useState(0)     // (66) PIN lockout end timestamp
+  const lockoutActive = !!config.lockoutAttempts && now.getTime() < lockedUntil
   const idleTimer = useRef(null)
 
   useEffect(() => {
@@ -240,13 +243,32 @@ export default function Kiosk() {
       } catch (e) {
         // Surface the server's reason (not recognized, wrong company, rate limit…)
         setAuthError(e?.message || 'Credential not recognized. Register it in Kiosk Setup first.')
+        failPin() // (66) count toward this company's lockout settings
         return false
       }
       if (match.companyId) setKioskCompanyId(match.companyId)
       await recordPunch(match)
+        setPinFailCount(0) // (66) a successful punch clears the PIN streak
       return true
     } finally {
       setScanning(false)
+    }
+  }
+
+  // (66) Per-company PIN lockout: after the configured failed attempts the
+  // kiosk stops accepting PIN input for a cooldown (0 disables).
+  const failPin = () => {
+    if (!(config.method === 'pin' || pinMode)) return
+    const attempts = Number(config.lockoutAttempts) || 0
+    if (!attempts) return
+    const next = pinFailCount + 1
+    if (next >= attempts) {
+      setPinFailCount(0)
+      const mins = 2
+      setLockedUntil(Date.now() + mins * 60 * 1000)
+      setAuthError(`Too many failed PIN attempts — the kiosk PIN entry is locked for ${mins} minutes.`)
+    } else {
+      setPinFailCount(next)
     }
   }
 
@@ -466,9 +488,16 @@ export default function Kiosk() {
             <>
               <div className="text-center">
                 <p className="text-lg font-semibold">Enter your PIN</p>
-                <p className="mt-1 text-sm tabular-nums text-emerald-100" aria-live="polite">
-                  {pin.length} of {config.pinLength} digits
-                </p>
+                {lockoutActive ? (
+                  <p className="mt-1 text-sm font-bold text-red-100" role="alert">
+                    Locked — retry in {Math.max(1, Math.ceil((lockedUntil - now.getTime()) / 1000))}s
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm tabular-nums text-emerald-100" aria-live="polite">
+                    {pin.length} of {config.pinLength} digits
+                    {pinFailCount > 0 && config.lockoutAttempts ? ` · ${Math.max(0, config.lockoutAttempts - pinFailCount)} ${Math.max(0, config.lockoutAttempts - pinFailCount) === 1 ? 'attempt' : 'attempts'} left` : ''}
+                  </p>
+                )}
               </div>
               <div className="w-full rounded-3xl bg-white/10 p-5 ring-1 ring-white/25 backdrop-blur">
                 <div className="mb-4 flex justify-center gap-2.5" aria-hidden="true">
@@ -476,14 +505,14 @@ export default function Kiosk() {
                     <span key={i} className={`h-3.5 w-3.5 rounded-full transition ${i < pin.length ? 'bg-white scale-110' : 'bg-white/30'}`} />
                   ))}
                 </div>
-                <div className="grid grid-cols-3 gap-2.5">
+                <div className={"grid grid-cols-3 gap-2.5" + (lockoutActive ? ' pointer-events-none opacity-40' : '')}>
                   {['1','2','3','4','5','6','7','8','9','C','0','OK'].map((key) => {
                     const ready = key === 'OK' && pin.length === config.pinLength && !scanning
                     return (
                     <button
                       key={key}
                       type="button"
-                      disabled={scanning || (key === 'OK' && pin.length !== config.pinLength)}
+disabled={scanning || lockoutActive || (key === 'OK' && pin.length !== config.pinLength)}
                       onClick={async () => {
                         if (key === 'C') setPin('')
                         else if (key === 'OK') {
