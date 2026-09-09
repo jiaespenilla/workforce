@@ -121,7 +121,8 @@ export default function NotificationBell() {
                       return
                     }
                     // default: tasks or people notifications go to relevant page
-                    if (subject.includes('task')) navigate('/tasks')
+                    // Task notifications — admins have no tasks view, route them to Companies
+                    if (subject.includes('task')) navigate(user?.role === 'administrator' ? '/companies' : '/tasks')
                     else if (subject.includes('people') || subject.includes('team')) navigate('/people')
                     else navigate(user?.role === 'administrator' ? '/companies' : '/')
                   }}

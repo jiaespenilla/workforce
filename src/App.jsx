@@ -32,6 +32,14 @@ function RouteLoader() {
 }
 
 // Single /profile route — wraps the page in the layout matching the user's role.
+// Tasks is for company members (CEO manages, employees work their list).
+// Administrators have no tasks view — send them to their Companies console.
+function TasksRoute() {
+  const { user } = useAuth()
+  if (user?.role === 'administrator') return <Navigate to="/companies" replace />
+  return <PageGate perm="tasks"><ChromeByRole><Tasks /></ChromeByRole></PageGate>
+}
+
 function ProfileRoute() {
   const { user } = useAuth()
   return user?.role === 'administrator' ? (
@@ -132,7 +140,7 @@ export default function App() {
 
           {/* Single /tasks route for every role — one shared branch so the
               router can never match a duplicate path and bounce home. */}
-          <Route path="/tasks" element={<PageGate perm="tasks"><ChromeByRole><Tasks /></ChromeByRole></PageGate>} />
+          <Route path="/tasks" element={<TasksRoute />} />
 
           {/* Single /profile route — renders inside the right chrome for the user's role */}
           <Route
