@@ -5,7 +5,8 @@ import { startRegistration } from '@simplewebauthn/browser'
 import { getActiveSettings } from '../lib/systemSettings'
 import { api, apiEnabled } from '../lib/api'
 import { getCredential, setPin, ensureQrCode } from '../lib/credentials'
-import { getDefaultKioskConfig, saveCompanyKioskConfig, loadKioskConfig as loadKioskConfigPerCompany } from '../lib/kioskConfig'
+import { getDefaultKioskConfig, getCompanyKioskConfig, resolveKioskSite, saveCompanyKioskConfig, loadKioskConfig as loadKioskConfigPerCompany } from '../lib/kioskConfig'
+import { getCompanyLocations } from '../lib/locations'
 
 // Keep legacy export for Kiosk.jsx fallback (no companyId)
 export function loadKioskConfig(companyId) {
@@ -41,7 +42,8 @@ const methods = [
   },
 ]
 
-const SITES = { hq: 'Head Office', branch1: 'Branch 1 — Makati', branch2: 'Branch 2 — Cebu' }
+// Legacy hardcoded sites removed (65) — the assigned branch/site is now chosen
+// from the company's real work locations (People → Work Locations).
 
 function QrGlyph({ className }) {
   return (
@@ -67,6 +69,36 @@ export default function KioskSetup() {
     }).catch(()=>{})
   }, [configCompanyId])
   const [saved, setSaved] = useState(false)
+
+  // Company work locations (65) — the kiosk's assigned branch/site must be
+  // one of this company's real work locations (managed in People / Company
+  // details → Work locations), and the Kiosk screen renders the same value.
+  const [locations, setLocations] = useState([])
+  const [configLoaded, setConfigLoaded] = useState(false)
+  useEffect(() => {
+    if (!configCompanyId) { setLocations([]); setConfigLoaded(false); return }
+    let cancelled = false
+    setConfigLoaded(false)
+    Promise.all([
+      getCompanyLocations(configCompanyId).catch(() => []),
+      getCompanyKioskConfig(configCompanyId).catch(() => null),
+    ]).then(([ls, saved]) => {
+      if (cancelled) return
+      setLocations(ls || [])
+      setConfig((prev) => {
+        const base = saved || prev
+        const aligned = resolveKioskSite(base, ls || [])
+        // No real locations yet (or legacy name that no longer exists) —
+        // keep the saved value untouched instead of blanking it.
+        if (!(ls || []).length && !aligned.siteId && (base.site || base.siteId)) {
+          return { ...prev, ...base }
+        }
+        return { ...prev, ...base, ...aligned }
+      })
+      setConfigLoaded(true)
+    })
+    return () => { cancelled = true }
+  }, [configCompanyId])
 
   // Device pairing — a per-company token kiosks use to record punches.
   const [kioskToken, setKioskToken] = useState(null)
@@ -492,9 +524,31 @@ export default function KioskSetup() {
               </label>
               <label className="block text-sm">
                 <span className="font-medium text-gray-700">Assigned branch / site:</span>
-                <select value={config.site} onChange={(e) => update('site', e.target.value)} className={inputCls}>
-                  {Object.entries(SITES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                <select
+                  value={config.siteId || ''}
+                  onChange={(e) => {
+                    const loc = locations.find((l) => String(l.id) === e.target.value)
+                    setConfig((c) => ({ ...c, siteId: loc ? loc.id : '', site: loc ? loc.name : '' }))
+                  }}
+                  disabled={!configLoaded || locations.length === 0}
+                  className={inputCls + ' bg-white disabled:cursor-not-allowed disabled:bg-gray-50'}
+                >
+                  {locations.length === 0 ? (
+                    <option value="">No work locations yet — add them in People first</option>
+                  ) : (
+                    <>
+                      <option value="">Select a work location…</option>
+                      {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                    </>
+                  )}
                 </select>
+                <span className="mt-1 block text-xs text-gray-500">
+                  Pulled from this company&apos;s work locations — the same list used when assigning
+                  employees. The Kiosk screen shows this site name.
+                </span>
+                {config.site ? (
+                  <p className="mt-1 text-xs font-medium text-emerald-700">Kiosk will display: {config.site}</p>
+                ) : null}
               </label>
             </div>
           </section>
@@ -502,7 +556,7 @@ export default function KioskSetup() {
 
         <aside className="self-start lg:sticky lg:top-24">
           <p className="mb-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500">Live Preview</p>
-          <Preview method={config.method} systemName={systemName} site={SITES[config.site]} />
+          <Preview method={config.method} systemName={systemName} site={config.site} />
         </aside>
       </div>
     </form>

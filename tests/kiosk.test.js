@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getDefaultKioskConfig } from '../src/lib/kioskConfig.js'
+import { getDefaultKioskConfig, resolveKioskSite } from '../src/lib/kioskConfig.js'
 
 describe('kiosk config', () => {
   it('returns expected defaults', () => {
@@ -8,7 +8,19 @@ describe('kiosk config', () => {
     expect(cfg.pinFallback).toBe(true)
     expect(cfg.pinLength).toBe(4)
     expect(cfg.idleTimeout).toBe(60)
-    expect(cfg.site).toBe('hq')
+    expect(cfg.site).toBe('')
+    expect(cfg.siteId).toBe('')
+  })
+  it('resolves a saved site by id against current locations', () => {
+    const ls = [{ id: 'loc-1', name: 'Makati HQ' }, { id: 'loc-2', name: 'Cebu Branch' }]
+    expect(resolveKioskSite({ siteId: 'loc-2', site: 'stale name' }, ls)).toEqual({ siteId: 'loc-2', site: 'Cebu Branch' })
+  })
+  it('matches a legacy saved site name to its location id', () => {
+    const ls = [{ id: 'loc-1', name: 'Makati HQ' }]
+    expect(resolveKioskSite({ siteId: '', site: 'makati hq' }, ls)).toEqual({ siteId: 'loc-1', site: 'Makati HQ' })
+  })
+  it('keeps an unknown saved site untouched when locations are unavailable', () => {
+    expect(resolveKioskSite({ siteId: '', site: 'Old Site' }, [])).toEqual({ siteId: '', site: 'Old Site' })
   })
   it('returns a fresh copy each call', () => {
     const a = getDefaultKioskConfig()

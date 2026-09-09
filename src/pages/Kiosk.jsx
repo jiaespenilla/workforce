@@ -153,10 +153,17 @@ export default function Kiosk() {
   // Stale-token guard: the device may hold a token that no longer exists
   // server-side (e.g. after an administrator data reset or token rotation).
   // Verify once on load and force re-pairing instead of failing punches.
+  // A paired kiosk shows its company's saved device settings (auth method,
+  // idle timeout, assigned branch/site) — same values Kiosk Setup saved.
   useEffect(() => {
     if (!apiEnabled() || !deviceToken) return undefined
     let live = true
     api('/api/kiosk/verify-token', { method: 'POST', body: { token: deviceToken } })
+      .then((verify) => {
+        if (!live || !verify?.companyId) return
+        setKioskCompanyId(verify.companyId)
+        getCompanyKioskConfig(verify.companyId).then((cfg) => { if (live && cfg) setConfig(cfg) }).catch(() => {})
+      })
       .catch((e) => {
         if (!live || e?.status !== 401) return // offline/network errors keep the token
         localStorage.removeItem('uw_kiosk_device_token')
@@ -173,19 +180,21 @@ export default function Kiosk() {
     setPairing(true)
     setPairError(null)
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/kiosk/verify-token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: t }),
-      })
-      if (!res.ok) { setPairError('That token was not recognized. Check Kiosk Setup and try again.'); return }
+      const res = await api('/api/kiosk/verify-token', { method: 'POST', body: { token: t } })
       localStorage.setItem('uw_kiosk_device_token', t)
       setDeviceToken(t)
+      if (res?.companyId) {
+        setKioskCompanyId(res.companyId)
+        const cfg = await getCompanyKioskConfig(res.companyId).catch(() => null)
+        if (cfg) setConfig(cfg)
+      }
       setAuthError(null)
       setPairOpen(false)
       setPairInput('')
     } catch {
-      setPairError('Could not reach the server. Check the connection and try again.')
+      setPairError(apiEnabled()
+        ? 'That token was not recognized. Check Kiosk Setup and try again.'
+        : 'Could not reach the server. Check the connection and try again.')
     } finally {
       setPairing(false)
     }

@@ -14,7 +14,28 @@ const DEFAULTS = {
   qrRotation: 'daily',
   camera: 'rear',
   idleTimeout: 60,
-  site: 'hq',
+  // (65) Assigned branch/site — aligned to the company's real work locations
+  // (People → Work Locations). Stored as a stable location id; `site` keeps
+  // the display name so the Kiosk header/footer can render without a lookup.
+  siteId: '',
+  site: '',
+}
+
+export function resolveKioskSite(config = {}, locations = []) {
+  const list = Array.isArray(locations) ? locations : []
+  if (config.siteId) {
+    const byId = list.find((l) => String(l.id) === String(config.siteId))
+    if (byId) return { siteId: byId.id, site: byId.name }
+  }
+  if (config.site) {
+    const byName = list.find(
+      (l) => String(l.name || '').trim().toLowerCase() === String(config.site).trim().toLowerCase()
+    )
+    if (byName) return { siteId: byName.id, site: byName.name }
+  }
+  // Keep the stored display name (legacy configs) even when locations are
+  // unavailable; the Kiosk renders `site` verbatim.
+  return { siteId: config.siteId || '', site: config.site || '' }
 }
 
 export function getDefaultKioskConfig() {
