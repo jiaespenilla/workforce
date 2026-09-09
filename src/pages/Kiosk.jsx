@@ -149,6 +149,23 @@ export default function Kiosk() {
   const [pairOpen, setPairOpen] = useState(false)
   const [pairInput, setPairInput] = useState('')
   const [pairError, setPairError] = useState(null)
+
+  // Stale-token guard: the device may hold a token that no longer exists
+  // server-side (e.g. after an administrator data reset or token rotation).
+  // Verify once on load and force re-pairing instead of failing punches.
+  useEffect(() => {
+    if (!apiEnabled() || !deviceToken) return undefined
+    let live = true
+    api('/api/kiosk/verify-token', { method: 'POST', body: { token: deviceToken } })
+      .catch((e) => {
+        if (!live || e?.status !== 401) return // offline/network errors keep the token
+        localStorage.removeItem('uw_kiosk_device_token')
+        setDeviceToken('')
+        setPairError('The paired device token is no longer valid — pair this kiosk again with a fresh token from Kiosk Setup.')
+        setPairOpen(true)
+      })
+    return () => { live = false }
+  }, [deviceToken])
   const [pairing, setPairing] = useState(false)
   const pairDevice = async () => {
     const t = pairInput.trim()
@@ -273,6 +290,11 @@ export default function Kiosk() {
         })
       } catch (e) {
         punchError = e?.message || 'Could not reach the server — the punch was not saved. Try again.'
+        // Invalid token → drop the stale token so the kiosk offers pairing again.
+        if (e?.status === 401) {
+          localStorage.removeItem('uw_kiosk_device_token')
+          setDeviceToken('')
+        }
       }
     } else {
       // merge back to global uw_punches
@@ -323,13 +345,21 @@ export default function Kiosk() {
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        {!deviceToken ? (
-          <button type="button" onClick={() => { setPairOpen(true); setPairError(null) }} className="inline-flex min-h-[44px] items-center rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-gray-900 shadow hover:bg-amber-300">Pair device</button>
-        ) : (
+        {deviceToken && (
           <span className="hidden items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-emerald-50 sm:inline-flex">
             <span className="h-2 w-2 rounded-full bg-emerald-300" /> Paired
           </span>
         )}
+        {/* Pair / re-pair is ALWAYS reachable — a stored-but-stale token must
+            never lock the device out of pairing. */}
+        <button
+          type="button"
+          onClick={() => { setPairOpen(true); setPairError(null) }}
+          title={deviceToken ? 'Replace the paired device token' : 'Pair this kiosk with a company device token'}
+          className={`inline-flex min-h-[44px] items-center rounded-full px-5 py-2 text-sm font-semibold shadow transition ${deviceToken ? 'bg-white/15 text-white hover:bg-white/25' : 'bg-amber-400 text-gray-900 hover:bg-amber-300'}`}
+        >
+          {deviceToken ? 'Re-pair' : 'Pair device'}
+        </button>
         <Link to="/" className="inline-flex min-h-[44px] items-center rounded-full bg-white/15 px-5 py-2 text-sm font-medium hover:bg-white/25">Exit kiosk</Link>
       </div>
     </header>
@@ -591,6 +621,13 @@ export default function Kiosk() {
               <p className="text-xs leading-relaxed text-gray-500">
                 Your attendance was <span className="font-semibold">not recorded</span>. Ask the administrator to check the kiosk pairing if this keeps happening.
               </p>
+              <button
+                type="button"
+                onClick={() => { setResult(null); setPairError('The paired device token was rejected — paste a fresh token from Kiosk Setup.'); setPairOpen(true) }}
+                className="min-h-[44px] rounded-xl bg-gray-900 px-6 py-2.5 text-xs font-semibold text-white shadow hover:bg-gray-700"
+              >
+                Pair this kiosk
+              </button>
             </>
           ) : (
             result.action === 'out' && result.overtime && (
