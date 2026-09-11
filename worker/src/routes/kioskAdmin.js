@@ -2,7 +2,7 @@
 
 import * as webAuthn from '../webauthn.js'
 import { json, readJson } from '../lib/http.js'
-import { generateKioskToken } from '../lib/kiosk.js'
+import { generateKioskToken, kioskTtlExpiry, KIOSK_TOKEN_TTLS, revokeKioskToken } from '../lib/kiosk.js'
 
 export async function handle({ request, env, url, path, method, isAdmin }) {
   /* kiosk device tokens (administrator) */
@@ -12,7 +12,7 @@ export async function handle({ request, env, url, path, method, isAdmin }) {
       if (!isAdmin) return json({ error: 'Administrator only.' }, 403)
       const companyId = decodeURIComponent(m[1])
       if (method === 'GET') {
-        // Get-or-create: each company has exactly one active kiosk token.
+        // Permanent pairing token — get-or-create: each company has exactly one.
         const row = await env.DB.prepare("SELECT key FROM settings WHERE key LIKE 'kiosk_device_token:%' AND value = ?").bind(companyId).first()
         let token = row ? row.key.slice('kiosk_device_token:'.length) : null
         if (!token) {
@@ -20,10 +20,51 @@ export async function handle({ request, env, url, path, method, isAdmin }) {
           await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
             .bind(`kiosk_device_token:${token}`, companyId).run()
         }
-        return json({ token, companyId })
+        // (71) Active temporary tokens for field work, with their expiry.
+        const tempRows = await env.DB.prepare(
+          "SELECT key, value FROM settings WHERE key LIKE 'kiosk_device_token:%' AND value = ?"
+        ).bind(companyId).all().then((r) => r.results)
+        const temporary = []
+        for (const t of tempRows) {
+          const tok = t.key.slice('kiosk_device_token:'.length)
+          if (tok === token) continue // permanent token is reported separately
+          const exp = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(`kiosk_token_expiry:${tok}`).first()
+          if (exp?.value && new Date(exp.value).getTime() > Date.now()) {
+            temporary.push({ token: tok, expiresAt: exp.value })
+          }
+        }
+        return json({ token, companyId, temporary })
+      }
+      if (method === 'POST') {
+        // (71) Generate a temporary field-work token with an expiry.
+        const body = await readJson(request)
+        const ttl = String(body?.ttl || '').trim()
+        if (!KIOSK_TOKEN_TTLS.includes(ttl)) {
+          return json({ error: `ttl must be one of: ${KIOSK_TOKEN_TTLS.join(', ')}.` }, 400)
+        }
+        const expiresAt = kioskTtlExpiry(ttl)
+        if (!expiresAt) return json({ error: 'Could not compute an expiry for that TTL.' }, 400)
+        const token = generateKioskToken()
+        await env.DB.batch([
+          env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+            .bind(`kiosk_device_token:${token}`, companyId),
+          env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+            .bind(`kiosk_token_expiry:${token}`, expiresAt.toISOString()),
+        ])
+        return json({ token, companyId, expiresAt: expiresAt.toISOString(), ttl }, 201)
       }
       if (method === 'DELETE') {
+        // Optional ?token= revokes one temp token; without it, rotate the
+        // company's permanent token (and all of its temp tokens) as before.
+        const target = url?.searchParams?.get('token') || ''
+        if (target) {
+          const ok = await revokeKioskToken(env, target)
+          return json({ ok, message: ok ? 'Temporary token revoked.' : 'Token not found.' }, ok ? 200 : 404)
+        }
         await env.DB.prepare("DELETE FROM settings WHERE key LIKE 'kiosk_device_token:%' AND value = ?").bind(companyId).run()
+        await env.DB.prepare(
+          "DELETE FROM settings WHERE key LIKE 'kiosk_token_expiry:%' AND key IN (SELECT key FROM settings WHERE key LIKE 'kiosk_device_token:%' AND value = ?)"
+        ).bind(companyId).run().catch(() => {})
         return json({ ok: true })
       }
     }

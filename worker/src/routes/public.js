@@ -17,7 +17,7 @@ import { getDefaultEmployeePassword } from '../lib/constants.js'
 import { verifyPassword, upgradeUserPassword, createToken, verifySecret, pbkdf2 } from '../lib/crypto.js'
 import { json, readJson, clientIp } from '../lib/http.js'
 import { recentAttempts, recordAttempts, clearAttempts } from '../lib/rateLimit.js'
-import { kioskTokenFrom, kioskTokenCompanyId } from '../lib/kiosk.js'
+import { kioskTokenFrom, kioskTokenCompanyId, kioskTokenInfo } from '../lib/kiosk.js'
 import { mapCompany, insertEmployee, ensureUser, queueNotification, safeParse } from '../lib/db.js'
 
 export async function handle({ request, env, url, path, method }) {
@@ -157,10 +157,10 @@ export async function handle({ request, env, url, path, method }) {
   // Kiosk device pairing — verifies a token without a user login.
   if (path === '/api/kiosk/verify-token' && method === 'POST') {
     const { token } = await readJson(request)
-    const companyId = await kioskTokenCompanyId(env, (token || '').trim())
-    if (!companyId) return json({ error: 'Invalid kiosk device token.' }, 401)
-    const c = await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(companyId).first()
-    return json({ ok: true, companyId, companyName: c?.name || '' })
+    const info = await kioskTokenInfo(env, (token || '').trim())
+    if (!info) return json({ error: 'Invalid kiosk device token.' }, 401)
+    const c = await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(info.companyId).first()
+    return json({ ok: true, companyId: info.companyId, companyName: c?.name || '', expiresAt: info.expiresAt || null })
   }
 
   /* ---- kiosk biometric (WebAuthn) — public: the kiosk scans a fingerprint without logging in ---- */
