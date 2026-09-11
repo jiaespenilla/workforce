@@ -72,11 +72,8 @@ export function taskTimeByDay(task, now = Date.now()) {
   return timeByDay(sessions, { now })
 }
 
-// "9/9/2026" style label for a YYYY-MM-DD day key (Manila).
+// (73) MM/DD/YYYY label for a YYYY-MM-DD day key (Manila), zero-padded.
 export function dayLabel(date) {
-  try {
-    return new Date(`${date}T00:00:00+08:00`).toLocaleDateString([], { month: 'numeric', day: 'numeric', year: 'numeric' })
-  } catch {
-    return date
-  }
+  const m = String(date || '').match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return m ? `${m[2]}/${m[3]}/${m[1]}` : String(date || '')
 }

@@ -77,7 +77,9 @@ describe('taskTimeByDay / labels', () => {
     expect(dayKeyOf(Date.UTC(2026, 8, 9, 17, 30, 0))).toBe('2026-09-10')
   })
 
-  it('dayLabel renders M/D/YYYY', () => {
-    expect(dayLabel('2026-09-09')).toBe('9/9/2026')
+  it('dayLabel renders MM/DD/YYYY (73)', () => {
+    expect(dayLabel('2026-09-09')).toBe('09/09/2026')
+    expect(dayLabel('2026-11-05')).toBe('11/05/2026')
+    expect(dayLabel('')).toBe('')
   })
 })
