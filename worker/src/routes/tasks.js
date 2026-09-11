@@ -32,6 +32,22 @@ async function taskInCompany(env, taskId, companyId) {
   return (t.assignee || '').endsWith(`(${own?.name || ''})`)
 }
 
+// True when the caller is a CEO or a management role (HR Manager / Team Lead…).
+// CEOs & administrators are always allowed; managers are detected by their
+// employee-record role since login accounts only carry 'ceo'/'employee'.
+async function isManager(env, email) {
+  if (!email) return false
+  const row = await env.DB.prepare('SELECT role FROM employees WHERE lower(email) = ? LIMIT 1')
+    .bind(String(email).toLowerCase()).first()
+  const role = String(row?.role || '').toLowerCase()
+  return role.includes('manager') || role.includes('lead')
+}
+
+async function canManageTasks(env, claims, isAdmin) {
+  if (isAdmin || claims?.role === 'ceo') return true
+  return isManager(env, claims?.sub)
+}
+
 // Notify the company's CEO and managers when a task is created or updated.
 // Never throws — notification failures must not break task writes.
 async function notifyTaskUpdate(env, task, actorEmail, verb) {
@@ -149,10 +165,23 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
     const m = path.match(/^\/api\/tasks\/(\d+)$/)
     if (m && method === 'PUT') {
       const body = await readJson(request)
+      // (69) Normalize the due date: an empty value means "clear it" — sent as
+      // null so the COALESCE updates below can never store an empty string.
+      if (body.due !== undefined) body.due = String(body.due || '').trim() || null
       // Tenant scoping: company accounts may only update their own tasks.
       const callerCompany = await callerCompanyId(env, claims)
       if (callerCompany && !(await taskInCompany(env, Number(m[1]), callerCompany))) {
         return json({ error: 'Not authorized to modify this task.' }, 403)
+      }
+      // (69/70) Changing the due date or transferring the assignee is a
+      // management action — only the CEO, administrators and manager roles.
+      if (body.due !== undefined || body.transferTo) {
+        if (!(await canManageTasks(env, claims, isAdmin))) {
+          return json({ error: body.transferTo ? 'Only the CEO or a manager can transfer tasks.' : 'Only the CEO or a manager can change the due date.' }, 403)
+        }
+        if (body.transferTo && !String(body.assignee || '').trim()) {
+          return json({ error: 'A receiving employee is required to transfer the task.' }, 400)
+        }
       }
       // Work progress notes (57): client sends the full array; the server
       // sanitizes, stamps and caps it. Only the assignee, their managers,
@@ -177,6 +206,11 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
         }
         const row = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(Number(m[1])).first()
         return json(mapTask(row))
+      }
+      // (69) COALESCE treats a null `due` as "keep the current value", so an
+      // explicit clear runs first; the COALESCE updates below then preserve it.
+      if (body.due !== undefined && body.due === null) {
+        await env.DB.prepare('UPDATE tasks SET due = NULL WHERE id = ?').bind(Number(m[1])).run()
       }
       // If assignee string is being updated, also refresh normalized columns
       if (body.assignee !== undefined) {

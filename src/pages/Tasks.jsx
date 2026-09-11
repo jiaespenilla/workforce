@@ -113,6 +113,15 @@ function MonitoringBoard() {
   const [viewingTask, setViewingTask] = useState(null)
   const [noteInput, setNoteInput] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
+  // (69) Inline due-date editor in the task detail modal.
+  const [dueEditId, setDueEditId] = useState(null)
+  const [dueEditVal, setDueEditVal] = useState('')
+  // (70) Transfer active tasks to another employee (before deactivation).
+  const [transferEmp, setTransferEmp] = useState(null)
+  const [transferTo, setTransferTo] = useState('')
+  const [transferSel, setTransferSel] = useState(() => new Set())
+  const [transferBusy, setTransferBusy] = useState(false)
+  const [transferMsg, setTransferMsg] = useState('')
   // Live clock for work-log timers — only ticks while a session is running.
   const now = useTicker(tasks.some(workRunning))
   useEffect(() => {
@@ -130,6 +139,13 @@ function MonitoringBoard() {
   // Non-CEO users only see the tasks assigned to them ("my work"); CEO and
   // administrators monitor everything.
   const canViewAll = user?.role === 'administrator' || user?.role === 'ceo'
+  // (69/70) Due-date editing and task transfer are management actions: the
+  // CEO, administrators and manager roles (HR Manager, Team Lead…). Admins can
+  // additionally hide each via Roles & Permissions → Tasks (edit / transfer).
+  const roleLabel = String(user?.roleLabel || user?.role || '').toLowerCase()
+  const isMgmtUser = user?.role === 'administrator' || user?.role === 'ceo' || roleLabel.includes('manager') || roleLabel.includes('lead')
+  const canEditDue = isMgmtUser && canAction(user?.perms, 'tasks', 'edit')
+  const canTransfer = isMgmtUser && canAction(user?.perms, 'tasks', 'transfer')
   const isMine = (t) => {
     const me = (user?.email || '').toLowerCase()
     if (!me) return false
@@ -196,6 +212,71 @@ function MonitoringBoard() {
     if (apiEnabled()) {
       await api(`/api/tasks/${id}`, { method: 'PUT', body: { status } }).catch(() => {})
     }
+  }
+
+  // (69) Update a task's due date (optimistic; reopens the editor on failure).
+  const setTaskDue = async (id, due) => {
+    const prev = tasks.find((t) => t.id === id)?.due || ''
+    const next = due || null
+    setTasks((t) => t.map((task) => (task.id === id ? { ...task, due: next } : task)))
+    setViewingTask((v) => (v && v.id === id ? { ...v, due: next } : v))
+    setDueEditId(null)
+    if (apiEnabled()) {
+      try {
+        await api(`/api/tasks/${id}`, { method: 'PUT', body: { due: next } })
+      } catch {
+        setDueEditId(id)
+        setDueEditVal(String(prev).slice(0, 10))
+      }
+    }
+  }
+
+  // (70) Open the transfer dialog for an employee — their active tasks must be
+  // handed over to someone else before they can be deactivated.
+  const openTransfer = (emp) => {
+    const active = tasks.filter((t) =>
+      (t.assigneeEmail ? t.assigneeEmail === emp.email : t.assignee && t.assignee.startsWith(`${emp.name} (${emp.companyName})`))
+      && t.status !== 'completed')
+    setTransferEmp(emp)
+    setTransferTo('')
+    setTransferSel(new Set(active.map((t) => t.id)))
+    setTransferMsg('')
+  }
+
+  const toggleTransferTask = (id) => {
+    const next = new Set(transferSel)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setTransferSel(next)
+  }
+
+  const confirmTransfer = async () => {
+    if (!transferEmp || !transferTo || transferBusy) return
+    const target = employees.find((e) => (e.email || '').toLowerCase() === transferTo.toLowerCase())
+    if (!target) return
+    setTransferBusy(true)
+    setTransferMsg('')
+    const targetAssignee = `${target.name} (${target.companyName})`
+    const movedIds = new Set(tasks.filter((t) => transferSel.has(t.id)).map((t) => t.id))
+    if (!movedIds.size) {
+      setTransferMsg('Select at least one task to transfer.')
+      setTransferBusy(false)
+      return
+    }
+    setTasks((prev) => prev.map((t) => movedIds.has(t.id)
+      ? { ...t, assignee: targetAssignee, assigneeEmail: target.email, assigneeCompanyId: target.companyId }
+      : t))
+    let failed = 0
+    if (apiEnabled()) {
+      for (const id of movedIds) {
+        try {
+          await api(`/api/tasks/${id}`, { method: 'PUT', body: { assignee: targetAssignee, transferTo: true } })
+        } catch { failed++ }
+      }
+    }
+    setTransferBusy(false)
+    if (failed === 0) setTransferEmp(null)
+    else setTransferMsg(`${failed} task${failed !== 1 ? 's' : ''} could not be synced — shown transferred here; retry or check the connection.`)
   }
 
   // Append a work-progress note. The server stamps author/time and caps length.
@@ -442,6 +523,7 @@ function MonitoringBoard() {
               <th className="px-5 py-2">Status</th>
               <th className="px-5 py-2">Task progress</th>
               <th className="px-5 py-2">Time on tasks</th>
+              {canTransfer && <th className="px-5 py-2 text-right">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -481,11 +563,24 @@ function MonitoringBoard() {
                   <td className="px-5 py-3 tabular-nums text-gray-700">
                     {fmtHMS(assigned.reduce((sum, t) => sum + workElapsedMs(t, now), 0))}
                   </td>
+                  {canTransfer && (
+                    <td className="px-5 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => openTransfer(emp)}
+                        disabled={active === 0}
+                        title={active === 0 ? `${emp.name} has no active tasks to transfer` : `Transfer ${emp.name}'s active tasks to another employee`}
+                        className="inline-flex min-h-[44px] items-center rounded-lg border border-brand-200 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Transfer
+                      </button>
+                    </td>
+                  )}
                 </tr>
               )
             })}
             {shownStaff.length === 0 && (
-              <tr><td colSpan={6} className="px-5 py-8 text-center text-xs text-gray-400">No staff found — add employees in People.</td></tr>
+              <tr><td colSpan={canTransfer ? 7 : 6} className="px-5 py-8 text-center text-xs text-gray-400">No staff found — add employees in People.</td></tr>
             )}
           </tbody>
         </table>
@@ -521,6 +616,33 @@ function MonitoringBoard() {
                 </button>
               ))}
             </div>
+
+            {/* (69) Due-date editor — CEO / managers (admin-controlled via Tasks → edit) */}
+            {canEditDue && (
+              <div className="px-5 pt-3 sm:px-6">
+                <div className="flex flex-wrap items-center gap-2 rounded-xl bg-gray-50 px-3.5 py-2.5 ring-1 ring-gray-100">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Due date</span>
+                  {dueEditId === viewingTask.id ? (
+                    <>
+                      <input
+                        type="date"
+                        value={dueEditVal}
+                        onChange={(e) => setDueEditVal(e.target.value)}
+                        aria-label="New due date"
+                        className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                      />
+                      <button type="button" onClick={() => setTaskDue(viewingTask.id, dueEditVal)} className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">Save</button>
+                      <button type="button" onClick={() => setDueEditId(null)} className="inline-flex min-h-[44px] items-center rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <span className={`text-sm font-bold tabular-nums ${viewingTask.due ? 'text-gray-900' : 'text-gray-400'}`}>{viewingTask.due || 'No due date'}</span>
+                      <button type="button" onClick={() => { setDueEditId(viewingTask.id); setDueEditVal(String(viewingTask.due || '').slice(0, 10)) }} className="inline-flex min-h-[44px] items-center rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50">Change</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Work log (63) — time consumption and sessions for this task */}
             <div className="px-5 pt-3 sm:px-6">
@@ -598,6 +720,58 @@ function MonitoringBoard() {
                   {noteSaving ? 'Posting…' : 'Post'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* (70) Task transfer dialog — hand an employee's active tasks to someone else */}
+      {transferEmp && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={() => !transferBusy && setTransferEmp(null)}>
+          <div className="absolute inset-0 bg-gray-900/50" />
+          <div className="relative max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 text-gray-900 shadow-xl sm:rounded-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-bold">Transfer tasks from {transferEmp.name}</h3>
+            <p className="mt-1 text-xs leading-relaxed text-gray-500">
+              Pick who takes over the selected active tasks — e.g. before deactivating {transferEmp.name}.
+            </p>
+            <label className="mt-4 block text-xs font-medium text-gray-700">
+              Transfer to
+              <select
+                value={transferTo}
+                onChange={(e) => setTransferTo(e.target.value)}
+                className="mt-1 min-h-[44px] w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+              >
+                <option value="">Select employee…</option>
+                {employees
+                  .filter((e2) => (e2.email || '').toLowerCase() !== (transferEmp.email || '').toLowerCase() && e2.active !== false)
+                  .map((e2) => <option key={e2.email} value={e2.email}>{e2.name}</option>)}
+              </select>
+            </label>
+            <div className="mt-4">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Active tasks ({transferSel.size} selected)</p>
+              <div className="mt-2 max-h-48 space-y-1.5 overflow-y-auto pr-1">
+                {tasks
+                  .filter((t) => (t.assigneeEmail ? t.assigneeEmail === transferEmp.email : t.assignee && t.assignee.startsWith(`${transferEmp.name} (${transferEmp.companyName})`)) && t.status !== 'completed')
+                  .map((t) => (
+                    <label key={t.id} className="flex cursor-pointer items-center gap-2.5 rounded-lg bg-gray-50 px-3 py-2 ring-1 ring-gray-100">
+                      <input type="checkbox" checked={transferSel.has(t.id)} onChange={() => toggleTransferTask(t.id)} className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+                      <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800">{t.title}</span>
+                      <span className="shrink-0 text-[10px] font-semibold uppercase text-gray-400">{t.priority}</span>
+                    </label>
+                  ))}
+              </div>
+            </div>
+            {transferMsg && <p role="alert" className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 ring-1 ring-amber-200">{transferMsg}</p>}
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setTransferEmp(null)} disabled={transferBusy} className="min-h-[44px] rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+              <button
+                type="button"
+                onClick={confirmTransfer}
+                disabled={!transferTo || transferSel.size === 0 || transferBusy}
+                className="min-h-[44px] rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-brand-700 disabled:opacity-50"
+              >
+                {transferBusy ? 'Transferring…' : `Transfer ${transferSel.size} task${transferSel.size !== 1 ? 's' : ''}`}
+              </button>
             </div>
           </div>
         </div>
