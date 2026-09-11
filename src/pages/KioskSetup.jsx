@@ -106,7 +106,12 @@ export default function KioskSetup() {
   useEffect(() => {
     if (!configCompanyId) { setKioskToken(null); return }
     let cancelled = false
-    api(`/api/kiosk-token/${encodeURIComponent(configCompanyId)}`).then((r) => { if (!cancelled) setKioskToken(r.token) }).catch(() => { if (!cancelled) setKioskToken(null) })
+    api(`/api/kiosk-token/${encodeURIComponent(configCompanyId)}`).then((r) => {
+      if (cancelled) return
+      setKioskToken(r.token)
+      // (71) Active temporary field-work tokens, with their expiry
+      setTempTokens(Array.isArray(r.temporary) ? r.temporary : [])
+    }).catch(() => { if (!cancelled) setKioskToken(null) })
     return () => { cancelled = true }
   }, [configCompanyId])
   const regenerateToken = async () => {
@@ -122,6 +127,72 @@ export default function KioskSetup() {
     if (!kioskToken) return
     try { await navigator.clipboard.writeText(kioskToken); setTokenCopied(true); setTimeout(() => setTokenCopied(false), 3000) } catch {}
   }
+
+  // (71) Temporary field-work tokens — short-lived pairing tokens so a field
+  // employee can pair their own device, clock in/out, and the token stops
+  // working automatically. TTLs: 1h / 3h / 5h / end of day.
+  const TEMP_TTLS = [
+    ['1h', '1 hour'],
+    ['3h', '3 hours'],
+    ['5h', '5 hours'],
+    ['day', 'End of day'],
+  ]
+  const [tempTokens, setTempTokens] = useState([])
+  const [tempTtl, setTempTtl] = useState('1h')
+  const [freshTemp, setFreshTemp] = useState(null)   // just-generated token
+  const [freshCopied, setFreshCopied] = useState(false)
+  const [tempBusy, setTempBusy] = useState(false)
+  const [tempError, setTempError] = useState(null)
+  const [nowTick, setNowTick] = useState(Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30000)
+    return () => clearInterval(t)
+  }, [])
+
+  const generateTempToken = async () => {
+    if (!configCompanyId || tempBusy) return
+    setTempBusy(true)
+    setTempError(null)
+    try {
+      const r = await api(`/api/kiosk-token/${encodeURIComponent(configCompanyId)}`, { method: 'POST', body: { ttl: tempTtl } })
+      setFreshTemp({ token: r.token, expiresAt: r.expiresAt })
+      setFreshCopied(false)
+      setTempTokens((prev) => [...prev, { token: r.token, expiresAt: r.expiresAt }])
+    } catch (e) {
+      setTempError(e?.message || 'Could not generate a temporary token.')
+    } finally {
+      setTempBusy(false)
+    }
+  }
+
+  const copyTempToken = async (tok) => {
+    try { await navigator.clipboard.writeText(tok); setFreshCopied(true); setTimeout(() => setFreshCopied(false), 3000) } catch {}
+  }
+
+  const revokeTempToken = async (tok) => {
+    if (!configCompanyId || tempBusy) return
+    setTempBusy(true)
+    setTempError(null)
+    try {
+      await api(`/api/kiosk-token/${encodeURIComponent(configCompanyId)}?token=${encodeURIComponent(tok)}`, { method: 'DELETE' })
+      setTempTokens((prev) => prev.filter((x) => x.token !== tok))
+      if (freshTemp?.token === tok) setFreshTemp(null)
+    } catch (e) {
+      setTempError(e?.message || 'Could not revoke that token.')
+    } finally {
+      setTempBusy(false)
+    }
+  }
+
+  // Live tokens only — the server already deletes expired ones lazily.
+  const liveTempTokens = tempTokens.filter((x) => !x.expiresAt || new Date(x.expiresAt).getTime() > nowTick)
+  const fmtExpiry = (iso) => {
+    try {
+      const d = new Date(iso)
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    } catch { return '' }
+  }
+  const minutesLeft = (iso) => Math.max(0, Math.round((new Date(iso).getTime() - nowTick) / 60000))
 
   // Credential registration state
   // (uses same active companies list)
@@ -308,6 +379,79 @@ export default function KioskSetup() {
           </div>
         </div>
         {kioskToken && <p className="mt-2 text-[11px] text-gray-500">Regenerating invalidates the old token immediately — re-pair any kiosk that used it.</p>}
+
+        {/* (71) Temporary field-work tokens */}
+        <div className="mt-4 rounded-xl border border-amber-200 bg-white/70 p-4">
+          <h3 className="text-sm font-semibold text-gray-900">Temporary field-work token</h3>
+          <p className="mt-1 text-xs leading-relaxed text-gray-600">
+            For field work: generate a short-lived token the field employee can use to pair their own device
+            (tap <span className="font-semibold">Pair device</span> on the time kiosk page) and clock in/out on site.
+            It stops working automatically when it expires — no cleanup needed.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {TEMP_TTLS.map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTempTtl(id)}
+                aria-pressed={tempTtl === id}
+                className={`min-h-[44px] rounded-full px-4 py-2 text-xs font-semibold transition ${
+                  tempTtl === id ? 'bg-amber-500 text-white shadow hover:bg-amber-600' : 'border border-amber-300 bg-white text-amber-700 hover:bg-amber-100'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={generateTempToken}
+              disabled={tempBusy || !configCompanyId}
+              className="min-h-[44px] rounded-lg bg-gray-900 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-gray-700 disabled:opacity-50"
+            >
+              {tempBusy ? 'Generating…' : 'Generate token'}
+            </button>
+          </div>
+          {tempError && (
+            <p role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700 ring-1 ring-red-200">{tempError}</p>
+          )}
+          {freshTemp && (
+            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <p className="text-xs font-semibold text-amber-800">
+                Send this to the field employee now — expires {fmtExpiry(freshTemp.expiresAt)}
+              </p>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <code className="min-w-0 flex-1 truncate rounded-lg border border-amber-200 bg-white px-3 py-2 font-mono text-xs text-gray-800">{freshTemp.token}</code>
+                <button type="button" onClick={() => copyTempToken(freshTemp.token)} className="min-h-[44px] shrink-0 rounded-lg border border-amber-300 bg-white px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100">
+                  {freshCopied ? 'Copied ✓' : 'Copy'}
+                </button>
+              </div>
+            </div>
+          )}
+          {liveTempTokens.length > 0 && (
+            <div className="mt-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Active temporary tokens ({liveTempTokens.length})</p>
+              <ul className="mt-1.5 space-y-1.5">
+                {liveTempTokens.map((x) => (
+                  <li key={x.token} className="flex flex-wrap items-center gap-2 rounded-lg bg-white px-3 py-2 ring-1 ring-amber-100">
+                    <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-gray-700">{x.token}</code>
+                    <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                      expires {fmtExpiry(x.expiresAt)}{minutesLeft(x.expiresAt) <= 60 ? ` · ${minutesLeft(x.expiresAt)}m left` : ''}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => revokeTempToken(x.token)}
+                      disabled={tempBusy}
+                      aria-label={`Revoke temporary token ending ${fmtExpiry(x.expiresAt)}`}
+                      className="min-h-[44px] shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
+                    >
+                      Revoke
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_360px]">

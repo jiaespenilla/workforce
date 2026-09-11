@@ -13,7 +13,7 @@
  *    tokens with no expiry row keep working.
  */
 import { describe, it, expect } from 'vitest'
-import { kioskTokenFrom, kioskTokenCompanyId, kioskTokenInfo, generateKioskToken, kioskTtlExpiry, KIOSK_TOKEN_TTLS } from './kiosk.js'
+import { kioskTokenFrom, kioskTokenCompanyId, kioskTokenInfo, generateKioskToken, kioskTtlExpiry, kioskTtlLabel, KIOSK_TOKEN_TTLS } from './kiosk.js'
 
 const HEADER = 'X-Kiosk-Token'
 
@@ -155,5 +155,13 @@ describe('kioskTtlExpiry / ttl constants', () => {
 
   it('returns null for an unknown TTL', () => {
     expect(kioskTtlExpiry('forever')).toBeNull()
+  })
+
+  it('labels each TTL for the UI', () => {
+    expect(kioskTtlLabel('1h')).toBe('1 hour')
+    expect(kioskTtlLabel('3h')).toBe('3 hours')
+    expect(kioskTtlLabel('5h')).toBe('5 hours')
+    expect(kioskTtlLabel('day')).toBe('End of day')
+    expect(kioskTtlLabel('nope')).toBe('nope')
   })
 })

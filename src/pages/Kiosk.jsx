@@ -149,6 +149,8 @@ export default function Kiosk() {
 
   // Kiosk device pairing — punches are recorded with a per-company device token.
   const [deviceToken, setDeviceToken] = useState(() => localStorage.getItem('uw_kiosk_device_token') || '')
+  // (71) Field-work pairings expire — show it on the device so staff know.
+  const [tokenExpiry, setTokenExpiry] = useState(() => localStorage.getItem('uw_kiosk_token_expiry') || '')
   const [pairOpen, setPairOpen] = useState(false)
   const [pairInput, setPairInput] = useState('')
   const [pairError, setPairError] = useState(null)
@@ -164,6 +166,10 @@ export default function Kiosk() {
     api('/api/kiosk/verify-token', { method: 'POST', body: { token: deviceToken } })
       .then((verify) => {
         if (!live || !verify?.companyId) return
+        // (71) Track a temporary field-work pairing's expiry on-device
+        const exp = verify.expiresAt || ''
+        try { localStorage.setItem('uw_kiosk_token_expiry', exp) } catch {}
+        setTokenExpiry(exp)
         setKioskCompanyId(verify.companyId)
         getCompanyKioskConfig(verify.companyId).then((cfg) => { if (live && cfg) setConfig(cfg) }).catch(() => {})
       })
@@ -184,6 +190,10 @@ export default function Kiosk() {
     setPairError(null)
     try {
       const res = await api('/api/kiosk/verify-token', { method: 'POST', body: { token: t } })
+      // (71) Track a temporary field-work pairing's expiry on-device
+      const exp = res?.expiresAt || ''
+      try { localStorage.setItem('uw_kiosk_token_expiry', exp) } catch {}
+      setTokenExpiry(exp)
       localStorage.setItem('uw_kiosk_device_token', t)
       setDeviceToken(t)
       if (res?.companyId) {
@@ -378,7 +388,7 @@ export default function Kiosk() {
       <div className="flex shrink-0 items-center gap-2">
         {deviceToken && (
           <span className="hidden items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-emerald-50 sm:inline-flex">
-            <span className="h-2 w-2 rounded-full bg-emerald-300" /> Paired
+            <span className="h-2 w-2 rounded-full bg-emerald-300" /> {tokenExpiry ? `Field \u00b7 until ${new Date(tokenExpiry).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Paired'}
           </span>
         )}
         {/* Pair / re-pair is ALWAYS reachable — a stored-but-stale token must
