@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api, apiEnabled } from '../lib/api'
 import { canAction } from '../lib/roles'
+import { taskTimeByDay, dayLabel } from '../lib/workLog'
 
 const columns = [
   { id: 'pending', label: 'Pending' },
@@ -653,6 +654,20 @@ function MonitoringBoard() {
                 </span>
                 <span className="text-sm font-bold tabular-nums text-gray-900">{fmtHMS(workElapsedMs(viewingTask, now))}</span>
               </div>
+              {/* (72) Time consumed broken down per calendar day */}
+              {((viewingTask.workLog || []).length > 0 || workRunning(viewingTask)) && (
+                <div className="mt-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Time consumed by day</p>
+                  <ol className="mt-1.5 space-y-1">
+                    {taskTimeByDay(viewingTask, now).map((d) => (
+                      <li key={d.date} className="flex flex-wrap items-baseline justify-between gap-1 rounded-lg bg-white px-3 py-1.5 text-[11px] ring-1 ring-gray-100">
+                        <span className="font-medium tabular-nums text-gray-600">{dayLabel(d.date)}</span>
+                        <span className="font-bold tabular-nums text-gray-900">{fmtHMS(d.seconds * 1000)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
               {(viewingTask.workLog || []).length > 0 && (
                 <div className="mt-2">
                   <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Work sessions ({viewingTask.workLog.length})</p>
@@ -1103,6 +1118,23 @@ function EmployeeTasks({ name }) {
                 >
                   {workRunning(detailTask) ? 'Stop work' : 'Start work'}
                 </button>
+              )}
+              {/* (72) Time consumed broken down per calendar day */}
+              {((detailTask.workLog || []).length > 0 || workRunning(detailTask)) && (
+                <div className="mt-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Time consumed by day</p>
+                  <ol className="mt-1.5 space-y-1">
+                    {taskTimeByDay(detailTask, now).map((d) => (
+                      <li key={d.date} className="flex flex-wrap items-baseline justify-between gap-1 rounded-lg bg-white px-3 py-1.5 text-[11px] ring-1 ring-gray-100">
+                        <span className="font-medium tabular-nums text-gray-600">{dayLabel(d.date)}</span>
+                        <span className="font-bold tabular-nums text-gray-900">{fmtHMS(d.seconds * 1000)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+              {(detailTask.workLog || []).length > 0 && (
+                <p className="mt-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">Work sessions ({detailTask.workLog.length})</p>
               )}
               {(detailTask.workLog || []).length > 0 && (
                 <ol className="mt-2 space-y-1">
