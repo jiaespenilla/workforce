@@ -6,6 +6,22 @@ import { callerCompanyId } from '../lib/auth.js'
 import { mapCompany, insertEmployee, ensureUser } from '../lib/db.js'
 import { parsePagination, paginate } from '../lib/pagination.js'
 
+// (70) Resignation guard — an employee with active (non-completed) tasks must
+// have them transferred (Tasks → staff table → Transfer) or completed before
+// they can be set inactive or removed. Returns { n, name }.
+async function unassignableTaskGuard(env, empId) {
+  const emp = await env.DB.prepare('SELECT email, name, company_id FROM employees WHERE id = ?').bind(Number(empId)).first()
+  if (!emp) return { n: 0, name: '' }
+  const comp = emp.company_id
+    ? await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(emp.company_id).first()
+    : null
+  const like = `%${String(emp.name || '').replace(/[\\%_]/g, '\\$&')} (${comp?.name || ''})%`
+  const row = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM tasks WHERE status != 'completed' AND (assignee_email = ? OR assignee LIKE ? ESCAPE '\\')"
+  ).bind(String(emp.email || '').toLowerCase(), like).first()
+  return { n: Number(row?.n || 0), name: emp.name || 'This employee' }
+}
+
 export async function handle({ request, env, url, path, method, claims, isAdmin }) {
   /* companies */
   if (path === '/api/companies' && method === 'GET') {
@@ -71,6 +87,14 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
           if (!target || target.company_id !== callerCompany) return json({ error: 'You can only manage employees of your own company.' }, 403)
         }
         const body = await readJson(request)
+        // (70) Resignation guard: active tasks must be transferred or
+        // completed before the employee can be set inactive.
+        if (body.active === false) {
+          const guard = await unassignableTaskGuard(env, Number(m[1]))
+          if (guard.n > 0) {
+            return json({ error: `${guard.name} still has ${guard.n} active task${guard.n === 1 ? '' : 's'} — transfer them first (Tasks → staff progress table → Transfer) or mark them completed before setting this employee inactive.` }, 409)
+          }
+        }
         const locVal = body.locationId ?? body.location ?? null
         // Payroll fields (49): pay_type 'monthly'|'hourly', pay_rate PHP.
         // Sent as null to clear. Wrapped in try/catch so databases that have
@@ -105,6 +129,11 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
         if (!isAdmin) {
           const target = await env.DB.prepare('SELECT company_id FROM employees WHERE id = ?').bind(Number(m[1])).first()
           if (!target || target.company_id !== callerCompany) return json({ error: 'You can only manage employees of your own company.' }, 403)
+        }
+        // (70) Same guard as deactivation — never orphan active tasks.
+        const guard = await unassignableTaskGuard(env, Number(m[1]))
+        if (guard.n > 0) {
+          return json({ error: `${guard.name} still has ${guard.n} active task${guard.n === 1 ? '' : 's'} — transfer them first (Tasks → staff progress table → Transfer) or mark them completed before removing this employee.` }, 409)
         }
         await env.DB.prepare('DELETE FROM employees WHERE id = ?').bind(Number(m[1])).run()
         return json({ ok: true })

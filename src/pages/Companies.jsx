@@ -552,6 +552,8 @@ export default function Companies() {
   const [rejectReason, setRejectReason] = useState('')
   const [approving, setApproving] = useState(null)
   const [deactivateConfirm, setDeactivateConfirm] = useState(null)
+  // (70) Blocked deactivation — the employee still has active tasks to transfer.
+  const [transferBlock, setTransferBlock] = useState(null)
   const [page, setPage] = useState(0)
   const PAGE_SIZE = 6
 
@@ -672,7 +674,23 @@ export default function Companies() {
     setDeactivateConfirm(null)
   }
 
-  const handleToggleEmployee = (id, empEmail) =>
+  // (70) Deactivation via the company-details toggle is blocked while the
+  // employee still has active tasks — they must be transferred first.
+  const handleToggleEmployee = async (id, empEmail) => {
+    const company = companies.find((c) => c.id === id)
+    const emp = company?.employees.find((e) => e.email === empEmail)
+    if (emp && emp.active !== false && apiEnabled()) {
+      try {
+        const all = await api('/api/tasks')
+        const rows = Array.isArray(all) ? all : (all.data || [])
+        const me = (emp.email || '').toLowerCase()
+        const n = rows.filter((t) => t.status !== 'completed' && ((t.assigneeEmail || '').toLowerCase() === me || (t.assignee || '').startsWith(`${emp.name} (`))).length
+        if (n > 0) {
+          setTransferBlock({ emp, count: n })
+          return
+        }
+      } catch { /* unreachable — the API-side guard still protects */ }
+    }
     mutateCompanies(
       (prev) =>
         prev.map((c) =>
@@ -681,12 +699,13 @@ export default function Companies() {
             : c
         ),
       () => {
-        const company = companies.find((c) => c.id === id)
-        const emp = company?.employees.find((e) => e.email === empEmail)
-        if (!emp?.id) return Promise.resolve()
-        return api(`/api/employees/${emp.id}`, { method: 'PUT', body: { active: emp.active === false } })
+        const company2 = companies.find((c) => c.id === id)
+        const emp2 = company2?.employees.find((e) => e.email === empEmail)
+        if (!emp2?.id) return Promise.resolve()
+        return api(`/api/employees/${emp2.id}`, { method: 'PUT', body: { active: emp2.active === false } })
       }
     )
+  }
 
   const handleEditEmployee = (companyId, empEmail, updates) =>
     mutateCompanies(
@@ -954,6 +973,30 @@ export default function Companies() {
             <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
               <button onClick={() => setDeactivateConfirm(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
               <button onClick={confirmDeactivate} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Continue &amp; Deactivate</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* (70) Resignation guard — the employee still has active tasks */}
+      {transferBlock && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={() => setTransferBlock(null)}>
+          <div className="absolute inset-0 bg-gray-900/50" />
+          <div className="relative max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 text-gray-900 shadow-xl sm:rounded-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-base font-bold">Cannot set {transferBlock.emp.name} inactive</h3>
+                <p className="mt-1 text-xs leading-relaxed text-gray-600">
+                  {transferBlock.count} active task{transferBlock.count !== 1 ? 's' : ''} still assigned. Before this employee can be marked inactive, their tasks must be transferred to a teammate or completed.
+                </p>
+                <p className="mt-1.5 text-xs leading-relaxed text-gray-500">The company&apos;s CEO or a manager can transfer them from the Tasks page — staff progress table → Transfer.</p>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button type="button" onClick={() => setTransferBlock(null)} className="min-h-[44px] rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
             </div>
           </div>
         </div>

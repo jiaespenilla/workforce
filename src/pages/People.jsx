@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { usePageTitle } from '../lib/documentMeta'
 import { getConfiguredRoles, canAction } from '../lib/roles'
@@ -164,8 +165,26 @@ export default function People() {
     }
   }
 
+  // (70) Blocked deactivation — the employee still has active tasks to transfer.
+  const [transferBlock, setTransferBlock] = useState(null)
+  const roleLabel = String(user?.roleLabel || user?.role || '').toLowerCase()
+  const isMgmtUser = user?.role === 'administrator' || user?.role === 'ceo' || roleLabel.includes('manager') || roleLabel.includes('lead')
+
   const toggleStatus = async (emp) => {
-    await saveEdit(emp, { active: emp.active === false })
+    const deactivating = emp.active !== false
+    // (70) Resignation guard — active tasks must be transferred or completed
+    // first. The server enforces this too; the pre-check shows an actionable
+    // message instead of a bare error.
+    if (deactivating && apiEnabled()) {
+      try {
+        const all = await api('/api/tasks')
+        const rows = Array.isArray(all) ? all : (all.data || [])
+        const me = (emp.email || '').toLowerCase()
+        const n = rows.filter((task) => task.status !== 'completed' && ((task.assigneeEmail || '').toLowerCase() === me || (task.assignee || '').startsWith(`${emp.name} (`))).length
+        if (n > 0) { setTransferBlock({ emp, count: n }); return }
+      } catch { /* unreachable server — the API-side guard still protects */ }
+    }
+    await saveEdit(emp, { active: !deactivating })
   }
 
   const deleteEmployee = async (emp) => {
@@ -437,6 +456,34 @@ export default function People() {
           <Pagination page={peoplePage} pageSize={PEOPLE_PAGE_SIZE} total={filteredPeople.length} onPageChange={setPeoplePage} />
         )}
       </section>
+
+
+      {/* (70) Resignation guard — active tasks must be transferred first */}
+      {transferBlock && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={() => setTransferBlock(null)}>
+          <div className="absolute inset-0 bg-gray-900/50" />
+          <div className="relative max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 text-gray-900 shadow-xl sm:rounded-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-base font-bold">Cannot set {transferBlock.emp.name} inactive</h3>
+                <p className="mt-1 text-xs leading-relaxed text-gray-600">
+                  {transferBlock.count} active task{transferBlock.count !== 1 ? 's' : ''} still assigned. Transfer them first — open Tasks, find {transferBlock.emp.name} in the staff progress table and use Transfer — or mark the tasks completed.
+                </p>
+                <p className="mt-1.5 text-xs leading-relaxed text-gray-500">Only the CEO or a manager can transfer tasks.</p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              {isMgmtUser && (
+                <Link to="/tasks" onClick={() => setTransferBlock(null)} className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-brand-700">Open Tasks</Link>
+              )}
+              <button type="button" onClick={() => setTransferBlock(null)} className="min-h-[44px] rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
