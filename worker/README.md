@@ -28,12 +28,17 @@ Also replace `database_id` in `wrangler.jsonc` with the id printed by `d1 create
 wrangler dev     # API on http://localhost:8787
 ```
 
-Seeded accounts (created automatically on first login attempt):
+Platform accounts (administrator, platform CEO) and the default employee
+password are **not** stored in source. Configure them as secrets before first
+use — account creation and password resets fail closed until they are set:
 
-| Account | Email / username | Password |
-|---|---|---|
-| Administrator | admin_celestine | Celest!ne2026! |
-| Platform CEO | ceo@celestsolutions.com | P@ssw0rd2026! |
+```bash
+wrangler secret put ADMIN_PASSWORD
+wrangler secret put CEO_PASSWORD
+wrangler secret put DEFAULT_EMPLOYEE_PASSWORD   # used by admin password-reset too
+```
+
+See ../DEPLOY.md for the full environment variable reference.
 
 ## Deploy
 

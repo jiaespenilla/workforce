@@ -1,5 +1,6 @@
 // Shared DB helpers — mappers, insert helpers
 import { hashPassword } from './crypto.js'
+import { isPlaceholderPassword } from './constants.js'
 
 export function mapCompany(row, employees) {
   return {
@@ -74,27 +75,84 @@ export function safeParse(text) {
   }
 }
 
-export async function insertEmployee(env, companyId, emp) {
+// Escape LIKE wildcards so user-derived strings match literally
+// (use together with `LIKE ? ESCAPE '\'`).
+export function escapeLike(text) {
+  return String(text || '').replace(/[\\%_]/g, '\\$&')
+}
+
+// Canonical employee insert (migration guarantees pay_type/pay_rate exist).
+// Exported for the atomic registration batch below.
+function employeeInsertStatement(env, companyId, emp) {
   const locId = emp.locationId || emp.location || null
   // Payroll fields (49/50): pay_type 'monthly'|'hourly', pay_rate — optional at creation.
   const payType = emp.payType && ['monthly', 'hourly'].includes(String(emp.payType)) ? String(emp.payType) : null
   const payRate = emp.payRate === undefined || emp.payRate === null || emp.payRate === '' ? null : Math.max(0, Number(emp.payRate) || 0)
+  return env.DB.prepare('INSERT OR IGNORE INTO employees (company_id, name, email, role, active, location_id, pay_type, pay_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(companyId, emp.name || 'Unnamed', (emp.email || '').toLowerCase(), emp.role || 'Unassigned', emp.active === false ? 0 : 1, locId, payType, payRate)
+}
+
+export async function insertEmployee(env, companyId, emp) {
   try {
-    await env.DB.prepare('INSERT OR IGNORE INTO employees (company_id, name, email, role, active, location_id, pay_type, pay_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(companyId, emp.name || 'Unnamed', (emp.email || '').toLowerCase(), emp.role || 'Unassigned', emp.active === false ? 0 : 1, locId, payType, payRate).run()
-  } catch {
+    await employeeInsertStatement(env, companyId, emp).run()
+  } catch (e) {
+    // Fallback for databases missing the optional columns — logged so schema
+    // drift is visible in Worker logs instead of silently reduced features.
+    console.error('insertEmployee: canonical insert failed, retrying without payroll columns:', e?.message || e)
+    const locId = emp.locationId || emp.location || null
     try {
       await env.DB.prepare('INSERT OR IGNORE INTO employees (company_id, name, email, role, active, location_id) VALUES (?, ?, ?, ?, ?, ?)')
         .bind(companyId, emp.name || 'Unnamed', (emp.email || '').toLowerCase(), emp.role || 'Unassigned', emp.active === false ? 0 : 1, locId).run()
-    } catch {
+    } catch (e2) {
+      console.error('insertEmployee: retry failed, using base columns only:', e2?.message || e2)
       await env.DB.prepare('INSERT OR IGNORE INTO employees (company_id, name, email, role, active) VALUES (?, ?, ?, ?, ?)')
         .bind(companyId, emp.name || 'Unnamed', (emp.email || '').toLowerCase(), emp.role || 'Unassigned', emp.active === false ? 0 : 1).run()
     }
   }
 }
 
+// Atomic team creation for public registration: every employee row and its
+// login account are inserted in a single D1 batch, so a failure cannot leave
+// a half-registered company behind (the old sequential loop could).
+export async function registerEmployees(env, companyId, employees, defaultPassword) {
+  const list = (Array.isArray(employees) ? employees : []).filter((e) => e && (e.name || e.email))
+  if (!list.length) return 0
+  // SECURITY: fail closed — same rule as ensureUser.
+  if (isPlaceholderPassword(defaultPassword)) {
+    throw new Error('registerEmployees: no usable DEFAULT_EMPLOYEE_PASSWORD is configured')
+  }
+  // Skip login accounts that already exist (mirrors ensureUser's behavior).
+  const emails = list.map((e) => String(e.email || '').toLowerCase()).filter(Boolean)
+  const existing = new Set()
+  if (emails.length) {
+    const placeholders = emails.map(() => '?').join(', ')
+    const rows = await env.DB.prepare(`SELECT lower(email) AS email FROM users WHERE lower(email) IN (${placeholders})`)
+      .bind(...emails).all().then((r) => r.results)
+    for (const r of rows) existing.add(String(r.email || '').toLowerCase())
+  }
+  const stmts = []
+  for (const emp of list) {
+    stmts.push(employeeInsertStatement(env, companyId, emp))
+    const email = String(emp.email || '').toLowerCase()
+    if (email && !existing.has(email)) {
+      const roleForUser = (emp.role || '').trim().toLowerCase() === 'ceo' ? 'ceo' : 'employee'
+      const salt = crypto.randomUUID()
+      stmts.push(env.DB.prepare('INSERT INTO users (email, name, role, password_salt, password_hash, must_change_password) VALUES (?, ?, ?, ?, ?, 1)')
+        .bind(email, emp.name || email, roleForUser, salt, await hashPassword(defaultPassword, salt)))
+      existing.add(email)
+    }
+  }
+  await env.DB.batch(stmts)
+  return list.length
+}
+
 export async function ensureUser(env, email, name, role, password) {
   if (!email) return
+  // SECURITY: fail closed — refuse to mint accounts whose password is empty or
+  // a known source placeholder. Configure DEFAULT_EMPLOYEE_PASSWORD first.
+  if (isPlaceholderPassword(password)) {
+    throw new Error('ensureUser: no usable DEFAULT_EMPLOYEE_PASSWORD is configured')
+  }
   const existing = await env.DB.prepare('SELECT id FROM users WHERE lower(email) = ?').bind(email.toLowerCase()).first()
   if (existing) return
   const salt = crypto.randomUUID()

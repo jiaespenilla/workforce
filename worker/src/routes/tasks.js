@@ -2,8 +2,8 @@
 
 import { json, readJson } from '../lib/http.js'
 import { callerCompanyId } from '../lib/auth.js'
-import { mapTask, queueNotification, safeParseArray } from '../lib/db.js'
-import { parsePagination, paginate } from '../lib/pagination.js'
+import { mapTask, queueNotification, safeParseArray, escapeLike } from '../lib/db.js'
+import { parsePagination } from '../lib/pagination.js'
 
 // Resolve normalized assignee columns (email / company_id / employee id)
 // from the "Name (Company)" display string.
@@ -79,21 +79,34 @@ async function notifyTaskUpdate(env, task, actorEmail, verb) {
 export async function handle({ request, env, url, path, method, claims, isAdmin }) {
   /* tasks */
   if (path === '/api/tasks' && method === 'GET') {
-    let rows = await env.DB.prepare('SELECT * FROM tasks ORDER BY id DESC').all().then((r) => r.results)
-    // Company accounts only see their own company's tasks.
+    // SQL-level tenant scoping (idx_tasks_company), search and pagination —
+    // the table is never fully loaded and filtered in JS like before.
     const companyId = await callerCompanyId(env, claims)
+    const conditions = []
+    const params = []
     if (companyId) {
       const own = await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(companyId).first()
       const suffix = `(${own?.name || ''})`
-      rows = rows.filter((t) => {
-        if (t.assignee_company_id) return t.assignee_company_id === companyId
-        return (t.assignee || '').endsWith(suffix)
-      })
+      conditions.push("(assignee_company_id = ? OR (assignee_company_id IS NULL AND assignee LIKE ? ESCAPE '\\'))")
+      params.push(companyId, `%${escapeLike(suffix)}`)
     }
-    const mapped = rows.map(mapTask)
     const pag = parsePagination(url, 50)
-    const result = paginate(mapped, pag, ['title', 'assignee', 'priority', 'status'])
-    return json(result)
+    if (pag.q) {
+      const like = `%${escapeLike(pag.q)}%`
+      conditions.push("(lower(title) LIKE ? ESCAPE '\\' OR lower(assignee) LIKE ? ESCAPE '\\' OR lower(priority) LIKE ? ESCAPE '\\' OR lower(status) LIKE ? ESCAPE '\\')")
+      params.push(like, like, like, like)
+    }
+    const where = conditions.length ? ' WHERE ' + conditions.join(' AND ') : ''
+    let rows
+    if (pag.hasPagination) {
+      const total = Number((await env.DB.prepare(`SELECT COUNT(*) AS n FROM tasks${where}`).bind(...params).first())?.n || 0)
+      const listSql = pag.limit > 0 ? `SELECT * FROM tasks${where} ORDER BY id DESC LIMIT ? OFFSET ?` : `SELECT * FROM tasks${where} ORDER BY id DESC`
+      const listParams = pag.limit > 0 ? [...params, pag.limit, pag.offset] : params
+      rows = await env.DB.prepare(listSql).bind(...listParams).all().then((r) => r.results)
+      return json({ data: rows.map(mapTask), total, limit: pag.limit, offset: pag.offset, q: pag.q })
+    }
+    rows = await env.DB.prepare(`SELECT * FROM tasks${where} ORDER BY id DESC`).bind(...params).all().then((r) => r.results)
+    return json(rows.map(mapTask))
   }
   if (path === '/api/tasks' && method === 'POST') {
     // Any authenticated member can create tasks if their role permits it (frontend gates via perms).

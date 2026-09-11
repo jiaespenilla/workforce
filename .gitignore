@@ -7,3 +7,5 @@ dist/
 # Wrangler / Miniflare local dev artifacts (cache + local D1 state)
 .wrangler/
 .env
+
+.claude

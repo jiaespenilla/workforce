@@ -20,18 +20,23 @@ export async function handle({ request, env, url, path, method, isAdmin }) {
           await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
             .bind(`kiosk_device_token:${token}`, companyId).run()
         }
-        // (71) Active temporary tokens for field work, with their expiry.
+        // (71) Active temporary tokens for field work, with their expiry —
+        // fetched in one round trip (was one query per token: N+1).
         const tempRows = await env.DB.prepare(
           "SELECT key, value FROM settings WHERE key LIKE 'kiosk_device_token:%' AND value = ?"
         ).bind(companyId).all().then((r) => r.results)
-        const temporary = []
-        for (const t of tempRows) {
-          const tok = t.key.slice('kiosk_device_token:'.length)
-          if (tok === token) continue // permanent token is reported separately
-          const exp = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(`kiosk_token_expiry:${tok}`).first()
-          if (exp?.value && new Date(exp.value).getTime() > Date.now()) {
-            temporary.push({ token: tok, expiresAt: exp.value })
-          }
+        const tempTokens = tempRows
+          .map((t) => t.key.slice('kiosk_device_token:'.length))
+          .filter((tok) => tok !== token) // permanent token is reported separately
+        let temporary = []
+        if (tempTokens.length) {
+          const placeholders = tempTokens.map(() => '?').join(', ')
+          const expRows = await env.DB.prepare(`SELECT key, value FROM settings WHERE key IN (${placeholders})`)
+            .bind(...tempTokens.map((t) => `kiosk_token_expiry:${t}`)).all().then((r) => r.results)
+          const now = Date.now()
+          temporary = expRows
+            .map((e) => ({ token: e.key.slice('kiosk_token_expiry:'.length), expiresAt: e.value }))
+            .filter((e) => e.expiresAt && new Date(e.expiresAt).getTime() > now)
         }
         return json({ token, companyId, temporary })
       }

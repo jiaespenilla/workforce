@@ -2,6 +2,25 @@
 import { getAdminCredentials, getCeoCredentials, COMPANY_SETTING_KEYS, GLOBAL_SETTINGS_SQL } from './constants.js'
 import { hashPassword } from './crypto.js'
 
+// Migration steps are best-effort so a cold start never hard-fails the whole
+// Worker, but every failure is reported — silent catches previously caused
+// "mysteriously missing" columns that were impossible to diagnose from logs.
+function logMigrationError(step, e) {
+  console.error(`[migrate] ${step} failed — schema drift, run the DDL manually or move to wrangler d1 migrations:`, e?.message || e)
+}
+
+// ALTER TABLE helper: "duplicate column" on a cold-start race is expected
+// noise (warn), anything else is a real failure (error).
+async function alterLogged(env, step, ddl) {
+  try {
+    await env.DB.prepare(ddl).run()
+  } catch (e) {
+    const msg = String(e?.message || e)
+    if (/duplicate column/i.test(msg)) console.warn(`[migrate] ${step}: column already exists (${ddl})`)
+    else logMigrationError(`${step}: ${ddl}`, e)
+  }
+}
+
 let seedVerified = false
 
 export async function ensureSeed(env) {
@@ -49,21 +68,16 @@ export async function migrateTaskColumns(env) {
   } catch {
     // column missing — add it
   }
-  const stmts = []
+  const stmts = [
+    env.DB.prepare('ALTER TABLE tasks ADD COLUMN assignee_email TEXT'),
+    env.DB.prepare('ALTER TABLE tasks ADD COLUMN assignee_company_id TEXT'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_tasks_assignee_email ON tasks (assignee_email)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_tasks_company ON tasks (assignee_company_id)'),
+  ]
   try {
-    stmts.push(env.DB.prepare('ALTER TABLE tasks ADD COLUMN assignee_email TEXT'))
-  } catch {}
-  try {
-    stmts.push(env.DB.prepare('ALTER TABLE tasks ADD COLUMN assignee_company_id TEXT'))
-  } catch {}
-  try {
-    stmts.push(env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_tasks_assignee_email ON tasks (assignee_email)'))
-  } catch {}
-  try {
-    stmts.push(env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_tasks_company ON tasks (assignee_company_id)'))
-  } catch {}
-  if (stmts.length) {
-    try { await env.DB.batch(stmts) } catch {}
+    await env.DB.batch(stmts)
+  } catch (e) {
+    logMigrationError('migrateTaskColumns', e)
   }
   // Best-effort backfill: parse "Name (Company)" -> email + company_id
   try {
@@ -78,7 +92,9 @@ export async function migrateTaskColumns(env) {
       const email = emailRow?.email || null
       await env.DB.prepare('UPDATE tasks SET assignee_email = ?, assignee_company_id = ? WHERE id = ?').bind(email ? email.toLowerCase() : null, comp?.id || null, r.id).run()
     }
-  } catch {}
+  } catch (e) {
+    logMigrationError('migrateTaskColumns backfill', e)
+  }
   taskColumnsMigrated = true
 }
 
@@ -95,22 +111,23 @@ export async function migrateTaskAssigneeId(env) {
   } catch {
     // column missing — add it
   }
-  const stmts = []
+  const stmts = [
+    env.DB.prepare('ALTER TABLE tasks ADD COLUMN assignee_id INTEGER'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_tasks_assignee_id ON tasks (assignee_id)'),
+  ]
   try {
-    stmts.push(env.DB.prepare('ALTER TABLE tasks ADD COLUMN assignee_id INTEGER'))
-  } catch {}
-  try {
-    stmts.push(env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_tasks_assignee_id ON tasks (assignee_id)'))
-  } catch {}
-  if (stmts.length) {
-    try { await env.DB.batch(stmts) } catch {}
+    await env.DB.batch(stmts)
+  } catch (e) {
+    logMigrationError('migrateTaskAssigneeId', e)
   }
   // Best-effort backfill: resolve assignee_id from the normalized email.
   try {
     await env.DB.prepare(
       'UPDATE tasks SET assignee_id = (SELECT e.id FROM employees e WHERE lower(e.email) = lower(tasks.assignee_email) LIMIT 1) WHERE assignee_id IS NULL AND assignee_email IS NOT NULL'
     ).run()
-  } catch {}
+  } catch (e) {
+    logMigrationError('migrateTaskAssigneeId backfill', e)
+  }
   taskAssigneeIdMigrated = true
 }
 
@@ -157,9 +174,7 @@ export async function migrateAttendanceOvertime(env) {
   } catch {
     // column missing — add it below
   }
-  try {
-    await env.DB.prepare('ALTER TABLE attendance ADD COLUMN overtime_minutes INTEGER NOT NULL DEFAULT 0').run()
-  } catch {}
+  await alterLogged(env, 'migrateAttendanceOvertime', 'ALTER TABLE attendance ADD COLUMN overtime_minutes INTEGER NOT NULL DEFAULT 0')
   attendanceOvertimeMigrated = true
 }
 
@@ -176,12 +191,8 @@ export async function migrateEmployeePay(env) {
   } catch {
     // column missing — add it below
   }
-  try {
-    await env.DB.prepare('ALTER TABLE employees ADD COLUMN pay_type TEXT').run()
-  } catch {}
-  try {
-    await env.DB.prepare('ALTER TABLE employees ADD COLUMN pay_rate REAL').run()
-  } catch {}
+  await alterLogged(env, 'migrateEmployeePay', 'ALTER TABLE employees ADD COLUMN pay_type TEXT')
+  await alterLogged(env, 'migrateEmployeePay', 'ALTER TABLE employees ADD COLUMN pay_rate REAL')
   employeePayMigrated = true
 }
 
@@ -206,8 +217,10 @@ export async function migratePayrollRuns(env) {
         created_at TEXT DEFAULT (datetime('now'))
       )`),
       env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_payroll_runs_company ON payroll_runs (company_id)'),
-    ])
-  } catch {}
+      ])
+  } catch (e) {
+    logMigrationError('migratePayrollRuns', e)
+  }
   payrollRunsMigrated = true
 }
 
@@ -223,8 +236,8 @@ export async function migrateUserProfile(env) {
   } catch {
     // column missing — add it below
   }
-  try { await env.DB.prepare('ALTER TABLE users ADD COLUMN phone TEXT').run() } catch {}
-  try { await env.DB.prepare('ALTER TABLE users ADD COLUMN avatar TEXT').run() } catch {}
+  await alterLogged(env, 'migrateUserProfile', 'ALTER TABLE users ADD COLUMN phone TEXT')
+  await alterLogged(env, 'migrateUserProfile', 'ALTER TABLE users ADD COLUMN avatar TEXT')
   userProfileMigrated = true
 }
 
@@ -241,8 +254,8 @@ export async function migrateWebAuthnDevice(env) {
   } catch {
     // column missing — add it below
   }
-  try { await env.DB.prepare('ALTER TABLE webauthn_credentials ADD COLUMN device_id TEXT').run() } catch {}
-  try { await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_wcred_device ON webauthn_credentials (device_id)').run() } catch {}
+  await alterLogged(env, 'migrateWebAuthnDevice', 'ALTER TABLE webauthn_credentials ADD COLUMN device_id TEXT')
+  await alterLogged(env, 'migrateWebAuthnDevice', 'CREATE INDEX IF NOT EXISTS idx_wcred_device ON webauthn_credentials (device_id)')
   webauthnDeviceMigrated = true
 }
 
@@ -257,7 +270,7 @@ export async function migrateTaskNotes(env) {
   } catch {
     // column missing — add it below
   }
-  try { await env.DB.prepare('ALTER TABLE tasks ADD COLUMN notes TEXT').run() } catch {}
+  await alterLogged(env, 'migrateTaskNotes', 'ALTER TABLE tasks ADD COLUMN notes TEXT')
   taskNotesMigrated = true
 }
 
@@ -278,7 +291,7 @@ export async function migrateTaskWorkLog(env) {
     'ALTER TABLE tasks ADD COLUMN work_started_at TEXT',
     'ALTER TABLE tasks ADD COLUMN work_log TEXT',
   ]) {
-    try { await env.DB.prepare(ddl).run() } catch {}
+    await alterLogged(env, 'migrateTaskWorkLog', ddl)
   }
   taskWorkLogMigrated = true
 }

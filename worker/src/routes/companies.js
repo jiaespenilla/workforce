@@ -3,7 +3,7 @@
 import { getDefaultEmployeePassword } from '../lib/constants.js'
 import { json, readJson } from '../lib/http.js'
 import { callerCompanyId } from '../lib/auth.js'
-import { mapCompany, insertEmployee, ensureUser } from '../lib/db.js'
+import { mapCompany, insertEmployee, ensureUser, escapeLike } from '../lib/db.js'
 import { parsePagination, paginate } from '../lib/pagination.js'
 
 // (70) Resignation guard — an employee with active (non-completed) tasks must
@@ -15,7 +15,7 @@ async function unassignableTaskGuard(env, empId) {
   const comp = emp.company_id
     ? await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(emp.company_id).first()
     : null
-  const like = `%${String(emp.name || '').replace(/[\\%_]/g, '\\$&')} (${comp?.name || ''})%`
+  const like = `%${escapeLike(`${String(emp.name || '')} (${comp?.name || ''})`)}%`
   const row = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM tasks WHERE status != 'completed' AND (assignee_email = ? OR assignee LIKE ? ESCAPE '\\')"
   ).bind(String(emp.email || '').toLowerCase(), like).first()
@@ -104,11 +104,15 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
         try {
           await env.DB.prepare('UPDATE employees SET name = COALESCE(?, name), role = COALESCE(?, role), active = COALESCE(?, active), location_id = COALESCE(?, location_id), pay_type = ?, pay_rate = ? WHERE id = ?')
             .bind(body.name ?? null, body.role ?? null, body.active === undefined ? null : body.active ? 1 : 0, locVal, payType, payRate, Number(m[1])).run()
-        } catch {
+        } catch (e) {
+          // Fallback for DBs missing the payroll columns — logged so schema
+          // drift is visible instead of silently reduced functionality.
+          console.error('PUT /api/employees: payroll columns missing, retrying without them:', e?.message || e)
           try {
             await env.DB.prepare('UPDATE employees SET name = COALESCE(?, name), role = COALESCE(?, role), active = COALESCE(?, active), location_id = COALESCE(?, location_id) WHERE id = ?')
               .bind(body.name ?? null, body.role ?? null, body.active === undefined ? null : body.active ? 1 : 0, locVal, Number(m[1])).run()
-          } catch {
+          } catch (e2) {
+            console.error('PUT /api/employees: location column missing, using base columns:', e2?.message || e2)
             await env.DB.prepare('UPDATE employees SET name = COALESCE(?, name), role = COALESCE(?, role), active = COALESCE(?, active) WHERE id = ?')
               .bind(body.name ?? null, body.role ?? null, body.active === undefined ? null : body.active ? 1 : 0, Number(m[1])).run()
           }

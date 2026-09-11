@@ -10,7 +10,11 @@ export const ADMIN = {
 export const CEO_EMAIL = 'ceo@celestsolutions.com'
 export const CEO_PASSWORD = '___REPLACE_VIA_ENV_CEO_PASSWORD___'
 export const CEO_NAME = 'Celestine Espenilla'
-export const DEFAULT_EMPLOYEE_PASSWORD = 'P@ssw0rd2026!'
+// SECURITY: no real password is committed to source. When DEFAULT_EMPLOYEE_PASSWORD
+// is not configured, this placeholder is returned and refused by ensureUser and
+// the admin reset flow (fail closed), so an unconfigured deployment can never
+// mint accounts with a known password.
+export const DEFAULT_EMPLOYEE_PASSWORD = '___REPLACE_VIA_ENV_DEFAULT_EMPLOYEE_PASSWORD___'
 export const NOTIFICATION_RECIPIENT = 'jiaespenilla@gmail.com'
 
 export function getAdminCredentials(env) {
@@ -27,9 +31,21 @@ export function getCeoCredentials(env) {
     name: env.CEO_NAME || CEO_NAME,
   }
 }
+let defaultEmployeePasswordWarned = false
 export function getDefaultEmployeePassword(env) {
-  return env.DEFAULT_EMPLOYEE_PASSWORD || DEFAULT_EMPLOYEE_PASSWORD
+  if (env.DEFAULT_EMPLOYEE_PASSWORD) return env.DEFAULT_EMPLOYEE_PASSWORD
+  // SECURITY: never ship a real fallback password in source — warn so an
+  // unconfigured deployment is visible in logs instead of silently weak.
+  if (!defaultEmployeePasswordWarned) {
+    defaultEmployeePasswordWarned = true
+    console.warn('DEFAULT_EMPLOYEE_PASSWORD is not configured — new accounts cannot be created and password resets are disabled. Set it via `wrangler secret put DEFAULT_EMPLOYEE_PASSWORD`.')
+  }
+  return DEFAULT_EMPLOYEE_PASSWORD
 }
+
+// True when no usable deployment default password is configured (empty or the
+// source placeholder). Used to fail closed in ensureUser and admin reset.
+export const isPlaceholderPassword = (pw) => !pw || pw === DEFAULT_EMPLOYEE_PASSWORD
 
 export const PBKDF2_ITERATIONS = 100000
 

@@ -1,6 +1,6 @@
 // Platform administration — tenant data reset + user account management.
 
-import { CEO_EMAIL, getDefaultEmployeePassword } from '../lib/constants.js'
+import { CEO_EMAIL, getDefaultEmployeePassword, isPlaceholderPassword } from '../lib/constants.js'
 import { hashPassword } from '../lib/crypto.js'
 import { json, readJson } from '../lib/http.js'
 
@@ -67,7 +67,8 @@ export async function handle({ request, env, path, method, isAdmin, claims }) {
       return json({ error: 'Use Profile → Change password to update your own password.' }, 400)
     }
     const password = getDefaultEmployeePassword(env)
-    if (!password) return json({ error: 'No default password is configured for this deployment.' }, 500)
+    // Fail closed: never reset to an empty or source-placeholder password.
+    if (isPlaceholderPassword(password)) return json({ error: 'No default password is configured for this deployment.' }, 500)
     const salt = crypto.randomUUID()
     await env.DB.prepare('UPDATE users SET password_salt = ?, password_hash = ?, must_change_password = 1 WHERE id = ?')
       .bind(salt, await hashPassword(password, salt), target.id).run()

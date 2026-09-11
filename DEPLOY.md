@@ -42,6 +42,25 @@ Shared helpers live in `worker/src/lib/` (`kiosk.js`, `pagination.js`,
 `crypto.js`, `db.js`, `seed.js`, …). Public routes always run **before** the
 `requireAuth` gate — keep that ordering when adding new endpoints.
 
+### Scalability & auth notes
+
+- **SQL-level tenant scoping & pagination** — `/api/tasks` and `/api/attendance`
+  filter, search, count and paginate **in SQL** (`LIMIT`/`OFFSET` + a `COUNT`),
+  and `/api/bootstrap` scopes tasks via the indexed `assignee_company_id`
+  column. List endpoints return a plain array when no `limit`/`offset`/`q` is
+  sent, and a `{ data, total, limit, offset, q }` envelope otherwise (the
+  frontend unwraps both shapes).
+- **Deactivation revocation** — `requireAuth` re-checks the employee's
+  `active` flag on every request, so deactivating someone cuts off their
+  bearer token immediately instead of at the 12h TTL.
+- **Atomic registration** — team members + their login accounts are created
+  in one `DB.batch`, so a failure cannot leave a half-registered company.
+- **Runtime migrations** — `lib/seed.js` migrations stay best-effort (a cold
+  start never hard-fails), but every failure is now logged (`[migrate] …`).
+  The long-term plan is to move these to versioned `wrangler d1 migrations`
+  and delete the runtime ALTERs.
+
+
 ### Kiosk device tokens
 
 Each company has one long-lived kiosk token (`uwk_…`, 48 hex chars) stored in
@@ -93,4 +112,5 @@ Open `https://<your-pages-url>/kiosk` on the phone → browser menu →
 |---|---|---|
 | `VITE_API_URL` | Frontend build env / `.env` | URL of the Worker API |
 | `AUTH_SECRET` | Worker secret (`wrangler secret put AUTH_SECRET`) | Signs login tokens |
-| `DEFAULT_EMPLOYEE_PASSWORD` | Worker secret (`wrangler secret bulk`) | Default password applied by admin password-reset and new-employee accounts (currently `P@ssw0rd2026!`); users are forced to change it at next sign-in |
+| `DEFAULT_EMPLOYEE_PASSWORD` | Worker secret (`wrangler secret bulk`) | Default password applied by admin password-reset and new-employee accounts (secret — the value is never committed to source or docs); users are forced to change it at next sign-in |
+| `ALLOWED_ORIGINS` | Worker var (`wrangler.jsonc` `vars`) | Optional CORS allowlist (comma-separated origins); same-origin and localhost are always allowed |

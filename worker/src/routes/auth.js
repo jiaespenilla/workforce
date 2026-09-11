@@ -4,7 +4,7 @@ import { getDefaultEmployeePassword, NOTIFICATION_RECIPIENT, GLOBAL_SETTINGS_SQL
 import { verifyPassword, hashPassword } from '../lib/crypto.js'
 import { json, readJson } from '../lib/http.js'
 import { callerCompanyId } from '../lib/auth.js'
-import { mapCompany, mapTask, mapNotification, safeParse } from '../lib/db.js'
+import { mapCompany, mapTask, mapNotification, safeParse, escapeLike } from '../lib/db.js'
 
 export async function handle({ request, env, _url, path, method, claims }) {
   /* me */
@@ -69,14 +69,18 @@ export async function handle({ request, env, _url, path, method, claims }) {
     const employeeRows = companyId
       ? await env.DB.prepare('SELECT e.*, u.avatar AS user_avatar FROM employees e LEFT JOIN users u ON lower(u.email) = lower(e.email) WHERE e.company_id = ?').bind(companyId).all().then((r) => r.results)
       : await env.DB.prepare('SELECT e.*, u.avatar AS user_avatar FROM employees e LEFT JOIN users u ON lower(u.email) = lower(e.email)').all().then((r) => r.results)
-    let taskRows = await env.DB.prepare('SELECT * FROM tasks ORDER BY id DESC').all().then((r) => r.results)
+    let taskRows
     if (companyId) {
+      // Tenant scoping at the SQL level (uses idx_tasks_company) instead of
+      // loading every task into memory. Legacy rows without the normalized
+      // column keep working via the "Name (Company)" suffix match.
       const own = await env.DB.prepare('SELECT name FROM companies WHERE id = ?').bind(companyId).first()
       const suffix = `(${own?.name || ''})`
-      taskRows = taskRows.filter((t) => {
-        if (t.assignee_company_id) return t.assignee_company_id === companyId
-        return (t.assignee || '').endsWith(suffix)
-      })
+      taskRows = await env.DB.prepare(
+        "SELECT * FROM tasks WHERE assignee_company_id = ? OR (assignee_company_id IS NULL AND assignee LIKE ? ESCAPE '\\') ORDER BY id DESC"
+      ).bind(companyId, `%${escapeLike(suffix)}`).all().then((r) => r.results)
+    } else {
+      taskRows = await env.DB.prepare('SELECT * FROM tasks ORDER BY id DESC').all().then((r) => r.results)
     }
     let notifications = []
     if (claims.role === 'administrator') {

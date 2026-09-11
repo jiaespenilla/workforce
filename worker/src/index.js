@@ -3,7 +3,7 @@
 // shared helpers in src/lib/*. Route evaluation order mirrors the original
 // single-file router (public routes run before the auth gate).
 
-import { json, cors } from './lib/http.js'
+import { json, cors, setAllowedOrigins, toErrorResponse } from './lib/http.js'
 import { requireAuth } from './lib/auth.js'
 import { ensureSeed, migrateCompanySettings, migrateTaskColumns, migrateTaskAssigneeId, migrateAttendanceOvertime, migrateEmployeePay, migratePayrollRuns, migrateUserProfile, migrateWebAuthnDevice, migrateTaskNotes, migrateTaskWorkLog } from './lib/seed.js'
 import * as publicRoutes from './routes/public.js'
@@ -70,6 +70,8 @@ async function ensureMigrations(env) {
 export default {
   async fetch(request, env) {
     try {
+      // Optional CORS allowlist: comma-separated origins in ALLOWED_ORIGINS.
+      setAllowedOrigins(env.ALLOWED_ORIGINS || '')
       const url = new URL(request.url)
 
       // API requests → router (seeds the database on first use)
@@ -100,7 +102,8 @@ export default {
         },
       })
     } catch (err) {
-      return json({ error: err.message || 'Server error' }, err.status || 500, request)
+      // SECURITY: never echo internal error details (D1/SQL messages) to clients.
+      return toErrorResponse(err, request)
     }
   },
 }
