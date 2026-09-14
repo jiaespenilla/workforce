@@ -2,7 +2,7 @@ import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getSystemTimeZone } from '../lib/systemSettings'
-import { getCompanyShifts } from '../lib/shifts'
+import { getCompanyShifts, shiftForEmployee } from '../lib/shifts'
 import { api, apiEnabled } from '../lib/api'
 import { SkeletonRows } from '../components/Skeleton'
 import Avatar from '../components/Avatar'
@@ -149,13 +149,9 @@ function toMinutes(t) {
   return h * 60 + (Number.isFinite(m) ? m : 0)
 }
 
-// The shift assigned to an employee by their company's shift schedule.
-export function shiftForEmployee(shiftData, email) {
-  if (!shiftData || !email) return null
-  const sid = shiftData.assignments ? shiftData.assignments[email] : null
-  if (!sid) return null
-  return (shiftData.shifts || []).find((s) => s.id === sid) || null
-}
+// shiftForEmployee now lives in lib/shifts.js (shared with the dashboards —
+// issue 74). Re-exported here for backward compatibility with tests.
+export { shiftForEmployee }
 
 // Human-readable per-day status compared against the assigned shift schedule.
 // On time  = first clock-in is no later than the shift start time.

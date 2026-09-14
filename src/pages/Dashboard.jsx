@@ -2,6 +2,7 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api, apiEnabled } from '../lib/api'
+import { isCurrentlyClockedIn, openSessionPunch, shiftForEmployee, getCompanyShifts } from '../lib/shifts'
 import Avatar from '../components/Avatar'
 import { SkeletonRows } from '../components/Skeleton'
 
@@ -287,9 +288,9 @@ function CeoDashboard({ user }) {
   const [selectedEmail, setSelectedEmail] = useState(null)
   const [viewingTask, setViewingTask] = useState(null)
   const [allTasks, setAllTasks] = useState([])
-  const [clockState, setClockState] = useState({})
   const [allEmployees, setAllEmployees] = useState([])
   const [allAttendance, setAllAttendance] = useState([])
+  const [shiftsByCompany, setShiftsByCompany] = useState({})
     const [genStartDate, setGenStartDate] = useState('')
   const [genEndDate, setGenEndDate] = useState('')
   const [genResult, setGenResult] = useState(null)
@@ -309,6 +310,18 @@ function CeoDashboard({ user }) {
       .finally(() => setLoadingCompanies(false))
     }, [])
 
+  // Load every company's shift schedule so the clocked-in rule matches the
+  // kiosk exactly (same as TimeKeeping does).
+  useEffect(() => {
+    if (!allEmployees.length) return
+    const companyIds = [...new Set(allEmployees.map((e) => e.companyId))]
+    let cancelled = false
+    Promise.all(companyIds.map(async (id) => [id, await getCompanyShifts(id)]))
+      .then((entries) => { if (!cancelled) setShiftsByCompany(Object.fromEntries(entries)) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [allEmployees])
+
   // CEOs/administrators are not required to clock in/out — exclude them from
   // staff counts, clocked-in lists and attendance tallies.
   const isExempt = (e) => /^(ceo|administrator|admin)$/i.test(String(e?.role || ''))
@@ -319,25 +332,36 @@ function CeoDashboard({ user }) {
     if (apiEnabled()) {
       api('/api/tasks').then((res) => setAllTasks(Array.isArray(res) ? res : (res.data || []))).catch(() => setAllTasks(loadLocalAllTasks())).finally(() => setLoadingTasks(false))
       api('/api/attendance').then((res) => {
-        const records = Array.isArray(res) ? res : (res.data || [])
-        setAllAttendance(records)
-        const latest = {}
-        for (const p of records) {
-          const prev = latest[p.email]
-          if (!prev || new Date(p.time) > new Date(prev.time)) latest[p.email] = p
-        }
-        setClockState(latest)
-      }).catch(() => setClockState(getLocalClockInState()))
+        setAllAttendance(Array.isArray(res) ? res : (res.data || []))
+      }).catch(() => {
+        try { setAllAttendance(JSON.parse(localStorage.getItem('uw_punches')) || []) } catch { setAllAttendance([]) }
+      })
     } else {
       setAllTasks(loadLocalAllTasks())
-      setClockState(getLocalClockInState())
       try { setAllAttendance(JSON.parse(localStorage.getItem('uw_punches'))||[]) } catch { setAllAttendance([]) }
       setLoadingTasks(false)
     }
   }, [])
 
-  // "Active" = currently clocked-in via the kiosk for their shift.
-  const clockedInEmployees = employees.filter((e) => clockState[e.email]?.type === 'in')
+  // Punches grouped by email so the clocked-in rule is O(employees) per render.
+  const punchesByEmployee = useMemo(() => {
+    const map = new Map()
+    for (const p of allAttendance) {
+      const key = String(p.email || '').toLowerCase()
+      if (!key) continue
+      const list = map.get(key) || []
+      list.push(p)
+      map.set(key, list)
+    }
+    return map
+  }, [allAttendance])
+  const punchListFor = (e) => punchesByEmployee.get(String(e.email || '').toLowerCase()) || []
+  const shiftFor = (e) => shiftForEmployee(shiftsByCompany[e.companyId], e.email)
+
+  // "Active" = currently clocked in per the SAME rule the kiosk uses to decide
+  // the next scan (issue 74). A stale clock-in from a previous day no longer
+  // shows here — unless it is an open shift that legitimately carries over.
+  const clockedInEmployees = employees.filter((e) => isCurrentlyClockedIn(punchListFor(e), shiftFor(e), now))
   const selected = clockedInEmployees.find((e) => e.email === selectedEmail)
   const selectedTasks = selected
     ? allTasks.filter((t) => t.assignee === `${selected.name} (${selected.companyName})`)
@@ -615,7 +639,7 @@ function CeoDashboard({ user }) {
             </div>
           ) : (
           clockedInEmployees.map((emp) => {
-            const punch = clockState[emp.email]
+            const punch = openSessionPunch(punchListFor(emp), shiftFor(emp), now)
             const empTasks = tasksByAssignee.get(`${emp.name} (${emp.companyName})`) || []
             const openCount = empTasks.filter((t) => t.status !== 'completed').length
             const doneCount = empTasks.filter((t) => t.status === 'completed').length
@@ -641,7 +665,7 @@ function CeoDashboard({ user }) {
                       <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      In since {new Date(punch.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      In since {punch ? new Date(punch.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
                     </p>
                   </div>
                   <div className="shrink-0 text-center">

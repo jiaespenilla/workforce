@@ -73,18 +73,18 @@ export function decideAction(punches, shift, now = new Date(), otGraceMinutes = 
   if (shift?.open) {
     const sortedAll = [...punches].sort((a, b) => new Date(a.time) - new Date(b.time))
     const lastAny = sortedAll[sortedAll.length - 1]
-    if (!lastAny) return { action: 'in', overtime: false, overtimeMinutes: 0 }
+    if (!lastAny) return { action: 'in', overtime: false, overtimeMinutes: 0, sessionStart: null }
     if (lastAny.type === 'in') {
       const ot = now.getTime() >= openShiftEndMinutes(lastAny.time)
-      return { action: 'out', overtime: ot, overtimeMinutes: ot ? sessionMinutes(lastAny.time) : 0 }
+      return { action: 'out', overtime: ot, overtimeMinutes: ot ? sessionMinutes(lastAny.time) : 0, sessionStart: lastAny }
     }
-    return { action: 'in', overtime: false, overtimeMinutes: 0 }
+    return { action: 'in', overtime: false, overtimeMinutes: 0, sessionStart: null }
   }
 
   if (!shift) {
     // No shift assigned — alternate in/out per scan of the day.
-    if (!lastToday) return { action: 'in', overtime: false, overtimeMinutes: 0 }
-    return { action: lastToday.type === 'in' ? 'out' : 'in', overtime: false, overtimeMinutes: 0 }
+    if (!lastToday) return { action: 'in', overtime: false, overtimeMinutes: 0, sessionStart: null }
+    return { action: lastToday.type === 'in' ? 'out' : 'in', overtime: false, overtimeMinutes: 0, sessionStart: lastToday.type === 'in' ? lastToday : null }
   }
 
   const hasOpenClockIn = lastToday && lastToday.type === 'in'
@@ -101,9 +101,34 @@ export function decideAction(punches, shift, now = new Date(), otGraceMinutes = 
     const regularM = Number.isFinite(regularWorkMinutes) ? Number(regularWorkMinutes) : 480
     const overtime = nowM >= endM + graceM && worked >= regularM
     // Match TimeKeeping's display: the whole flagged session counts as OT.
-    return { action: 'out', overtime, overtimeMinutes: overtime ? worked : 0 }
+    return { action: 'out', overtime, overtimeMinutes: overtime ? worked : 0, sessionStart: lastToday }
   }
 
   // Not yet clocked in today → this scan starts the shift.
-  return { action: 'in', overtime: false, overtimeMinutes: 0 }
+  return { action: 'in', overtime: false, overtimeMinutes: 0, sessionStart: null }
+}
+
+// Single source of truth for "currently clocked in" (issue 74): a person is
+// clocked in exactly when the kiosk's next-scan decision for them would be a
+// CLOCK-OUT. Dashboards must use this instead of "latest punch of all time",
+// which shows stale clock-ins from previous days that the kiosk (correctly)
+// treats as a new day's clock-in.
+export function isCurrentlyClockedIn(punches, shift, now = new Date()) {
+  return decideAction(punches, shift, now).action === 'out'
+}
+
+// The punch that opened the still-open session (null when not clocked in) —
+// used by dashboards to display "In since <time>" consistently with the rule
+// above.
+export function openSessionPunch(punches, shift, now = new Date()) {
+  return decideAction(punches, shift, now).sessionStart || null
+}
+
+// The shift assigned to an employee by their company's shift schedule
+// (shared by TimeKeeping and the dashboards so everyone resolves it alike).
+export function shiftForEmployee(shiftData, email) {
+  if (!shiftData || !email) return null
+  const sid = shiftData.assignments ? shiftData.assignments[email] : null
+  if (!sid) return null
+  return (shiftData.shifts || []).find((s) => s.id === sid) || null
 }
