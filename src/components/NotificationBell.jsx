@@ -133,9 +133,9 @@ export default function NotificationBell() {
                     {n.subject}
                   </p>
                   <p className="mt-1 line-clamp-2 whitespace-pre-line text-[11px] leading-relaxed text-gray-400">{n.body}</p>
-                  <p className="mt-1.5 flex items-center justify-between gap-2 text-[10px] tabular-nums text-gray-400">
-                    <span>{new Date(n.createdAt).toLocaleDateString([], { timeZone: getSystemTimeZone(), month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                    <span>{new Date(n.createdAt).toLocaleTimeString([], { timeZone: getSystemTimeZone(), hour: '2-digit', minute: '2-digit' })}</span>
+                  <p className="mt-1.5 text-[10px] tabular-nums text-gray-400">
+                    {/* (75) Date only — the time was removed by request. */}
+                    {new Date(n.createdAt).toLocaleDateString([], { timeZone: getSystemTimeZone(), month: 'short', day: 'numeric', year: 'numeric' })}
                   </p>
                 </button>
               )

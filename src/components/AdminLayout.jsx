@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getActiveSettings, isMaintenanceMode } from '../lib/systemSettings'
@@ -7,7 +7,7 @@ import NotificationBell from './NotificationBell'
 import DefaultPasswordBanner from './DefaultPasswordBanner'
 import Avatar from './Avatar'
 import SignOutButton from './SignOutButton'
-import HelpModal from './HelpModal'
+
 
 const ADMIN_NAV = [
   { to: '/companies', label: 'Companies', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
@@ -22,7 +22,6 @@ export default function AdminLayout({ children }) {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const [maintenance, setMaintenance] = useState(isMaintenanceMode())
-  const [helpOpen, setHelpOpen] = useState(false)
   const settings = getActiveSettings()
   const nav = ADMIN_NAV
 
@@ -136,7 +135,7 @@ export default function AdminLayout({ children }) {
         <div className="mt-auto space-y-1 border-t border-gray-200 p-4">
           <button
             type="button"
-            onClick={() => setHelpOpen(true)}
+            onClick={() => navigate('/help')}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
           >
             <svg className="h-5 w-5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
@@ -146,7 +145,7 @@ export default function AdminLayout({ children }) {
           </button>
           <SignOutButton onConfirm={signOut} />
           <div className="mt-3 border-t border-gray-100 px-3 pt-3 text-[11px] text-gray-400">
-            <p><span className="font-semibold text-gray-500">{settings.name} {settings.version}</span> · <span className="font-semibold">CelestSolutions</span></p>
+            <p><span className="font-semibold text-gray-500">{settings.name} {settings.version}</span> Â· <span className="font-semibold">CelestSolutions</span></p>
           </div>
         </div>
       </aside>
@@ -168,7 +167,7 @@ export default function AdminLayout({ children }) {
               <div className="mt-auto space-y-1 p-4">
                 <button
                   type="button"
-                  onClick={() => { setMenuOpen(false); setHelpOpen(true) }}
+                  onClick={() => { setMenuOpen(false); navigate('/help') }}
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
                 >
                   <svg className="h-5 w-5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
@@ -188,7 +187,7 @@ export default function AdminLayout({ children }) {
         </div>
       )}
 
-      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
+
 
       <main className="min-w-0 lg:pl-64">
         <div className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6 lg:p-8">

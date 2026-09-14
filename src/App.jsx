@@ -26,6 +26,7 @@ const KioskCredentials = lazy(() => import('./pages/KioskCredentials'))
 const ShiftSchedules = lazy(() => import('./pages/ShiftSchedules'))
 const People = lazy(() => import('./pages/People'))
 const StorageSetup = lazy(() => import('./pages/StorageSetup'))
+const HelpGuide = lazy(() => import('./pages/HelpGuide'))
 
 function RouteLoader() {
   return <PageLoader page="Page" detail="Preparing your workspace…" />
@@ -137,6 +138,10 @@ export default function App() {
           </Route>
 
           <Route path="/shifts" element={<PageGate perm="shifts"><ChromeByRole><ShiftSchedules /></ChromeByRole></PageGate>} />
+
+          {/* (76) Help & Guide — a full page for every signed-in role, rendered
+              inside the right chrome. No PageGate: help is always available. */}
+          <Route path="/help" element={<RequireRole roles={['administrator', 'ceo', 'employee']}><ChromeByRole><HelpGuide /></ChromeByRole></RequireRole>} />
 
           {/* Single /tasks route for every role — one shared branch so the
               router can never match a duplicate path and bounce home. */}

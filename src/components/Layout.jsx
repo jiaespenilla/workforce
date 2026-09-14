@@ -8,7 +8,7 @@ import NotificationBell from './NotificationBell'
 import DefaultPasswordBanner from './DefaultPasswordBanner'
 import Avatar from './Avatar'
 import SignOutButton from './SignOutButton'
-import HelpModal from './HelpModal'
+
 
 const nav = [
   { to: '/', label: 'Dashboard', key: 'dashboard', icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
@@ -45,7 +45,6 @@ export { Logo }
 
 export default function Layout({ children }) {
   const [open, setOpen] = useState(false)
-  const [helpOpen, setHelpOpen] = useState(false)
   const [maintenance, setMaintenance] = useState(isMaintenanceMode())
   const navigate = useNavigate()
   const { user, logout } = useAuth()
@@ -167,7 +166,7 @@ export default function Layout({ children }) {
     <div className="space-y-1 border-t border-gray-200 p-4">
       <button
         type="button"
-        onClick={() => setHelpOpen(true)}
+        onClick={() => navigate('/help')}
         className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
       >
         <svg className="h-5 w-5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
@@ -235,7 +234,7 @@ export default function Layout({ children }) {
         </div>
       )}
 
-      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
+
 
       <main className="min-w-0 lg:pl-64">
         <div className="mx-auto max-w-7xl space-y-4 p-4 sm:p-6 lg:p-8">
