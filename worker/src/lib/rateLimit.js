@@ -12,7 +12,8 @@ export async function recordAttempts(env, keys) {
   // Housekeeping: rows older than the longest window are purged, but only on
   // ~2% of calls — a table-wide DELETE on every failed attempt puts an extra
   // write on the hot path and doesn't scale with attempt volume.
-  if (Math.random() < 0.02) {
+  const sample = crypto.getRandomValues(new Uint8Array(1))[0]
+  if (sample < 5) {
     const dayCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     stmts.push(env.DB.prepare('DELETE FROM login_attempts WHERE attempt_at < ?').bind(dayCutoff))
   }

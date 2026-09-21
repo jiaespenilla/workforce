@@ -1,6 +1,7 @@
 import * as webAuthn from '../webauthn.js'
 import { hmac, timingSafeEqual } from '../lib/crypto.js'
-import { json, readJson, clampText, HttpError } from '../lib/http.js'
+import { json, readJson, clampText, clientIp, HttpError } from '../lib/http.js'
+import { recentAttempts, recordAttempts, clearAttempts } from '../lib/rateLimit.js'
 import {
   activeEmployee,
   createAttendanceEvent,
@@ -11,6 +12,9 @@ import { normalizeTerminalBatch } from '../timeClockAdapters.js'
 
 const MAX_BATCH_EVENTS = 250
 const SIGNATURE_MAX_AGE_MS = 5 * 60 * 1000
+const PAIRING_CODE_TTL_MS = 10 * 60 * 1000
+const PAIRING_WINDOW_MS = 10 * 60 * 1000
+const PAIRING_MAX_ATTEMPTS = 8
 
 async function pilotEnabled(env, companyId) {
   const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?')
@@ -43,7 +47,155 @@ function safeEvent(event) {
   if (!Number.isFinite(new Date(event.occurredAt).getTime())) throw HttpError(400, 'Each event occurrence time must be valid.')
 }
 
+function randomSecret(byteCount = 32) {
+  const bytes = crypto.getRandomValues(new Uint8Array(byteCount))
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function randomPairingCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const bytes = crypto.getRandomValues(new Uint8Array(8))
+  return [...bytes].map((value) => alphabet[value % alphabet.length]).join('')
+}
+
+function normalizePairingCode(value) {
+  return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+async function kioskDigest(env, kind, value) {
+  if (!env.TIME_CLOCK_DEVICE_MASTER_SECRET) throw HttpError(503, 'Time clock pairing is not configured on this server.')
+  return hmac(`standalone-kiosk:${kind}:${value}`, env.TIME_CLOCK_DEVICE_MASTER_SECRET)
+}
+
+async function kioskSession(env, request) {
+  const token = String(request.headers.get('X-Time-Clock-Kiosk') || '').trim()
+  if (token.length < 32 || token.length > 256) throw HttpError(401, 'This kiosk is not paired.')
+  const tokenHash = await kioskDigest(env, 'session', token)
+  const session = await env.DB.prepare(
+    `SELECT s.id AS session_id, s.device_id, d.company_id, d.site_id, d.name AS device_name,
+      d.adapter, d.active AS device_active, c.name AS company_name,
+      c.active AS company_active, c.status AS company_status
+     FROM time_clock_kiosk_sessions s
+     JOIN time_clock_devices d ON d.id = s.device_id
+     JOIN companies c ON c.id = d.company_id
+     WHERE s.token_hash = ? AND s.active = 1 AND s.revoked_at IS NULL LIMIT 1`
+  ).bind(tokenHash).first()
+  if (!session || session.device_active !== 1 || session.company_active !== 1 || session.company_status === 'rejected') {
+    throw HttpError(401, 'This kiosk pairing is no longer active.')
+  }
+  if (!await siteBelongsToCompany(env, session.company_id, session.site_id)) {
+    throw HttpError(403, 'This kiosk site is no longer assigned to its company.')
+  }
+  return session
+}
+
 export async function handlePublic({ request, env, path, method }) {
+  if (path === '/api/time-clock/kiosk/pair' && method === 'POST') {
+    const attemptKey = `kiosk-pair:${clientIp(request)}`
+    if (await recentAttempts(env, attemptKey, PAIRING_WINDOW_MS) >= PAIRING_MAX_ATTEMPTS) {
+      return json({ error: 'Too many pairing attempts. Please wait ten minutes.' }, 429, request)
+    }
+    const body = await readJson(request)
+    const code = normalizePairingCode(body.code)
+    if (!/^[A-Z2-9]{8}$/.test(code)) {
+      await recordAttempts(env, [attemptKey])
+      return json({ error: 'The pairing code is invalid or expired.' }, 401, request)
+    }
+    const codeHash = await kioskDigest(env, 'pairing', code)
+    const pairing = await env.DB.prepare(
+      `SELECT p.id, p.device_id, p.expires_at, p.used_at, d.active AS device_active,
+        c.active AS company_active, c.status AS company_status
+       FROM time_clock_pairing_codes p
+       JOIN time_clock_devices d ON d.id = p.device_id
+       JOIN companies c ON c.id = d.company_id
+       WHERE p.code_hash = ? LIMIT 1`
+    ).bind(codeHash).first()
+    if (!pairing || pairing.used_at || Number(pairing.expires_at) < Date.now() || pairing.device_active !== 1 || pairing.company_active !== 1 || pairing.company_status === 'rejected') {
+      await recordAttempts(env, [attemptKey])
+      return json({ error: 'The pairing code is invalid or expired.' }, 401, request)
+    }
+    const usedAt = new Date().toISOString()
+    const claimed = await env.DB.prepare('UPDATE time_clock_pairing_codes SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at >= ?')
+      .bind(usedAt, pairing.id, Date.now()).run()
+    if (!claimed.meta?.changes) {
+      await recordAttempts(env, [attemptKey])
+      return json({ error: 'The pairing code was already used.' }, 409, request)
+    }
+    const sessionToken = randomSecret()
+    const sessionId = crypto.randomUUID()
+    await env.DB.prepare(
+      'INSERT INTO time_clock_kiosk_sessions (id, device_id, token_hash, label, paired_at) VALUES (?, ?, ?, ?, ?)'
+    ).bind(sessionId, pairing.device_id, await kioskDigest(env, 'session', sessionToken), clampText(body.name, 80) || 'Standalone kiosk', usedAt).run()
+    await clearAttempts(env, attemptKey)
+    console.log(JSON.stringify({ event: 'standalone_kiosk_paired', deviceId: pairing.device_id, sessionId }))
+    return json({ token: sessionToken }, 201, request)
+  }
+
+  if (path === '/api/time-clock/kiosk/status' && method === 'GET') {
+    const session = await kioskSession(env, request)
+    return json({
+      paired: true,
+      deviceId: session.device_id,
+      deviceName: session.device_name,
+      companyName: session.company_name,
+      siteId: session.site_id,
+      adapter: session.adapter || 'generic-v1',
+    }, 200, request)
+  }
+
+  if (path === '/api/time-clock/kiosk/session' && method === 'DELETE') {
+    const session = await kioskSession(env, request)
+    const now = new Date().toISOString()
+    await env.DB.prepare('UPDATE time_clock_kiosk_sessions SET active = 0, revoked_at = ? WHERE id = ?')
+      .bind(now, session.session_id).run()
+    return json({ ok: true }, 200, request)
+  }
+
+  if (path === '/api/time-clock/kiosk/punch' && method === 'POST') {
+    const session = await kioskSession(env, request)
+    const body = await readJson(request)
+    const eventId = safeUuid(body.eventId)
+    const terminalUserId = clampText(body.terminalUserId, 100)
+    if (!terminalUserId) return json({ error: 'The fingerprint reader did not return an employee ID.' }, 400, request)
+    const prior = await env.DB.prepare(
+      "SELECT id, punch_type, occurred_at, status, email FROM attendance_events WHERE source = 'standalone-kiosk' AND device_id = ? AND event_id = ? LIMIT 1"
+    ).bind(session.device_id, eventId).first()
+    if (prior) return json({ duplicate: true, eventId: prior.id, action: prior.punch_type, time: prior.occurred_at, reviewStatus: prior.status }, 200, request)
+    const employee = await env.DB.prepare(
+      `SELECT e.id, e.email, e.name, e.company_id, e.active, c.active AS company_active, c.status AS company_status
+       FROM terminal_employee_mappings m
+       JOIN employees e ON e.id = m.employee_id
+       JOIN companies c ON c.id = e.company_id
+       WHERE m.device_id = ? AND m.terminal_user_id = ? LIMIT 1`
+    ).bind(session.device_id, terminalUserId).first()
+    const now = new Date().toISOString()
+    if (!employee || employee.company_id !== session.company_id || employee.active !== 1 || employee.company_active !== 1 || employee.company_status === 'rejected') {
+      const reason = !employee ? 'unknown_employee_mapping' : 'inactive_or_cross_company_employee'
+      await recordRejectedEvent(env, {
+        eventId, source: 'standalone-kiosk', companyId: session.company_id,
+        deviceId: session.device_id, siteId: session.site_id, occurredAt: now,
+        receivedAt: now, reason, payload: { terminalUserId },
+      })
+      return json({ error: 'Fingerprint is not mapped to an active employee.', reason }, 422, request)
+    }
+    const result = await createAttendanceEvent(env, {
+      eventId,
+      source: 'standalone-kiosk',
+      employee,
+      occurredAt: now,
+      receivedAt: now,
+      deviceId: session.device_id,
+      siteId: session.site_id,
+      payload: { terminalUserId },
+    })
+    await env.DB.batch([
+      env.DB.prepare('UPDATE time_clock_kiosk_sessions SET last_seen_at = ? WHERE id = ?').bind(now, session.session_id),
+      env.DB.prepare('UPDATE time_clock_devices SET last_seen_at = ?, updated_at = ? WHERE id = ?').bind(now, now, session.device_id),
+    ])
+    console.log(JSON.stringify({ event: 'standalone_kiosk_punch', deviceId: session.device_id, companyId: session.company_id, action: result.action }))
+    return json({ ...result, employeeName: employee.name }, result.duplicate ? 200 : 201, request)
+  }
+
   if (path !== '/api/time-clock/device-events' || method !== 'POST') return null
   const deviceId = String(request.headers.get('X-Time-Clock-Device') || '').trim()
   const timestamp = String(request.headers.get('X-Time-Clock-Timestamp') || '').trim()
@@ -256,6 +408,7 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
     const rows = await env.DB.prepare(
       `SELECT d.*,
         (SELECT COUNT(*) FROM terminal_employee_mappings m WHERE m.device_id = d.id) AS mapping_count,
+        (SELECT COUNT(*) FROM time_clock_kiosk_sessions s WHERE s.device_id = d.id AND s.active = 1 AND s.revoked_at IS NULL) AS paired_kiosk_count,
         (SELECT COUNT(*) FROM attendance_events a WHERE a.device_id = d.id AND a.status IN ('rejected','needs_review')) AS issue_count
        FROM time_clock_devices d WHERE d.company_id = ? ORDER BY d.created_at DESC`
     ).bind(companyId).all().then((result) => result.results || [])
@@ -297,7 +450,42 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
       await env.DB.prepare(
         'UPDATE time_clock_devices SET name = COALESCE(?, name), site_id = ?, vendor = COALESCE(?, vendor), model = COALESCE(?, model), active = COALESCE(?, active), updated_at = ? WHERE id = ?'
       ).bind(clampText(body.name, 80), nextSite, clampText(body.vendor, 80), clampText(body.model, 80), typeof body.active === 'boolean' ? (body.active ? 1 : 0) : null, new Date().toISOString(), id).run()
+      if (body.active === false) {
+        const now = new Date().toISOString()
+        await env.DB.prepare('UPDATE time_clock_kiosk_sessions SET active = 0, revoked_at = ? WHERE device_id = ? AND active = 1')
+          .bind(now, id).run()
+      }
       return json({ ok: true }, 200, request)
+    }
+  }
+  {
+    const match = path.match(/^\/api\/time-clock\/admin\/devices\/([^/]+)\/pairing-code$/)
+    if (match && method === 'POST') {
+      const id = decodeURIComponent(match[1])
+      const device = await env.DB.prepare('SELECT id, active FROM time_clock_devices WHERE id = ?').bind(id).first()
+      if (!device || device.active !== 1) return json({ error: 'Active device not found.' }, 404, request)
+      const code = randomPairingCode()
+      const expiresAt = Date.now() + PAIRING_CODE_TTL_MS
+      const now = new Date().toISOString()
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM time_clock_pairing_codes WHERE device_id = ?').bind(id),
+        env.DB.prepare(
+          'INSERT INTO time_clock_pairing_codes (id, device_id, code_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)'
+        ).bind(crypto.randomUUID(), id, await kioskDigest(env, 'pairing', code), expiresAt, now),
+      ])
+      return json({ code, expiresAt, kioskPath: '/kiosk' }, 201, request)
+    }
+  }
+  {
+    const match = path.match(/^\/api\/time-clock\/admin\/devices\/([^/]+)\/unpair-kiosks$/)
+    if (match && method === 'POST') {
+      const id = decodeURIComponent(match[1])
+      const now = new Date().toISOString()
+      const result = await env.DB.prepare(
+        'UPDATE time_clock_kiosk_sessions SET active = 0, revoked_at = ? WHERE device_id = ? AND active = 1'
+      ).bind(now, id).run()
+      await env.DB.prepare('DELETE FROM time_clock_pairing_codes WHERE device_id = ? AND used_at IS NULL').bind(id).run()
+      return json({ ok: true, revoked: result.meta?.changes || 0 }, 200, request)
     }
   }
   {

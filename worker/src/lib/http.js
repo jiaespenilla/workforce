@@ -29,7 +29,7 @@ export function cors(request) {
   const origin = request ? request.headers.get('Origin') : null
   const base = {
     'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Time-Clock-Device,X-Time-Clock-Timestamp,X-Time-Clock-Nonce,X-Time-Clock-Signature',
+    'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Time-Clock-Device,X-Time-Clock-Timestamp,X-Time-Clock-Nonce,X-Time-Clock-Signature,X-Time-Clock-Kiosk',
   }
   // SECURITY: only echo the Origin header for origins we actually allow —
   // never reflect arbitrary origins (unless ALLOWED_ORIGINS includes them).

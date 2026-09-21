@@ -24,6 +24,7 @@ export default function TimeClockSetup() {
   const [newMapping, setNewMapping] = useState({ terminalUserId: '', employeeId: '' })
   const [sim, setSim] = useState({ terminalUserId: '', action: 'in', occurredAt: '' })
   const [revealedSecret, setRevealedSecret] = useState('')
+  const [pairingCode, setPairingCode] = useState(null)
   const [notice, setNotice] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -101,6 +102,29 @@ export default function TimeClockSetup() {
       setRevealedSecret(result.signingSecret)
       setNotice({ type: 'success', text: 'Signing secret rotated. Copy the new value to the terminal now.' })
     } catch (error) { setNotice({ type: 'error', text: error.message }) }
+  }
+
+  const createPairingCode = async (device) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      const result = await api(`/api/time-clock/admin/devices/${encodeURIComponent(device.id)}/pairing-code`, { method: 'POST' })
+      setPairingCode({ ...result, deviceId: device.id })
+      setNotice({ type: 'success', text: 'Pairing code created. Enter it on the standalone /kiosk page within ten minutes.' })
+    } catch (error) { setNotice({ type: 'error', text: error.message }) }
+    finally { setBusy(false) }
+  }
+
+  const unpairKiosks = async (device) => {
+    if (!confirm(`Unpair every browser kiosk connected to ${device.name}?`)) return
+    setBusy(true)
+    try {
+      const result = await api(`/api/time-clock/admin/devices/${encodeURIComponent(device.id)}/unpair-kiosks`, { method: 'POST' })
+      setPairingCode(null)
+      setNotice({ type: 'success', text: `${result.revoked || 0} kiosk pairing(s) removed.` })
+      await loadCompany()
+    } catch (error) { setNotice({ type: 'error', text: error.message }) }
+    finally { setBusy(false) }
   }
 
   const addMapping = async () => {
@@ -185,9 +209,10 @@ export default function TimeClockSetup() {
           <button onClick={createDevice} disabled={busy || !companyId} className="mt-3 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Add terminal</button>
           {revealedSecret && (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <p className="text-xs font-semibold text-amber-800">One-time signing secret</p>
+              <p className="text-xs font-semibold text-amber-800">Network-terminal signing secret</p>
               <code className="mt-2 block break-all rounded bg-white p-2 text-xs text-gray-700">{revealedSecret}</code>
               <button onClick={() => navigator.clipboard.writeText(revealedSecret)} className="mt-2 text-xs font-semibold text-amber-800">Copy secret</button>
+              <p className="mt-2 text-xs text-amber-700">Use this only in a terminal vendor connector. The browser kiosk uses the safer pairing code below.</p>
             </div>
           )}
           <div className="mt-4 space-y-2">
@@ -196,7 +221,7 @@ export default function TimeClockSetup() {
               return (
                 <button key={device.id} onClick={() => setSelectedId(device.id)} className={`w-full rounded-lg border p-4 text-left ${selectedId === device.id ? 'border-brand-400 bg-brand-50' : 'border-gray-200'}`}>
                   <div className="flex items-start justify-between gap-2"><span className="font-semibold text-gray-900">{device.name}</span><span className={`rounded-full px-2 py-1 text-xs font-medium ${cls}`}>{label}</span></div>
-                  <p className="mt-1 text-xs text-gray-500">Last sync: {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : 'Never'} · Mappings: {device.mapping_count} · Issues: {device.issue_count}</p>
+                  <p className="mt-1 text-xs text-gray-500">Last sync: {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : 'Never'} · Kiosks: {device.paired_kiosk_count || 0} · Mappings: {device.mapping_count} · Issues: {device.issue_count}</p>
                 </button>
               )
             })}
@@ -207,8 +232,24 @@ export default function TimeClockSetup() {
         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div><h2 className="font-semibold text-gray-900">Employee mappings</h2><p className="mt-1 text-xs text-gray-500">Connect the employee number stored in the terminal to the correct app employee.</p></div>
-            {selected && <div className="flex gap-2"><button onClick={() => rotateSecret(selected)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700">Rotate secret</button><button onClick={() => toggleDevice(selected)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700">{selected.active ? 'Revoke device' : 'Reactivate'}</button></div>}
+            {selected && <div className="flex flex-wrap justify-end gap-2"><button onClick={() => rotateSecret(selected)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700">Rotate connector secret</button><button onClick={() => toggleDevice(selected)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700">{selected.active ? 'Revoke device' : 'Reactivate'}</button></div>}
           </div>
+
+          {selected && selected.active ? (
+            <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div><h3 className="text-sm font-semibold text-brand-900">Standalone browser kiosk</h3><p className="mt-1 text-xs text-brand-700">Open <strong>/kiosk</strong> on the head-office computer. Employees will not sign in.</p></div>
+                <div className="flex gap-2"><button onClick={() => createPairingCode(selected)} disabled={busy} className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Create pairing code</button>{Number(selected.paired_kiosk_count) > 0 && <button onClick={() => unpairKiosks(selected)} disabled={busy} className="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 disabled:opacity-50">Unpair kiosks</button>}</div>
+              </div>
+              {pairingCode && pairingCode.deviceId === selected.id && (
+                <div className="mt-4 rounded-lg bg-white p-4 text-center shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Enter this code at /kiosk</p>
+                  <p className="mt-2 font-mono text-3xl font-bold tracking-[0.24em] text-gray-950">{pairingCode.code}</p>
+                  <p className="mt-2 text-xs text-gray-500">Expires {new Date(pairingCode.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. It works once.</p>
+                </div>
+              )}
+            </div>
+          ) : selected ? <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Reactivate this device before pairing a kiosk.</p> : null}
           <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_1.5fr_auto]">
             <input value={newMapping.terminalUserId} onChange={(event) => setNewMapping({ ...newMapping, terminalUserId: event.target.value })} placeholder="Terminal employee ID" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             <select value={newMapping.employeeId} onChange={(event) => setNewMapping({ ...newMapping, employeeId: event.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="">Choose employee</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} — {employee.email}</option>)}</select>

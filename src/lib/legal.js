@@ -18,7 +18,7 @@ By creating an account or using CadensIQ, you agree to these rules and to our Pr
 - Administrators and company owners decide which role each person gets.
 
 5. Time keeping
-- Attendance is recorded from your signed-in personal phone after a passkey check, or from an approved workplace fingerprint terminal.
+- Attendance is recorded from your signed-in personal phone after a passkey check, or from a securely paired workplace kiosk or fingerprint terminal.
 - The system decides whether a verified phone punch is a clock-in or clock-out and records official server time. Delayed terminal events keep their device occurrence time and may be marked for review.
 - Clock in and out only for yourself. Sharing an account or faking time records can lead to account deactivation.
 
@@ -49,7 +49,7 @@ Last updated: September 21, 2026
 - Your tasks, notifications, app settings, and an optional profile photo.
 
 2. How we use it
-- To confirm a phone passkey or registered workplace terminal and record attendance correctly.
+- To confirm a phone passkey or registered workplace kiosk/terminal and record attendance correctly.
 - To show the right information for your company, send important notifications, and protect the service from abuse.
 
 3. What we never do
@@ -65,7 +65,7 @@ Last updated: September 21, 2026
 - Data may be exported or deleted on request where the law allows.
 
 6. How we protect it
-- Traffic is encrypted. Workplace terminals must sign every event batch, and repeated or expired requests are blocked.
+- Traffic is encrypted. Workplace terminals sign event batches, standalone kiosks require one-time administrator pairing, and repeated or expired requests are blocked.
 - Rejected, delayed, and out-of-order terminal events are kept for administrator review instead of silently rewriting attendance history.
 
 7. Your choices and rights

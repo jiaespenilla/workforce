@@ -51,9 +51,10 @@ wrangler d1 migrations apply workforce --remote
 wrangler deploy
 ```
 
-The time-clock migration preserves existing attendance rows, adds immutable
-source events, and revokes legacy shared-kiosk tokens. Back up the D1 database
-before applying a production migration.
+The time-clock migrations preserve existing attendance rows, add immutable
+source events, revoke legacy shared-kiosk tokens, and add one-time pairing for
+the standalone `/kiosk` computer. Back up the D1 database before applying a
+production migration.
 
 ## Verification
 
@@ -64,8 +65,8 @@ npm run build
 ```
 
 The Worker-runtime test exercises signed terminal batches, replay blocking,
-invalid signatures, rejected mappings, and attendance creation inside the
-Cloudflare runtime.
+invalid signatures, standalone kiosk pairing/revocation, rejected mappings,
+and attendance creation inside the Cloudflare runtime.
 
 Note the deployed URL (e.g. https://unified-workforce-api.<your-subdomain>.workers.dev).
 

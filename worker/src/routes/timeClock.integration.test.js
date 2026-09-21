@@ -4,13 +4,16 @@ import { hmac } from '../lib/crypto.js'
 import { handle, handlePublic } from './timeClock.js'
 
 const schema = `
-CREATE TABLE IF NOT EXISTS companies (id TEXT PRIMARY KEY, active INTEGER, status TEXT);
+CREATE TABLE IF NOT EXISTS companies (id TEXT PRIMARY KEY, name TEXT, active INTEGER, status TEXT);
 CREATE TABLE IF NOT EXISTS employees (id INTEGER PRIMARY KEY, email TEXT, name TEXT, company_id TEXT, active INTEGER);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS login_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT, attempt_at TEXT);
 CREATE TABLE IF NOT EXISTS attendance (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, company_id TEXT, type TEXT, time TEXT, overtime INTEGER, overtime_minutes INTEGER, source_event_id TEXT, source TEXT, device_id TEXT, site_id TEXT, received_at TEXT, latitude REAL, longitude REAL, accuracy REAL, location_status TEXT, needs_review INTEGER);
-CREATE TABLE IF NOT EXISTS time_clock_devices (id TEXT PRIMARY KEY, company_id TEXT, site_id TEXT, name TEXT, vendor TEXT, model TEXT, secret_version INTEGER, active INTEGER, last_seen_at TEXT, last_sequence INTEGER, created_at TEXT, updated_at TEXT);
+CREATE TABLE IF NOT EXISTS time_clock_devices (id TEXT PRIMARY KEY, company_id TEXT, site_id TEXT, name TEXT, vendor TEXT, model TEXT, adapter TEXT DEFAULT 'generic-v1', secret_version INTEGER, active INTEGER, last_seen_at TEXT, last_sequence INTEGER, created_at TEXT, updated_at TEXT);
 CREATE TABLE IF NOT EXISTS terminal_employee_mappings (id INTEGER PRIMARY KEY AUTOINCREMENT, device_id TEXT, terminal_user_id TEXT, employee_id INTEGER, UNIQUE(device_id, terminal_user_id));
 CREATE TABLE IF NOT EXISTS time_clock_nonces (device_id TEXT, nonce TEXT, expires_at INTEGER, PRIMARY KEY(device_id, nonce));
+CREATE TABLE IF NOT EXISTS time_clock_pairing_codes (id TEXT PRIMARY KEY, device_id TEXT, code_hash TEXT UNIQUE, expires_at INTEGER, used_at TEXT, created_at TEXT);
+CREATE TABLE IF NOT EXISTS time_clock_kiosk_sessions (id TEXT PRIMARY KEY, device_id TEXT, token_hash TEXT UNIQUE, label TEXT, active INTEGER DEFAULT 1, paired_at TEXT, last_seen_at TEXT, revoked_at TEXT);
 CREATE TABLE IF NOT EXISTS attendance_events (id TEXT PRIMARY KEY, event_id TEXT, source TEXT, employee_id INTEGER, email TEXT, company_id TEXT, device_id TEXT, site_id TEXT, occurred_at TEXT, received_at TEXT, punch_type TEXT, sequence INTEGER, status TEXT, rejection_reason TEXT, latitude REAL, longitude REAL, accuracy REAL, location_status TEXT, payload_json TEXT, created_at TEXT, UNIQUE(source, device_id, event_id));
 `
 
@@ -20,14 +23,17 @@ async function seed() {
     env.DB.prepare('DELETE FROM attendance'),
     env.DB.prepare('DELETE FROM attendance_events'),
     env.DB.prepare('DELETE FROM time_clock_nonces'),
+    env.DB.prepare('DELETE FROM time_clock_kiosk_sessions'),
+    env.DB.prepare('DELETE FROM time_clock_pairing_codes'),
     env.DB.prepare('DELETE FROM terminal_employee_mappings'),
     env.DB.prepare('DELETE FROM time_clock_devices'),
     env.DB.prepare('DELETE FROM employees'),
     env.DB.prepare('DELETE FROM companies'),
     env.DB.prepare('DELETE FROM settings'),
+    env.DB.prepare('DELETE FROM login_attempts'),
   ])
   await env.DB.batch([
-    env.DB.prepare("INSERT OR REPLACE INTO companies (id, active, status) VALUES ('co-1', 1, 'approved')"),
+    env.DB.prepare("INSERT OR REPLACE INTO companies (id, name, active, status) VALUES ('co-1', 'Acme', 1, 'approved')"),
     env.DB.prepare("INSERT OR REPLACE INTO employees (id, email, name, company_id, active) VALUES (1, 'emp@acme.com', 'Employee', 'co-1', 1)"),
     env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('company_locations:co-1', JSON.stringify({ locations: [{ id: 'site-1', name: 'HQ' }] })),
     env.DB.prepare("INSERT OR REPLACE INTO time_clock_devices (id, company_id, site_id, name, secret_version, active) VALUES ('terminal-1', 'co-1', 'site-1', 'Front door', 1, 1)"),
@@ -59,6 +65,26 @@ async function send(request) {
   return handlePublic({ request, env, path: '/api/time-clock/device-events', method: 'POST' })
 }
 
+async function adminRequest(path, body) {
+  const request = new Request(`https://app.example${path}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}),
+  })
+  return handle({ request, env, url: new URL(request.url), path, method: 'POST', claims: { sub: 'admin', role: 'administrator' }, isAdmin: true })
+}
+
+async function pairKiosk() {
+  const codeResponse = await adminRequest('/api/time-clock/admin/devices/terminal-1/pairing-code')
+  const { code } = await codeResponse.json()
+  const storedCode = await env.DB.prepare('SELECT code_hash FROM time_clock_pairing_codes').first()
+  expect(storedCode.code_hash).not.toContain(code)
+  const request = new Request('https://app.example/api/time-clock/kiosk/pair', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '203.0.113.10' },
+    body: JSON.stringify({ code, name: 'Front desk PC' }),
+  })
+  const response = await handlePublic({ request, env, path: '/api/time-clock/kiosk/pair', method: 'POST' })
+  return response.json()
+}
+
 describe('signed terminal batches in the Workers runtime', () => {
   beforeEach(seed)
 
@@ -88,6 +114,43 @@ describe('signed terminal batches in the Workers runtime', () => {
     expect(response.status).toBe(202)
     expect((await response.json()).results[0]).toEqual(expect.objectContaining({ status: 'accepted', action: 'in' }))
     expect((await env.DB.prepare('SELECT source FROM attendance').first()).source).toBe('terminal')
+  })
+
+  it('pairs a standalone kiosk once and records scans without an employee login', async () => {
+    const { token } = await pairKiosk()
+    expect(token).toBeTruthy()
+    const stored = await env.DB.prepare('SELECT token_hash FROM time_clock_kiosk_sessions').first()
+    expect(stored.token_hash).not.toContain(token)
+
+    const statusRequest = new Request('https://app.example/api/time-clock/kiosk/status', { headers: { 'X-Time-Clock-Kiosk': token } })
+    const status = await handlePublic({ request: statusRequest, env, path: '/api/time-clock/kiosk/status', method: 'GET' })
+    expect(await status.json()).toEqual(expect.objectContaining({ paired: true, deviceName: 'Front door', companyName: 'Acme' }))
+
+    const punchRequest = new Request('https://app.example/api/time-clock/kiosk/punch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Time-Clock-Kiosk': token },
+      body: JSON.stringify({ eventId: 'kiosk-event-0001', terminalUserId: '1001' }),
+    })
+    const punch = await handlePublic({ request: punchRequest, env, path: '/api/time-clock/kiosk/punch', method: 'POST' })
+    expect(punch.status).toBe(201)
+    expect(await punch.json()).toEqual(expect.objectContaining({ action: 'in', employeeName: 'Employee' }))
+    expect(await env.DB.prepare('SELECT source FROM attendance').first()).toEqual({ source: 'standalone-kiosk' })
+  })
+
+  it('rejects invalid pairing codes and revokes every paired browser from admin setup', async () => {
+    const badRequest = new Request('https://app.example/api/time-clock/kiosk/pair', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '203.0.113.11' },
+      body: JSON.stringify({ code: 'BADCODE2' }),
+    })
+    const bad = await handlePublic({ request: badRequest, env, path: '/api/time-clock/kiosk/pair', method: 'POST' })
+    expect(bad.status).toBe(401)
+
+    const { token } = await pairKiosk()
+    const unpair = await adminRequest('/api/time-clock/admin/devices/terminal-1/unpair-kiosks')
+    expect(await unpair.json()).toEqual(expect.objectContaining({ ok: true, revoked: 1 }))
+    const statusRequest = new Request('https://app.example/api/time-clock/kiosk/status', { headers: { 'X-Time-Clock-Kiosk': token } })
+    await expect(handlePublic({ request: statusRequest, env, path: '/api/time-clock/kiosk/status', method: 'GET' }))
+      .rejects.toMatchObject({ status: 401 })
   })
 
   it('blocks a replayed nonce before a second attendance row can be created', async () => {
@@ -128,7 +191,7 @@ describe('signed terminal batches in the Workers runtime', () => {
 
   it('rejects a mapping that crosses company ownership', async () => {
     await env.DB.batch([
-      env.DB.prepare("INSERT OR REPLACE INTO companies (id, active, status) VALUES ('co-2', 1, 'approved')"),
+      env.DB.prepare("INSERT OR REPLACE INTO companies (id, name, active, status) VALUES ('co-2', 'Other Co', 1, 'approved')"),
       env.DB.prepare("INSERT OR REPLACE INTO employees (id, email, name, company_id, active) VALUES (2, 'other@acme.com', 'Other', 'co-2', 1)"),
       env.DB.prepare("INSERT OR REPLACE INTO terminal_employee_mappings (device_id, terminal_user_id, employee_id) VALUES ('terminal-1', '2002', 2)"),
     ])

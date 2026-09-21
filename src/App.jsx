@@ -15,6 +15,7 @@ const SystemConfig = lazy(() => import('./pages/SystemConfig'))
 const Companies = lazy(() => import('./pages/Companies'))
 
 const CompanyRegistration = lazy(() => import('./pages/CompanyRegistration'))
+const Kiosk = lazy(() => import('./pages/Kiosk'))
 const TimeClockSetup = lazy(() => import('./pages/KioskSetup'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const TimeKeeping = lazy(() => import('./pages/TimeKeeping'))
@@ -127,6 +128,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<CompanyRegistration />} />
+          <Route path="/kiosk" element={<Kiosk />} />
 
           <Route element={<RequireRole role="administrator"><AdminLayout /></RequireRole>}>
             <Route path="/companies" element={<Companies />} />
@@ -156,9 +158,6 @@ export default function App() {
               </RequireRole>
             }
           />
-
-          {/* Retired kiosk URL always returns to authenticated entry. */}
-          <Route path="/kiosk" element={<Navigate to="/login" replace />} />
 
           <Route element={<RequireRole roles={['employee', 'ceo']}><MaintenanceGate><Layout /></MaintenanceGate></RequireRole>}>
             <Route path="/" element={<PageGate perm="dashboard"><Dashboard /></PageGate>} />

@@ -52,8 +52,9 @@ function adminSections() {
     section('time-clock-setup', 'Time Clock Setup', 'Enable personal phones and prepare workplace fingerprint terminals.', [
       'Turn on the personal-phone pilot for the chosen company.',
       'Add a terminal, assign its work site, and match terminal employee numbers to staff.',
+      'Create a one-time pairing code, open /kiosk on the head-office computer, and enter the code there. Employees do not sign in on that computer.',
       'Use the simulator before buying hardware and review rejected or delayed events.',
-      'Fingerprint information stays inside the phone or terminal.',
+      'The fingerprint reader still needs its manufacturer-specific Windows connector. Fingerprint information stays inside the phone, reader, or terminal.',
     ]),
     section('storage', 'Storage Setup', 'Connect the secure place used for employee documents.', [
       'This normally needs to be done only once.',

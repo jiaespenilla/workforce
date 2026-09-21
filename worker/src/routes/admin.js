@@ -15,6 +15,8 @@ export async function handle({ request, env, path, method, isAdmin, claims }) {
       env.DB.prepare('DELETE FROM attendance'),
       env.DB.prepare('DELETE FROM attendance_events'),
       env.DB.prepare('DELETE FROM time_clock_nonces'),
+      env.DB.prepare('DELETE FROM time_clock_kiosk_sessions'),
+      env.DB.prepare('DELETE FROM time_clock_pairing_codes'),
       env.DB.prepare('DELETE FROM terminal_employee_mappings'),
       env.DB.prepare('DELETE FROM time_clock_devices'),
       env.DB.prepare('DELETE FROM employee_credentials'),
