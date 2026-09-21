@@ -2,7 +2,7 @@ import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
 import { getActiveSettings, getPendingSettings, queueSystemSettings, pushSystemSettingsToServer, pushSystemIconToServer, getSystemTimeZone, isMaintenanceMode, setMaintenanceMode, getSessionTimeoutMinutes, setSessionTimeoutMinutes } from '../lib/systemSettings'
 import { getLegalDocs, saveLegalDocs } from '../lib/legal'
-import { getConfiguredRoles, saveRolesList, canAction, kioskMethodAllowed, KIOSK_METHODS } from '../lib/roles'
+import { getConfiguredRoles, saveRolesList, canAction } from '../lib/roles'
 import { getSystemIcon, setSystemIcon } from '../lib/documentMeta'
 import { SYSTEM_ICON_PRESETS } from '../lib/iconPresets'
 import { api, apiEnabled } from '../lib/api'
@@ -396,23 +396,6 @@ function RolesPanel({ roles, onAdd, onRename, onRemove, onTogglePerm }) {
                   ))}
                 </div>
 
-                {/* Kiosk credentials — per-method visibility (fingerprint / PIN / QR) */}
-                <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Kiosk credentials shown to this role</p>
-                  <p className="mt-0.5 text-[11px] text-gray-400">Turn off a method to hide it on the Kiosk Credentials page. Turning all three off hides the page.</p>
-                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    {KIOSK_METHODS.map((m) => (
-                      <label key={m} className="flex cursor-pointer items-center gap-3 rounded-lg border border-white bg-white px-3 py-2.5 shadow-sm transition hover:shadow">
-                        <Toggle
-                          checked={kioskMethodAllowed(r.perms, m)}
-                          onChange={(value) => onTogglePerm(i, `kiosk.${m}`, value)}
-                        />
-                        <span className="text-xs font-medium capitalize text-gray-700">{m === 'pin' ? 'PIN code' : m === 'qr' ? 'QR badge' : 'Fingerprint'}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Action-level permissions */}
                 <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
                   <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-gray-500">Action buttons shown to this role:</p>
@@ -606,7 +589,7 @@ function StatusPanel({ settings }) {
       <div className="rounded-xl border border-red-200 bg-red-50/50 p-5">
         <h3 className="text-sm font-bold text-red-800">Danger Zone</h3>
         <p className="mt-1 text-xs leading-relaxed text-red-700">
-          Reset will permanently delete all companies, employees, tasks, attendance, notifications, shift schedules, locations and kiosk configs. System settings and roles are kept, and all company login accounts are removed — only the administrator and platform CEO can sign in afterward. This cannot be undone.
+          Reset will permanently delete all companies, employees, tasks, attendance, phone passkeys, terminal devices, notifications, shift schedules and locations. System settings and roles are kept, and all company login accounts are removed — only the administrator and platform CEO can sign in afterward. This cannot be undone.
         </p>
         {resetSuccess ? (
           <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">All data reset — reloading…</p>
@@ -626,7 +609,7 @@ function StatusPanel({ settings }) {
             <ul className="mt-2 list-disc pl-5 text-xs text-gray-600">
               <li>{companies.length} companies &amp; {employees.length} employees</li>
               <li>{tasks.length} tasks, {notifications.length} notifications, attendance &amp; credentials</li>
-              <li>Shift schedules, locations, kiosk configs (per-company)</li>
+              <li>Shift schedules, locations, phone passkeys, terminal mappings and events</li>
             </ul>
             <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 ring-1 ring-amber-200">System name, version, roles and the administrator login will be kept. All company login accounts are removed.</p>
 
@@ -874,7 +857,7 @@ export default function SystemConfig() {
   const addRole = () =>
     mutateRoles((prev) => [
       ...prev,
-      { name: '', users: 0, access: 'Custom scope', perms: { dashboard: true, timekeeping: true, tasks: true, payroll: true, employees: true, shifts: true, kiosk: true, settings: false } },
+      { name: '', users: 0, access: 'Custom scope', perms: { dashboard: true, timekeeping: true, tasks: true, payroll: true, employees: true, shifts: true, settings: false } },
     ])
 
   const removeRole = (index) => mutateRoles((prev) => prev.filter((_, i) => i !== index))
@@ -928,17 +911,6 @@ export default function SystemConfig() {
             Saved successfully
           </span>
         )}
-        {/* Quick access to the stand-alone kiosk (public route, opens in a new tab) */}
-        <a
-          href="/kiosk"
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Open the stand-alone time clock kiosk in a new tab"
-          className="inline-flex items-center gap-2 self-start rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-brand-400 hover:text-brand-700 sm:self-auto"
-        >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-          Open Kiosk
-        </a>
       </div>
 
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-[260px_1fr] xl:grid-cols-[280px_1fr]">

@@ -66,7 +66,7 @@ export default function WelcomeIntro() {
       const subject = `Welcome to ${company?.name || 'your company'} — You're all set!`
       const already = JSON.parse(localStorage.getItem('uw_notifications') || '[]').some((n) => n.subject === subject && (n.to || '').toLowerCase() === user.email.toLowerCase())
       if (!already) {
-        const body = `Welcome to ${company?.name || user.companyName || 'your company'}!\n\nYour company is now active on ${settings.name}.\n\nQuick start:\n• View your Dashboard for an overview\n• Manage teammates in People\n• Set up Shift Schedules for your team\n• Clock in/out via the Time Kiosk (QR / PIN / fingerprint)\n\nTip: Find this introduction again in Notifications.`
+        const body = `Welcome to ${company?.name || user.companyName || 'your company'}!\n\nYour company is now active on ${settings.name}.\n\nQuick start:\n• View your Dashboard for an overview\n• Manage teammates in People\n• Set up Shift Schedules for your team\n• Register your phone passkey and clock in/out from Time Keeping\n\nTip: Find this introduction again in Notifications.`
         const list = JSON.parse(localStorage.getItem('uw_notifications') || '[]')
         list.push({ id: `welcome-${Date.now()}`, to: user.email.toLowerCase(), subject, body, createdAt: new Date().toISOString(), status: 'welcome' })
         localStorage.setItem('uw_notifications', JSON.stringify(list))
@@ -81,7 +81,7 @@ export default function WelcomeIntro() {
     { title: 'Explore your Dashboard', desc: 'Track active teammates and tasks at a glance.', icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
     { title: 'Manage People', desc: 'Add teammates, assign roles and locations.', icon: 'M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6 1.37a6 6 0 10-6-6 6 6 0 006 6z' },
     { title: 'Set Shift Schedules', desc: 'Define shifts and assign them to your team.', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
-    { title: 'Try the Time Kiosk', desc: 'Clock in/out with QR, PIN or fingerprint.', icon: 'M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z' },
+    { title: 'Set up your phone', desc: 'Register a passkey, then clock in or out securely.', icon: 'M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z' },
   ]
 
   return (

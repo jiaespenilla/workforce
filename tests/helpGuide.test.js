@@ -9,7 +9,7 @@ describe('buildGuideSections — role awareness', () => {
     expect(ids).toContain('companies')
     expect(ids).toContain('system-config')
     expect(ids).toContain('roles')
-    expect(ids).toContain('kiosk-setup')
+    expect(ids).toContain('time-clock-setup')
     expect(ids).not.toContain('tasks')
     expect(ids).not.toContain('people')
   })
@@ -22,18 +22,18 @@ describe('buildGuideSections — role awareness', () => {
     expect(ids).toContain('people')
     expect(ids).toContain('payroll')
     expect(ids).not.toContain('companies')
-    expect(ids).not.toContain('kiosk') // Kiosk Mode is employee-only
+    expect(ids).not.toContain('phone-passkeys') // Personal phone management is employee-only
   })
 
   it('hides modules the employee has no permission for', () => {
     const full = buildGuideSections({ role: 'employee', perms: {} }).map((s) => s.id)
     expect(full).toContain('tasks')
-    expect(full).toContain('kiosk')
+    expect(full).toContain('phone-passkeys')
 
     const limited = buildGuideSections({ role: 'employee', perms: { tasks: false, timekeeping: false, kiosk: false } }).map((s) => s.id)
     expect(limited).not.toContain('tasks')
     expect(limited).not.toContain('timekeeping')
-    expect(limited).not.toContain('kiosk')
+    expect(limited).not.toContain('phone-passkeys')
     // Always-available sections remain.
     expect(limited).toContain('notifications')
     expect(limited).toContain('security')

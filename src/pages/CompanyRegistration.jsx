@@ -177,7 +177,7 @@ export default function CompanyRegistration() {
             <ol className="mt-5 space-y-2 rounded-xl bg-gray-50 p-4 text-left text-xs leading-relaxed text-gray-600 ring-1 ring-gray-100">
               <li className="flex gap-2"><span className="font-bold text-brand-600">1.</span> An administrator reviews and approves your registration.</li>
               <li className="flex gap-2"><span className="font-bold text-brand-600">2.</span> Each team member signs in with their registered email.</li>
-              <li className="flex gap-2"><span className="font-bold text-brand-600">3.</span> Set up shifts and start clocking in via the Time Kiosk.</li>
+              <li className="flex gap-2"><span className="font-bold text-brand-600">3.</span> Set up shifts and start secure clocking from Time Keeping.</li>
             </ol>
             <a href="/login" className="mt-6 inline-block w-full rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow hover:bg-brand-700">Go to login</a>
           </div>

@@ -57,6 +57,8 @@ export const REGISTER_MAX_ATTEMPTS = 5
 export const KIOSK_WINDOW_MS = 15 * 60 * 1000
 export const KIOSK_MAX_ATTEMPTS = 200
 
-export const COMPANY_SETTING_KEYS = ['shift_schedules', 'company_locations', 'kiosk_configs', 'attachment_storage']
+export const COMPANY_SETTING_KEYS = ['shift_schedules', 'company_locations', 'attachment_storage']
+// Public settings are an allowlist. A denylist previously risked exposing new
+// secret-bearing settings (including legacy kiosk tokens) as features grew.
 export const GLOBAL_SETTINGS_SQL =
-  "SELECT key, value FROM settings WHERE key NOT LIKE 'shift_schedules:%' AND key NOT LIKE 'company_locations:%' AND key NOT LIKE 'kiosk_configs:%' AND key NOT LIKE 'attachment_storage:%'"
+  "SELECT key, value FROM settings WHERE key IN ('system_name', 'version', 'timezone', 'system_icon', 'idle_timeout', 'idle_timeout_minutes', 'maintenance_mode')"

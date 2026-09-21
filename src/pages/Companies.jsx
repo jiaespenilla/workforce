@@ -605,7 +605,7 @@ export default function Companies() {
 
   const queueWelcomeForCompany = (company) => {
     const welcomeSubject = `Welcome to ${company.name} — You're all set!`
-    const welcomeBody = `Welcome to ${company.name}!\n\nYour company is now active on Unified Workforce.\n\nIndustry: ${company.industry || '—'}${company.city ? ` · ${company.city}` : ''}\nTeam size: ${company.employees.length} member(s)\n\nQuick start:\n• View your Dashboard for an overview\n• Manage teammates in People\n• Set up Shift Schedules for your team\n• Clock in/out via the Time Kiosk (QR / PIN / fingerprint)\n\nTip: You can find this introduction again in Notifications (bell icon).\n\n— CelestSolutions`
+    const welcomeBody = `Welcome to ${company.name}!\n\nYour company is now active on Unified Workforce.\n\nIndustry: ${company.industry || '—'}${company.city ? ` · ${company.city}` : ''}\nTeam size: ${company.employees.length} member(s)\n\nQuick start:\n• View your Dashboard for an overview\n• Manage teammates in People\n• Set up Shift Schedules for your team\n• Register a phone passkey and clock in/out from Time Keeping\n\nTip: You can find this introduction again in Notifications (bell icon).\n\n— CelestSolutions`
     for (const emp of company.employees) {
       if (!emp.email) continue
       const payload = { to: emp.email, subject: welcomeSubject, body: welcomeBody }
@@ -964,7 +964,7 @@ export default function Companies() {
                 <div>
                   <h3 className="text-base font-bold text-gray-900">Deactivate company?</h3>
                   <p className="mt-1 text-sm leading-relaxed text-gray-600">
-                    <span className="font-semibold">{deactivateConfirm.name}</span> is active and has {deactivateConfirm.employees.filter((e)=>e.active!==false).length} active employee(s). Deactivating will hide it from dropdowns, block logins and kiosk punches. You can reactivate later.
+                    <span className="font-semibold">{deactivateConfirm.name}</span> is active and has {deactivateConfirm.employees.filter((e)=>e.active!==false).length} active employee(s). Deactivating will hide it from dropdowns and block logins and time-clock punches. You can reactivate later.
                   </p>
                   <p className="mt-2 text-xs text-gray-500">Inactive companies remain visible in Companies search (as you requested) but are hidden from assignment dropdowns.</p>
                 </div>

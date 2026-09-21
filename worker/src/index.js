@@ -5,7 +5,7 @@
 
 import { json, cors, setAllowedOrigins, toErrorResponse } from './lib/http.js'
 import { requireAuth } from './lib/auth.js'
-import { ensureSeed, migrateCompanySettings, migrateTaskColumns, migrateTaskAssigneeId, migrateAttendanceOvertime, migrateEmployeePay, migratePayrollRuns, migrateUserProfile, migrateWebAuthnDevice, migrateTaskNotes, migrateTaskWorkLog } from './lib/seed.js'
+import { ensureSeed, migrateCompanySettings, migrateTaskColumns, migrateTaskAssigneeId, migrateAttendanceOvertime, migrateEmployeePay, migratePayrollRuns, migrateUserProfile, migrateTaskNotes, migrateTaskWorkLog } from './lib/seed.js'
 import * as publicRoutes from './routes/public.js'
 import * as authRoutes from './routes/auth.js'
 import * as settingsRoutes from './routes/settings.js'
@@ -13,14 +13,13 @@ import * as companyRoutes from './routes/companies.js'
 import * as taskRoutes from './routes/tasks.js'
 import * as attendanceRoutes from './routes/attendance.js'
 import * as payrollRoutes from './routes/payroll.js'
-import * as credentialRoutes from './routes/credentials.js'
 import * as orgUnitRoutes from './routes/orgUnits.js'
-import * as kioskAdminRoutes from './routes/kioskAdmin.js'
+import * as timeClockRoutes from './routes/timeClock.js'
 import * as notificationRoutes from './routes/notifications.js'
 import * as adminRoutes from './routes/admin.js'
 
 // Order matters: these run without a token (login, registration, kiosk…).
-const PUBLIC_HANDLERS = [publicRoutes.handle]
+const PUBLIC_HANDLERS = [timeClockRoutes.handlePublic, publicRoutes.handle]
 
 // Authenticated routes, evaluated in order; the first match wins.
 const API_HANDLERS = [
@@ -30,9 +29,8 @@ const API_HANDLERS = [
   taskRoutes.handle,
   attendanceRoutes.handle,
   payrollRoutes.handle,
-  credentialRoutes.handle,
   orgUnitRoutes.handle,
-  kioskAdminRoutes.handle,
+  timeClockRoutes.handle,
   notificationRoutes.handle,
   adminRoutes.handle,
 ]
@@ -58,7 +56,6 @@ async function ensureMigrations(env) {
         migrateEmployeePay(env),
         migratePayrollRuns(env),
         migrateUserProfile(env),
-        migrateWebAuthnDevice(env),
         migrateTaskNotes(env),
         migrateTaskWorkLog(env),
       ])

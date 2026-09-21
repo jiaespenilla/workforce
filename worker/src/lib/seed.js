@@ -44,10 +44,10 @@ export async function ensureSeed(env) {
   await addUser(ceoCreds.email, ceoCreds.name, 'ceo', ceoCreds.password)
 
   const defaults = [
-    ['CEO', { dashboard: true, timekeeping: true, tasks: true, payroll: true, employees: true, shifts: true, kiosk: false, settings: false }],
-    ['HR Manager', { dashboard: true, timekeeping: true, tasks: true, payroll: false, employees: true, shifts: true, kiosk: true, settings: false }],
-    ['Team Lead', { dashboard: true, timekeeping: true, tasks: true, payroll: false, employees: false, shifts: true, kiosk: true, settings: false }],
-    ['Employee', { dashboard: true, timekeeping: true, tasks: true, payroll: false, employees: false, shifts: true, kiosk: true, settings: false }],
+    ['CEO', { dashboard: true, timekeeping: true, tasks: true, payroll: true, employees: true, shifts: true, settings: false }],
+    ['HR Manager', { dashboard: true, timekeeping: true, tasks: true, payroll: false, employees: true, shifts: true, settings: false }],
+    ['Team Lead', { dashboard: true, timekeeping: true, tasks: true, payroll: false, employees: false, shifts: true, settings: false }],
+    ['Employee', { dashboard: true, timekeeping: true, tasks: true, payroll: false, employees: false, shifts: true, settings: false }],
   ]
   for (const [name, perms] of defaults) {
     await env.DB.prepare('INSERT INTO roles (name, perms_json) VALUES (?, ?)').bind(name, JSON.stringify(perms)).run()
@@ -239,24 +239,6 @@ export async function migrateUserProfile(env) {
   await alterLogged(env, 'migrateUserProfile', 'ALTER TABLE users ADD COLUMN phone TEXT')
   await alterLogged(env, 'migrateUserProfile', 'ALTER TABLE users ADD COLUMN avatar TEXT')
   userProfileMigrated = true
-}
-
-let webauthnDeviceMigrated = false
-// Track WHICH kiosk device enrolled each fingerprint credential (54/55).
-// One fingerprint per kiosk device — prevents two employees enrolling the
-// same finger on one kiosk, which makes the account picker ambiguous.
-export async function migrateWebAuthnDevice(env) {
-  if (webauthnDeviceMigrated) return
-  try {
-    await env.DB.prepare('SELECT device_id FROM webauthn_credentials LIMIT 1').first()
-    webauthnDeviceMigrated = true
-    return
-  } catch {
-    // column missing — add it below
-  }
-  await alterLogged(env, 'migrateWebAuthnDevice', 'ALTER TABLE webauthn_credentials ADD COLUMN device_id TEXT')
-  await alterLogged(env, 'migrateWebAuthnDevice', 'CREATE INDEX IF NOT EXISTS idx_wcred_device ON webauthn_credentials (device_id)')
-  webauthnDeviceMigrated = true
 }
 
 let taskNotesMigrated = false

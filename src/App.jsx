@@ -15,14 +15,13 @@ const SystemConfig = lazy(() => import('./pages/SystemConfig'))
 const Companies = lazy(() => import('./pages/Companies'))
 
 const CompanyRegistration = lazy(() => import('./pages/CompanyRegistration'))
-const Kiosk = lazy(() => import('./pages/Kiosk'))
-const KioskSetup = lazy(() => import('./pages/KioskSetup'))
+const TimeClockSetup = lazy(() => import('./pages/KioskSetup'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const TimeKeeping = lazy(() => import('./pages/TimeKeeping'))
 const Tasks = lazy(() => import('./pages/Tasks'))
 const Payroll = lazy(() => import('./pages/Payroll'))
 const Profile = lazy(() => import('./pages/Profile'))
-const KioskCredentials = lazy(() => import('./pages/KioskCredentials'))
+const PhonePasskeys = lazy(() => import('./pages/KioskCredentials'))
 const ShiftSchedules = lazy(() => import('./pages/ShiftSchedules'))
 const People = lazy(() => import('./pages/People'))
 const StorageSetup = lazy(() => import('./pages/StorageSetup'))
@@ -132,7 +131,8 @@ export default function App() {
           <Route element={<RequireRole role="administrator"><AdminLayout /></RequireRole>}>
             <Route path="/companies" element={<Companies />} />
             <Route path="/settings" element={<SystemConfig />} />
-            <Route path="/kiosk-setup" element={<KioskSetup />} />
+            <Route path="/time-clock-setup" element={<TimeClockSetup />} />
+            <Route path="/kiosk-setup" element={<Navigate to="/time-clock-setup" replace />} />
             {/* Storage Setup — administrator-only (19); configured per active company */}
             <Route path="/storage-setup" element={<StorageSetup />} />
           </Route>
@@ -157,14 +157,15 @@ export default function App() {
             }
           />
 
-          {/* Stand-alone kiosk — publicly accessible, no login required */}
-          <Route path="/kiosk" element={<Kiosk />} />
+          {/* Retired kiosk URL always returns to authenticated entry. */}
+          <Route path="/kiosk" element={<Navigate to="/login" replace />} />
 
           <Route element={<RequireRole roles={['employee', 'ceo']}><MaintenanceGate><Layout /></MaintenanceGate></RequireRole>}>
             <Route path="/" element={<PageGate perm="dashboard"><Dashboard /></PageGate>} />
             <Route path="/timekeeping" element={<PageGate perm="timekeeping"><TimeKeeping /></PageGate>} />
             <Route path="/payroll" element={<PageGate perm="payroll"><Payroll /></PageGate>} />
-                                    <Route path="/kiosk-credentials" element={<PageGate perm="kiosk"><KioskCredentials /></PageGate>} />
+            <Route path="/phone-passkeys" element={<PageGate perm="timekeeping"><PhonePasskeys /></PageGate>} />
+            <Route path="/kiosk-credentials" element={<Navigate to="/phone-passkeys" replace />} />
             <Route path="/people" element={<PageGate perm="employees"><People /></PageGate>} />
           </Route>
 

@@ -432,7 +432,7 @@ function CeoDashboard({ user }) {
             Good {now.getHours()<12?'morning':now.getHours()<18?'afternoon':'evening'}, {firstName}
           </h1>
           <p className="mt-1 text-sm leading-relaxed text-gray-500">
-            {clockedInEmployees.length} currently clocked-in via kiosk · click an employee to view their tasks.
+            {clockedInEmployees.length} currently clocked in · click an employee to view their tasks.
           </p>
         </div>
       </div>
@@ -635,7 +635,7 @@ function CeoDashboard({ user }) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <p className="text-sm font-medium text-gray-900">No one is clocked in right now</p>
-              <p className="mt-1 text-xs text-gray-500">Employees appear here once they check in through the kiosk.</p>
+              <p className="mt-1 text-xs text-gray-500">Employees appear here once they clock in by phone or workplace terminal.</p>
             </div>
           ) : (
           clockedInEmployees.map((emp) => {
@@ -894,7 +894,7 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-          <p className="mt-3 text-center text-[11px] text-gray-400">Mon–Fri from your kiosk punches</p>
+          <p className="mt-3 text-center text-[11px] text-gray-400">Mon–Fri from your verified punches</p>
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm flex flex-col">
@@ -909,7 +909,7 @@ export default function Dashboard() {
                   <p className="text-[11px] text-gray-500">{new Date(p.time).toLocaleDateString()}</p>
                 </div>
               </div>
-            )) : <div className="rounded-xl border-2 border-dashed border-gray-200 p-6 text-center text-sm text-gray-400">No punches yet — use the kiosk to clock in.</div>}
+            )) : <div className="rounded-xl border-2 border-dashed border-gray-200 p-6 text-center text-sm text-gray-400">No punches yet — use the secure clock in Time Keeping.</div>}
           </div>
           {upcomingTasks.length >0 && (
             <div className="mt-4 border-t border-gray-100 pt-4">
@@ -946,4 +946,3 @@ export default function Dashboard() {
     </div>
   )
 }
-

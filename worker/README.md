@@ -13,11 +13,12 @@ wrangler login                 # opens browser — use your Cloudflare account
 # Create the database, then copy the D1 database_id into wrangler.jsonc
 wrangler d1 create workforce
 
-# Apply the schema
+# Apply the schema for a brand-new database
 wrangler d1 execute workforce --file=./schema.sql --remote
 
 # Set a real auth secret
 wrangler secret put AUTH_SECRET   # paste a long random string when prompted
+wrangler secret put TIME_CLOCK_DEVICE_MASTER_SECRET
 ```
 
 Also replace `database_id` in `wrangler.jsonc` with the id printed by `d1 create`.
@@ -43,8 +44,28 @@ See ../DEPLOY.md for the full environment variable reference.
 ## Deploy
 
 ```bash
+# Existing databases: apply versioned upgrades before deploying the Worker.
+wrangler d1 migrations list workforce --remote
+wrangler d1 migrations apply workforce --remote
+
 wrangler deploy
 ```
+
+The time-clock migration preserves existing attendance rows, adds immutable
+source events, and revokes legacy shared-kiosk tokens. Back up the D1 database
+before applying a production migration.
+
+## Verification
+
+```bash
+npm run test:run
+npm run test:worker
+npm run build
+```
+
+The Worker-runtime test exercises signed terminal batches, replay blocking,
+invalid signatures, rejected mappings, and attendance creation inside the
+Cloudflare runtime.
 
 Note the deployed URL (e.g. https://unified-workforce-api.<your-subdomain>.workers.dev).
 

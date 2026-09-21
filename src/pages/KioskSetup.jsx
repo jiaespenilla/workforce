@@ -1,798 +1,246 @@
+import { useEffect, useMemo, useState } from 'react'
 import { usePageTitle } from '../lib/documentMeta'
-import { useEffect, useState } from 'react'
-import QRCode from 'qrcode'
-import { startRegistration } from '@simplewebauthn/browser'
-import { getActiveSettings } from '../lib/systemSettings'
-import { api, apiEnabled } from '../lib/api'
-import { getCredential, setPin, ensureQrCode } from '../lib/credentials'
-import { getDefaultKioskConfig, getCompanyKioskConfig, resolveKioskSite, saveCompanyKioskConfig, loadKioskConfig as loadKioskConfigPerCompany } from '../lib/kioskConfig'
+import { api } from '../lib/api'
 import { getCompanyLocations } from '../lib/locations'
 
-// Keep legacy export for Kiosk.jsx fallback (no companyId)
-export function loadKioskConfig(companyId) {
-  if (companyId) return loadKioskConfigPerCompany(companyId)
-  try {
-    const legacy = localStorage.getItem('uw_kiosk_config')
-    if (legacy) return { ...getDefaultKioskConfig(), ...JSON.parse(legacy) }
-  } catch {}
-  return getDefaultKioskConfig()
+function statusLabel(device) {
+  if (!device.active) return ['Revoked', 'bg-red-50 text-red-700']
+  if (!device.last_seen_at) return ['Not connected', 'bg-gray-100 text-gray-600']
+  const recent = Date.now() - new Date(device.last_seen_at).getTime() < 10 * 60 * 1000
+  return recent ? ['Connected', 'bg-emerald-50 text-emerald-700'] : ['Offline', 'bg-amber-50 text-amber-700']
 }
 
-const methods = [
-  {
-    id: 'fingerprint',
-    label: 'Fingerprint',
-    tag: 'Default',
-    desc: 'Biometric unlock using the device fingerprint sensor. Recommended for mobile kiosks.',
-    icon: 'M2 12a10 10 0 0 1 18-6M21.8 16c.2-2 .131-5.354 0-6M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2M8.65 22c.21-.66.45-1.32.57-2M9 6.8a6 6 0 0 1 9 5.2v2M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4M14 13.12c0 2.38 0 6.38-1 8.88',
-  },
-  {
-    id: 'pin',
-    label: 'PIN Code',
-    tag: null,
-    desc: 'Employees enter a personal identification number on a numeric keypad.',
-    icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
-  },
-  {
-    id: 'qr',
-    label: 'QR Code',
-    tag: null,
-    desc: 'Employees scan their personal QR badge with the kiosk camera.',
-    icon: 'M3 9V5a2 2 0 012-2h4m6 0h4a2 2 0 012 2v4m0 6v4a2 2 0 01-2 2h-4m-6 0H5a2 2 0 01-2-2v-4M8 13v3h3m2-6h3v3',
-  },
-]
-
-// Legacy hardcoded sites removed (65) — the assigned branch/site is now chosen
-// from the company's real work locations (People → Work Locations).
-
-function QrGlyph({ className }) {
-  return (
-    <svg viewBox="0 0 21 21" className={className} fill="currentColor">
-      <path d="M0 0h7v7H0zM2 2v3h3V2zM14 0h7v7h-7zM16 2v3h3V2zM0 14h7v7H0zM2 16v3h3v-3zM10 0h2v2h-2zM10 4h2v2h-2zM4 10h2v2H4zM8 8h2v2H8zM12 10h2v2h-2zM10 14h2v2h-2zM14 14h2v2h-2zM18 14h2v2h-2zM16 10h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z" />
-    </svg>
-  )
-}
-
-export default function KioskSetup() {
-  usePageTitle('Kiosk Setup')
+export default function TimeClockSetup() {
+  usePageTitle('Time Clock Setup')
   const [companies, setCompanies] = useState([])
-  const [configCompanyId, setConfigCompanyId] = useState('')
-  const [config, setConfig] = useState(() => loadKioskConfig())
-
-  useEffect(() => {
-    if (!apiEnabled()) return
-    api('/api/companies').then((res)=>{
-      const all = Array.isArray(res) ? res : (res.data || [])
-      const active = all.filter((c)=>c.active!==false)
-      setCompanies(active)
-      if (active.length && !active.find((c)=>c.id===configCompanyId)) setConfigCompanyId(active[0].id)
-    }).catch(()=>{})
-  }, [configCompanyId])
-  const [saved, setSaved] = useState(false)
-
-  // Company work locations (65) — the kiosk's assigned branch/site must be
-  // one of this company's real work locations (managed in People / Company
-  // details → Work locations), and the Kiosk screen renders the same value.
+  const [companyId, setCompanyId] = useState('')
   const [locations, setLocations] = useState([])
-  const [configLoaded, setConfigLoaded] = useState(false)
-  useEffect(() => {
-    if (!configCompanyId) { setLocations([]); setConfigLoaded(false); return }
-    let cancelled = false
-    setConfigLoaded(false)
-    Promise.all([
-      getCompanyLocations(configCompanyId).catch(() => []),
-      getCompanyKioskConfig(configCompanyId).catch(() => null),
-    ]).then(([ls, saved]) => {
-      if (cancelled) return
-      setLocations(ls || [])
-      setConfig((prev) => {
-        const base = saved || prev
-        const aligned = resolveKioskSite(base, ls || [])
-        // No real locations yet (or legacy name that no longer exists) —
-        // keep the saved value untouched instead of blanking it.
-        if (!(ls || []).length && !aligned.siteId && (base.site || base.siteId)) {
-          return { ...prev, ...base }
-        }
-        return { ...prev, ...base, ...aligned }
-      })
-      setConfigLoaded(true)
-    })
-    return () => { cancelled = true }
-  }, [configCompanyId])
+  const [devices, setDevices] = useState([])
+  const [selectedId, setSelectedId] = useState('')
+  const [mappings, setMappings] = useState([])
+  const [issues, setIssues] = useState([])
+  const [phoneEnabled, setPhoneEnabled] = useState(false)
+  const [newDevice, setNewDevice] = useState({ name: 'Main entrance terminal', siteId: '' })
+  const [newMapping, setNewMapping] = useState({ terminalUserId: '', employeeId: '' })
+  const [sim, setSim] = useState({ terminalUserId: '', action: 'in', occurredAt: '' })
+  const [revealedSecret, setRevealedSecret] = useState('')
+  const [notice, setNotice] = useState(null)
+  const [busy, setBusy] = useState(false)
 
-  // Device pairing — a per-company token kiosks use to record punches.
-  const [kioskToken, setKioskToken] = useState(null)
-  const [tokenCopied, setTokenCopied] = useState(false)
-  useEffect(() => {
-    if (!configCompanyId) { setKioskToken(null); return }
-    let cancelled = false
-    api(`/api/kiosk-token/${encodeURIComponent(configCompanyId)}`).then((r) => {
-      if (cancelled) return
-      setKioskToken(r.token)
-      // (71) Active temporary field-work tokens, with their expiry
-      setTempTokens(Array.isArray(r.temporary) ? r.temporary : [])
-    }).catch(() => { if (!cancelled) setKioskToken(null) })
-    return () => { cancelled = true }
-  }, [configCompanyId])
-  const regenerateToken = async () => {
-    if (!configCompanyId) return
-    try {
-      await api(`/api/kiosk-token/${encodeURIComponent(configCompanyId)}`, { method: 'DELETE' })
-      const r = await api(`/api/kiosk-token/${encodeURIComponent(configCompanyId)}`)
-      setKioskToken(r.token)
-      setTokenCopied(false)
-    } catch { /* ignore */ }
-  }
-  const copyToken = async () => {
-    if (!kioskToken) return
-    try { await navigator.clipboard.writeText(kioskToken); setTokenCopied(true); setTimeout(() => setTokenCopied(false), 3000) } catch {}
-  }
+  const company = companies.find((item) => item.id === companyId)
+  const selected = devices.find((item) => item.id === selectedId)
+  const employees = useMemo(() => (company?.employees || []).filter((employee) => employee.active !== false), [company])
 
-  // (71) Temporary field-work tokens — short-lived pairing tokens so a field
-  // employee can pair their own device, clock in/out, and the token stops
-  // working automatically. TTLs: 1h / 3h / 5h / end of day.
-  const TEMP_TTLS = [
-    ['1h', '1 hour'],
-    ['3h', '3 hours'],
-    ['5h', '5 hours'],
-    ['day', 'End of day'],
-  ]
-  const [tempTokens, setTempTokens] = useState([])
-  const [tempTtl, setTempTtl] = useState('1h')
-  const [freshTemp, setFreshTemp] = useState(null)   // just-generated token
-  const [freshCopied, setFreshCopied] = useState(false)
-  const [tempBusy, setTempBusy] = useState(false)
-  const [tempError, setTempError] = useState(null)
-  const [nowTick, setNowTick] = useState(Date.now())
   useEffect(() => {
-    const t = setInterval(() => setNowTick(Date.now()), 30000)
-    return () => clearInterval(t)
+    api('/api/companies').then((result) => {
+      const all = (Array.isArray(result) ? result : result.data || []).filter((item) => item.active !== false)
+      setCompanies(all)
+      setCompanyId((current) => current || all[0]?.id || '')
+    }).catch((error) => setNotice({ type: 'error', text: error.message }))
   }, [])
 
-  const generateTempToken = async () => {
-    if (!configCompanyId || tempBusy) return
-    setTempBusy(true)
-    setTempError(null)
-    try {
-      const r = await api(`/api/kiosk-token/${encodeURIComponent(configCompanyId)}`, { method: 'POST', body: { ttl: tempTtl } })
-      setFreshTemp({ token: r.token, expiresAt: r.expiresAt })
-      setFreshCopied(false)
-      setTempTokens((prev) => [...prev, { token: r.token, expiresAt: r.expiresAt }])
-    } catch (e) {
-      setTempError(e?.message || 'Could not generate a temporary token.')
-    } finally {
-      setTempBusy(false)
-    }
+  const loadCompany = async () => {
+    if (!companyId) return
+    const [deviceRows, locationRows, eventRows, config] = await Promise.all([
+      api(`/api/time-clock/admin/devices?companyId=${encodeURIComponent(companyId)}`),
+      getCompanyLocations(companyId),
+      api(`/api/time-clock/admin/events?companyId=${encodeURIComponent(companyId)}`),
+      api(`/api/time-clock/admin/config?companyId=${encodeURIComponent(companyId)}`),
+    ])
+    setDevices(deviceRows)
+    setLocations(locationRows)
+    setIssues(eventRows)
+    setPhoneEnabled(!!config.personalPhoneEnabled)
+    setSelectedId((current) => deviceRows.some((item) => item.id === current) ? current : deviceRows[0]?.id || '')
   }
-
-  const copyTempToken = async (tok) => {
-    try { await navigator.clipboard.writeText(tok); setFreshCopied(true); setTimeout(() => setFreshCopied(false), 3000) } catch {}
-  }
-
-  const revokeTempToken = async (tok) => {
-    if (!configCompanyId || tempBusy) return
-    setTempBusy(true)
-    setTempError(null)
-    try {
-      await api(`/api/kiosk-token/${encodeURIComponent(configCompanyId)}?token=${encodeURIComponent(tok)}`, { method: 'DELETE' })
-      setTempTokens((prev) => prev.filter((x) => x.token !== tok))
-      if (freshTemp?.token === tok) setFreshTemp(null)
-    } catch (e) {
-      setTempError(e?.message || 'Could not revoke that token.')
-    } finally {
-      setTempBusy(false)
-    }
-  }
-
-  // Live tokens only — the server already deletes expired ones lazily.
-  const liveTempTokens = tempTokens.filter((x) => !x.expiresAt || new Date(x.expiresAt).getTime() > nowTick)
-  const fmtExpiry = (iso) => {
-    try {
-      const d = new Date(iso)
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    } catch { return '' }
-  }
-  const minutesLeft = (iso) => Math.max(0, Math.round((new Date(iso).getTime() - nowTick) / 60000))
-
-  // Credential registration state
-  // (uses same active companies list)
-  const [credCompanyId, setCredCompanyId] = useState(companies[0]?.id || '')
-  const credCompany = companies.find((c) => c.id === credCompanyId)
-  const credEmployees = credCompany?.employees || []
-  const [credEmail, setCredEmail] = useState('')
-  const credEmployee = credEmployees.find((e) => e.email === credEmail)
-  const [fpStatus, setFpStatus] = useState(null)   // 'registered' | null
-  const [pinInput, setPinInput] = useState('')
-  const [pinStatus, setPinStatus] = useState(null) // {ok, msg}
-  const [qrImg, setQrImg] = useState(null)
-  const [qrCodeStr, setQrCodeStr] = useState(null)
-  const [credError, setCredError] = useState(null)
-
-  // Keep credential company in sync when active list refreshes (cloud mode)
-  useEffect(() => {
-    if (companies.length && !companies.find((c)=>c.id===credCompanyId)) {
-      setCredCompanyId(companies[0].id)
-      setCredEmail('')
-    }
-  }, [companies, credCompanyId])
 
   useEffect(() => {
-    setFpStatus(null); setPinStatus(null); setQrImg(null); setQrCodeStr(null); setCredError(null)
-    if (!credEmail) return
-    ;(async () => {
-      try {
-        if (apiEnabled()) {
-          const status = await api(`/api/credentials/${encodeURIComponent(credEmail.toLowerCase())}`)
-          setPinStatus(status.pinSet ? { ok: true } : null)
-          if (status.qrCode) {
-            setQrCodeStr(status.qrCode)
-            setQrImg(await QRCode.toDataURL(status.qrCode, { width: 240, margin: 1 }))
-          }
-          // Fingerprint is a platform-authenticator credential (WebAuthn).
-          try {
-            const w = await api(`/api/webauthn/credentials?email=${encodeURIComponent(credEmail.toLowerCase())}`)
-            setFpStatus(w.registered ? 'registered' : null)
-          } catch {
-            setFpStatus(null)
-          }
-        } else {
-          const cred = await getCredential(credEmail)
-          setFpStatus(cred.fpToken ? 'registered' : null)
-          setPinStatus(cred.pin ? { ok: true } : null)
-          if (cred.qrCode) {
-            setQrCodeStr(cred.qrCode)
-            setQrImg(await QRCode.toDataURL(cred.qrCode, { width: 240, margin: 1 }))
-          }
-        }
-      } catch { /* ignore */ }
-    })()
-  }, [credEmail])
+    loadCompany().catch((error) => setNotice({ type: 'error', text: error.message }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId])
 
-  const registerFingerprint = async () => {
-    if (!credEmail) return setCredError('Select an employee first.')
-    if (!credCompanyId) return setCredError('Select a company first.')
-    const email = credEmail.toLowerCase()
+  useEffect(() => {
+    if (!selectedId) { setMappings([]); return }
+    api(`/api/time-clock/admin/mappings?deviceId=${encodeURIComponent(selectedId)}`)
+      .then(setMappings).catch((error) => setNotice({ type: 'error', text: error.message }))
+  }, [selectedId])
+
+  const savePilot = async (enabled) => {
+    setBusy(true)
     try {
-      setCredError(null)
-      // Stable per-device id (54/55): lets the server enforce one fingerprint
-      // enrollment per kiosk, so the OS account picker can never offer two
-      // employees for the same finger.
-      let deviceId = localStorage.getItem('uw_kiosk_device_id')
-      if (!deviceId) {
-        deviceId = crypto.randomUUID ? crypto.randomUUID() : 'kiosk-' + Date.now() + '-' + Math.random().toString(36).slice(2)
-        localStorage.setItem('uw_kiosk_device_id', deviceId)
-      }
-      const options = await api('/api/webauthn/register/options', { method: 'POST', body: { email, origin: window.location.origin } })
-      // Triggers the platform biometric prompt (fingerprint / Face ID) on this device.
-      const reg = await startRegistration({ optionsJSON: options })
-      await api('/api/webauthn/register', { method: 'POST', body: { email, companyId: credCompanyId, deviceId, response: reg } })
-      setFpStatus('registered')
-    } catch (err) {
-      setCredError(friendlyBiometricError(err))
-    }
+      await api('/api/time-clock/admin/config', { method: 'PUT', body: { companyId, personalPhoneEnabled: enabled } })
+      setPhoneEnabled(enabled)
+      setNotice({ type: 'success', text: enabled ? 'Personal phone pilot enabled.' : 'Personal phone clocking paused.' })
+    } catch (error) { setNotice({ type: 'error', text: error.message }) }
+    finally { setBusy(false) }
   }
 
-  // Translate raw WebAuthn / network failures into something actionable on a
-  // shared kiosk phone (previously these errors were silently swallowed).
-  function friendlyBiometricError(err) {
-    const name = err?.name || ''
-    const msg = err?.message || 'Unknown error'
-    if (name === 'NotAllowedError') return 'Biometric capture failed: the prompt was cancelled or timed out. Tap Capture and approve the fingerprint prompt within 2 minutes — one shared device can enroll every employee, one at a time.'
-    if (name === 'InvalidStateError') return 'Biometric capture failed: this device already holds a credential for this employee. Remove the old enrollment below, then capture again.'
-    if (name === 'NotSupportedError' || /not supported|platform/i.test(msg)) return 'Biometric capture failed: this device has no usable fingerprint sensor (or no screen lock is set). Use PIN or QR instead.'
-    if (/network|fetch|failed to fetch/i.test(msg)) return 'Biometric capture failed: could not reach the server. Check the connection and try again.'
-    return 'Biometric capture failed: ' + msg
-  }
-
-  // Remove the employee's fingerprint enrollment (55) — e.g. to clear a
-  // duplicate so another employee can register on the same kiosk device.
-  const removeFingerprint = async () => {
-    if (!credEmail) return
-    if (!window.confirm('Remove the fingerprint enrollment for ' + credEmail + '? The kiosk will no longer accept this finger until it is re-registered.')) return
+  const createDevice = async () => {
+    if (!newDevice.name.trim() || busy) return
+    setBusy(true)
+    setNotice(null)
     try {
-      setCredError(null)
-      await api('/api/webauthn/credentials/' + encodeURIComponent(credEmail.toLowerCase()), { method: 'DELETE' })
-      setFpStatus(null)
-    } catch (err) {
-      setCredError('Could not remove the enrollment: ' + (err?.message || 'Unknown error'))
-    }
+      const result = await api('/api/time-clock/admin/devices', { method: 'POST', body: { companyId, ...newDevice } })
+      setRevealedSecret(result.signingSecret)
+      setSelectedId(result.device.id)
+      setNotice({ type: 'success', text: 'Terminal record created. Copy the signing secret now; it is shown only for setup.' })
+      await loadCompany()
+    } catch (error) { setNotice({ type: 'error', text: error.message }) }
+    finally { setBusy(false) }
   }
 
-  const savePin = async () => {
-    if (!credEmail) return setCredError('Select an employee first.')
-    if (pinInput.length < 4 || pinInput.length > 8) return setCredError('PIN must be 4–8 digits.')
-    await setPin(credEmail, pinInput)
-    setPinInput('')
-    setPinStatus({ ok: true })
-    setCredError(null)
+  const toggleDevice = async (device) => {
+    await api(`/api/time-clock/admin/devices/${encodeURIComponent(device.id)}`, { method: 'PUT', body: { active: !device.active, siteId: device.site_id } })
+    await loadCompany()
   }
 
-  const generateQr = async () => {
-    if (!credEmail) return setCredError('Select an employee first.')
-    const code = await ensureQrCode(credEmail)
-    setQrCodeStr(code)
-    setQrImg(await QRCode.toDataURL(code, { width: 240, margin: 1 }))
-    setCredError(null)
+  const rotateSecret = async (device) => {
+    if (!confirm('Rotate this terminal secret? The terminal will stop syncing until the new secret is installed.')) return
+    try {
+      const result = await api(`/api/time-clock/admin/devices/${encodeURIComponent(device.id)}/rotate-secret`, { method: 'POST' })
+      setRevealedSecret(result.signingSecret)
+      setNotice({ type: 'success', text: 'Signing secret rotated. Copy the new value to the terminal now.' })
+    } catch (error) { setNotice({ type: 'error', text: error.message }) }
   }
 
-  const update = (key, value) => setConfig((c) => ({ ...c, [key]: value }))
-
-  const save = async (e) => {
-    e.preventDefault()
-    if (!configCompanyId) return
-    await saveCompanyKioskConfig(configCompanyId, config)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+  const addMapping = async () => {
+    if (!selectedId || !newMapping.terminalUserId.trim() || !newMapping.employeeId) return
+    setBusy(true)
+    try {
+      await api('/api/time-clock/admin/mappings', { method: 'POST', body: { deviceId: selectedId, ...newMapping } })
+      setNewMapping({ terminalUserId: '', employeeId: '' })
+      setMappings(await api(`/api/time-clock/admin/mappings?deviceId=${encodeURIComponent(selectedId)}`))
+      await loadCompany()
+    } catch (error) { setNotice({ type: 'error', text: error.message }) }
+    finally { setBusy(false) }
   }
 
-  const inputCls = 'mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10'
-  const systemName = getActiveSettings().name
-  // (66) PIN is optional per company — shown as fallback only when enabled.
-  const pinFallbackEnabled = config.method === 'fingerprint' && !!config.pinFallback
+  const removeMapping = async (id) => {
+    await api(`/api/time-clock/admin/mappings/${id}`, { method: 'DELETE' })
+    setMappings((rows) => rows.filter((row) => row.id !== id))
+  }
+
+  const simulate = async () => {
+    if (!selectedId || !sim.terminalUserId || busy) return
+    setBusy(true)
+    try {
+      const result = await api('/api/time-clock/admin/simulator', {
+        method: 'POST',
+        body: { deviceId: selectedId, ...sim, occurredAt: sim.occurredAt ? new Date(sim.occurredAt).toISOString() : undefined },
+      })
+      const eventResult = result.results?.[0]
+      const accepted = eventResult && eventResult.status !== 'rejected'
+      setNotice({
+        type: accepted ? 'success' : 'error',
+        text: accepted
+          ? `Simulator processed a clock-${eventResult.action}. Status: ${eventResult.status}.`
+          : `Simulator rejected the event: ${eventResult?.reason || 'Check the terminal mapping.'}`,
+      })
+      await loadCompany()
+    } catch (error) {
+      setNotice({ type: 'error', text: `Simulator result: ${error.message}` })
+      await loadCompany().catch(() => {})
+    } finally { setBusy(false) }
+  }
 
   return (
-    <form onSubmit={save} className="space-y-6 px-1 sm:px-0">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Administration</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Kiosk Setup</h1>
-          <p className="mt-1 text-sm leading-relaxed text-gray-500">Configure how employees authenticate at time-keeping kiosks. Each company has its own unique setup — detected automatically via employee tagging.</p>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Administrator</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Time Clock Setup</h1>
+          <p className="mt-1 text-sm text-gray-500">Manage personal phone access and workplace fingerprint terminals without storing biometric data.</p>
         </div>
-        <div className="flex items-center gap-3 self-start sm:self-auto shrink-0">
-          {saved && (
-            <span className="inline-flex items-center gap-2 rounded-full bg-brand-50 px-4 py-2 text-xs font-medium text-brand-700 ring-1 ring-brand-200 animate-pulse">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-              Saved
-            </span>
-          )}
-          <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700">Save configuration</button>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-brand-200 bg-gradient-to-br from-brand-50 to-white p-4 shadow-sm sm:p-5">
-        <label className="block text-sm">
-          <span className="flex items-center gap-2 font-semibold text-gray-900">
-            <svg className="h-4 w-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1" /></svg>
-            Configuring for company:
-          </span>
-          <select value={configCompanyId} onChange={(e)=>setConfigCompanyId(e.target.value)} className={inputCls + ' mt-2 max-w-sm min-h-[44px] bg-white'}>
-            {companies.length===0 && <option value="">No active companies — add one first</option>}
-            {companies.map((c)=><option key={c.id} value={c.id}>{c.name} {c.active===false?' (inactive)':''}</option>)}
+        <label className="text-sm font-medium text-gray-700">Company
+          <select value={companyId} onChange={(event) => setCompanyId(event.target.value)} className="mt-1 block min-w-64 rounded-lg border border-gray-300 bg-white px-3 py-2">
+            {companies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
         </label>
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-gray-500">
-          <svg className="h-3.5 w-3.5 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h5l-1.407-1.407A2 2 0 0118 13.585V11a6.003 6.003 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.585a2 2 0 01-.586 1.414L4 17.5" /></svg>
-          Unique per company — kiosk detects automatically via employee badge.
-        </p>
       </div>
 
-      <section className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm sm:p-5">
-        <h2 className="text-base font-semibold text-gray-900">Kiosk device pairing</h2>
-        <p className="mt-1 text-xs leading-relaxed text-gray-600">
-          Kiosks without a user login need this token to record punches. On the kiosk device, open the time kiosk page and tap <span className="font-semibold">Pair device</span>, then paste the token below.
-        </p>
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <code className="min-w-0 flex-1 truncate rounded-lg border border-amber-200 bg-white px-3 py-2 font-mono text-xs text-gray-800">{kioskToken || '—'}</code>
-          <div className="flex gap-2">
-            <button type="button" onClick={copyToken} disabled={!kioskToken} aria-label="Copy device token" className="inline-flex min-h-[44px] items-center rounded-lg border border-amber-300 bg-white px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-40">{tokenCopied ? 'Copied ✓' : 'Copy'}</button>
-            <button type="button" onClick={regenerateToken} disabled={!kioskToken} aria-label="Regenerate device token" className="inline-flex min-h-[44px] items-center rounded-lg bg-amber-500 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-40">Regenerate</button>
-          </div>
-        </div>
-        {kioskToken && <p className="mt-2 text-[11px] text-gray-500">Regenerating invalidates the old token immediately — re-pair any kiosk that used it.</p>}
+      {notice && <div className={`rounded-lg px-4 py-3 text-sm ${notice.type === 'success' ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}>{notice.text}</div>}
 
-        {/* (71) Temporary field-work tokens */}
-        <div className="mt-4 rounded-xl border border-amber-200 bg-white/70 p-4">
-          <h3 className="text-sm font-semibold text-gray-900">Temporary field-work token</h3>
-          <p className="mt-1 text-xs leading-relaxed text-gray-600">
-            For field work: generate a short-lived token the field employee can use to pair their own device
-            (tap <span className="font-semibold">Pair device</span> on the time kiosk page) and clock in/out on site.
-            It stops working automatically when it expires — no cleanup needed.
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {TEMP_TTLS.map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setTempTtl(id)}
-                aria-pressed={tempTtl === id}
-                className={`min-h-[44px] rounded-full px-4 py-2 text-xs font-semibold transition ${
-                  tempTtl === id ? 'bg-amber-500 text-white shadow hover:bg-amber-600' : 'border border-amber-300 bg-white text-amber-700 hover:bg-amber-100'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={generateTempToken}
-              disabled={tempBusy || !configCompanyId}
-              className="min-h-[44px] rounded-lg bg-gray-900 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-gray-700 disabled:opacity-50"
-            >
-              {tempBusy ? 'Generating…' : 'Generate token'}
-            </button>
+      <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-900">Personal phone pilot</h2>
+            <p className="mt-1 text-sm text-gray-500">Employees use their own phone passkey. GPS is requested, but a denied or unavailable location does not block the punch.</p>
           </div>
-          {tempError && (
-            <p role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700 ring-1 ring-red-200">{tempError}</p>
-          )}
-          {freshTemp && (
-            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
-              <p className="text-xs font-semibold text-amber-800">
-                Send this to the field employee now — expires {fmtExpiry(freshTemp.expiresAt)}
-              </p>
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-                <code className="min-w-0 flex-1 truncate rounded-lg border border-amber-200 bg-white px-3 py-2 font-mono text-xs text-gray-800">{freshTemp.token}</code>
-                <button type="button" onClick={() => copyTempToken(freshTemp.token)} className="min-h-[44px] shrink-0 rounded-lg border border-amber-300 bg-white px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100">
-                  {freshCopied ? 'Copied ✓' : 'Copy'}
-                </button>
-              </div>
-            </div>
-          )}
-          {liveTempTokens.length > 0 && (
-            <div className="mt-3">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Active temporary tokens ({liveTempTokens.length})</p>
-              <ul className="mt-1.5 space-y-1.5">
-                {liveTempTokens.map((x) => (
-                  <li key={x.token} className="flex flex-wrap items-center gap-2 rounded-lg bg-white px-3 py-2 ring-1 ring-amber-100">
-                    <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-gray-700">{x.token}</code>
-                    <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
-                      expires {fmtExpiry(x.expiresAt)}{minutesLeft(x.expiresAt) <= 60 ? ` · ${minutesLeft(x.expiresAt)}m left` : ''}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => revokeTempToken(x.token)}
-                      disabled={tempBusy}
-                      aria-label={`Revoke temporary token ending ${fmtExpiry(x.expiresAt)}`}
-                      className="min-h-[44px] shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
-                    >
-                      Revoke
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <button onClick={() => savePilot(!phoneEnabled)} disabled={busy || !companyId} className={`rounded-lg px-4 py-2 text-sm font-semibold ${phoneEnabled ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-700'}`}>
+            {phoneEnabled ? 'Enabled — click to pause' : 'Enable pilot'}
+          </button>
         </div>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_360px]">
-        <div className="space-y-6">
-          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-gray-900">Authentication Method</h2>
-            <p className="mt-1 text-sm text-gray-500">Select the primary sign-in method for kiosk devices.</p>
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              {methods.map((m) => (
-                <label
-                  key={m.id}
-                  className={`relative cursor-pointer rounded-xl border-2 p-4 transition ${
-                    config.method === m.id ? 'border-brand-500 bg-brand-50/60' : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <input type="radio" name="method" value={m.id} checked={config.method === m.id} onChange={() => update('method', m.id)} className="sr-only" />
-                  {m.tag && (
-                    <span className="absolute -top-2.5 right-3 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">{m.tag}</span>
-                  )}
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${config.method === m.id ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
-                      <path strokeLinecap="round" strokeLinejoin="round" d={m.icon} />
-                    </svg>
-                  </div>
-                  <p className="mt-3 text-sm font-semibold text-gray-900">{m.label}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-gray-500">{m.desc}</p>
-                </label>
-              ))}
+      <div className="grid gap-6 xl:grid-cols-[1fr_1.15fr]">
+        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="font-semibold text-gray-900">Terminal devices</h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <input value={newDevice.name} onChange={(event) => setNewDevice({ ...newDevice, name: event.target.value })} placeholder="Terminal name" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <select value={newDevice.siteId} onChange={(event) => setNewDevice({ ...newDevice, siteId: event.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+              <option value="">No site assigned</option>
+              {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+            </select>
+          </div>
+          <button onClick={createDevice} disabled={busy || !companyId} className="mt-3 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Add terminal</button>
+          {revealedSecret && (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <p className="text-xs font-semibold text-amber-800">One-time signing secret</p>
+              <code className="mt-2 block break-all rounded bg-white p-2 text-xs text-gray-700">{revealedSecret}</code>
+              <button onClick={() => navigator.clipboard.writeText(revealedSecret)} className="mt-2 text-xs font-semibold text-amber-800">Copy secret</button>
             </div>
-          </section>
-
-          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-gray-900">Method Options</h2>
-            {config.method === 'fingerprint' && (
-              <div className="mt-4 divide-y divide-gray-100 rounded-lg border border-gray-200">
-                <label className="flex cursor-pointer items-center justify-between gap-4 p-4">
-                  <span>
-                    <span className="block text-sm font-medium text-gray-900">Allow PIN fallback</span>
-                    <span className="block text-xs text-gray-500">PIN is optional — enable it only if this company needs a fallback when the fingerprint sensor is unavailable.</span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={!!config.pinFallback}
-                    onChange={(e) => update('pinFallback', e.target.checked)}
-                    aria-label="Allow PIN fallback"
-                    className="h-6 w-6 shrink-0 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-                  />
-                </label>
-                <label className="flex cursor-pointer items-center justify-between gap-4 p-4">
-                  <span>
-                    <span className="block text-sm font-medium text-gray-900">Require re-authentication after checkout</span>
-                    <span className="block text-xs text-gray-500">Prevents duplicate punches on shared devices.</span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={!!config.requireReAuth}
-                    onChange={(e) => update('requireReAuth', e.target.checked)}
-                    aria-label="Require re-authentication after checkout"
-                    className="h-6 w-6 shrink-0 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-                  />
-                </label>
-              </div>
-            )}
-{(config.method === 'pin' || pinFallbackEnabled) && (
-  <>
-    <p className="mt-4 text-xs leading-relaxed text-gray-500">
-      {config.method === 'pin'
-        ? 'PIN sign-in settings for kiosk devices.'
-        : 'Fingerprint fallback — these apply when an employee chooses “Use PIN instead”.'}
-    </p>
-    <div className="mt-2 grid gap-4 sm:grid-cols-2">
-      <label className="block text-sm">
-        <span className="font-medium text-gray-700">PIN length:</span>
-        <select value={String(config.pinLength)} onChange={(e) => update('pinLength', Number(e.target.value))} className={inputCls}>
-          <option value="4">4 digits</option>
-          <option value="6">6 digits</option>
-        </select>
-      </label>
-      <label className="block text-sm">
-        <span className="font-medium text-gray-700">Lockout after failed attempts:</span>
-        <select value={String(config.lockoutAttempts)} onChange={(e) => update('lockoutAttempts', Number(e.target.value))} className={inputCls}>
-          <option value="3">3 attempts</option>
-          <option value="5">5 attempts</option>
-          <option value="0">No lockout</option>
-        </select>
-      </label>
-    </div>
-  </>
-)}
-            {config.method === 'qr' && (
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm">
-                  <span className="font-medium text-gray-700">Badge QR rotation:</span>
-                  <select value={config.qrRotation} onChange={(e) => update('qrRotation', e.target.value)} className={inputCls}>
-                    <option value="static">Static (never expires)</option>
-                    <option value="daily">Rotate daily</option>
-                    <option value="weekly">Rotate weekly</option>
-                  </select>
-                </label>
-                <label className="block text-sm">
-                  <span className="font-medium text-gray-700">Camera device:</span>
-                  <select value={config.camera} onChange={(e) => update('camera', e.target.value)} className={inputCls}>
-                    <option value="rear">Rear camera (mobile)</option>
-                    <option value="front">Front camera</option>
-                  </select>
-                </label>
-              </div>
-            )}
-          </section>
-
-          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-gray-900">Credential Registration</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Register each employee's fingerprint, PIN and QR badge. On the kiosk, one tap on the
-              fingerprint sensor identifies who is clocking in — no name selection needed.
-            </p>
-            {credError && (
-              <div role="alert" className="mt-3 flex items-start gap-2.5 rounded-xl bg-red-50 px-4 py-3 text-xs font-medium leading-relaxed text-red-700 ring-1 ring-red-200">
-                <svg className="mt-0.5 h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <span className="flex-1">{credError}</span>
-                <button type="button" onClick={() => setCredError(null)} aria-label="Dismiss error" className="rounded-lg p-0.5 text-red-400 hover:bg-red-100 hover:text-red-600">
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          )}
+          <div className="mt-4 space-y-2">
+            {devices.map((device) => {
+              const [label, cls] = statusLabel(device)
+              return (
+                <button key={device.id} onClick={() => setSelectedId(device.id)} className={`w-full rounded-lg border p-4 text-left ${selectedId === device.id ? 'border-brand-400 bg-brand-50' : 'border-gray-200'}`}>
+                  <div className="flex items-start justify-between gap-2"><span className="font-semibold text-gray-900">{device.name}</span><span className={`rounded-full px-2 py-1 text-xs font-medium ${cls}`}>{label}</span></div>
+                  <p className="mt-1 text-xs text-gray-500">Last sync: {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : 'Never'} · Mappings: {device.mapping_count} · Issues: {device.issue_count}</p>
                 </button>
-              </div>
-            )}
+              )
+            })}
+            {!devices.length && <p className="rounded-lg bg-gray-50 p-4 text-sm text-gray-500">No workplace terminal added yet. The simulator works as soon as you add one.</p>}
+          </div>
+        </section>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="font-medium text-gray-700">Company:</span>
-                <select value={credCompanyId} onChange={(e) => { setCredCompanyId(e.target.value); setCredEmail('') }} className={inputCls}>
-                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </label>
-              <label className="block text-sm">
-                <span className="font-medium text-gray-700">Employee:</span>
-                <select value={credEmail} onChange={(e) => setCredEmail(e.target.value)} className={inputCls}>
-                  <option value="">Select employee…</option>
-                  {credEmployees.map((emp) => <option key={emp.email} value={emp.email}>{emp.name}</option>)}
-                </select>
-              </label>
+        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div><h2 className="font-semibold text-gray-900">Employee mappings</h2><p className="mt-1 text-xs text-gray-500">Connect the employee number stored in the terminal to the correct app employee.</p></div>
+            {selected && <div className="flex gap-2"><button onClick={() => rotateSecret(selected)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700">Rotate secret</button><button onClick={() => toggleDevice(selected)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700">{selected.active ? 'Revoke device' : 'Reactivate'}</button></div>}
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_1.5fr_auto]">
+            <input value={newMapping.terminalUserId} onChange={(event) => setNewMapping({ ...newMapping, terminalUserId: event.target.value })} placeholder="Terminal employee ID" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <select value={newMapping.employeeId} onChange={(event) => setNewMapping({ ...newMapping, employeeId: event.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="">Choose employee</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} — {employee.email}</option>)}</select>
+            <button onClick={addMapping} disabled={busy || !selectedId} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Map</button>
+          </div>
+          <div className="mt-4 divide-y divide-gray-100 rounded-lg border border-gray-200">
+            {mappings.map((mapping) => <div key={mapping.id} className="flex items-center justify-between gap-3 px-4 py-3"><div><p className="text-sm font-semibold text-gray-900">{mapping.terminal_user_id} → {mapping.name}</p><p className="text-xs text-gray-500">{mapping.email}</p></div><button onClick={() => removeMapping(mapping.id)} className="text-xs font-semibold text-red-600">Remove</button></div>)}
+            {!mappings.length && <p className="p-4 text-sm text-gray-500">No mappings for the selected terminal.</p>}
+          </div>
+
+          <div className="mt-6 border-t border-gray-100 pt-5">
+            <h3 className="font-semibold text-gray-900">Terminal simulator</h3>
+            <p className="mt-1 text-xs text-gray-500">Test mapping, offline timestamps, duplicate protection, and review flags before purchasing hardware.</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <input value={sim.terminalUserId} onChange={(event) => setSim({ ...sim, terminalUserId: event.target.value })} placeholder="Terminal employee ID" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <select value={sim.action} onChange={(event) => setSim({ ...sim, action: event.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="in">Clock in</option><option value="out">Clock out</option></select>
+              <input type="datetime-local" value={sim.occurredAt} onChange={(event) => setSim({ ...sim, occurredAt: event.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <button onClick={simulate} disabled={busy || !selectedId} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Send simulated event</button>
             </div>
-
-            {!credEmployee ? (
-              <p className="mt-4 rounded-lg bg-gray-50 px-4 py-3 text-center text-xs text-gray-400">Select an employee to manage their credentials.</p>
-            ) : (
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                {/* Fingerprint */}
-                <div className="rounded-xl border border-gray-200 p-4">
-                  <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                    <svg className="h-4 w-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M2 12a10 10 0 0 1 18-6M21.8 16c.2-2 .131-5.354 0-6M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2M8.65 22c.21-.66.45-1.32.57-2M9 6.8a6 6 0 0 1 9 5.2v2M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4M14 13.12c0 2.38 0 6.38-1 8.88" /></svg>
-                    Fingerprint
-                  </p>
-                  {fpStatus === 'registered' ? (
-                    <>
-                      <p className="mt-2 text-xs font-medium text-brand-700">✓ Registered</p>
-                      <div className="mt-2 flex gap-2">
-                        <button type="button" onClick={registerFingerprint} aria-label="Re-capture fingerprint" className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">Re-capture</button>
-                        <button type="button" onClick={removeFingerprint} aria-label="Remove fingerprint enrollment" className="inline-flex min-h-[44px] items-center rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50">Remove</button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <p className="mt-2 text-xs text-gray-400">Not registered</p>
-                      <button type="button" onClick={registerFingerprint} className="mt-2 w-full rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 min-h-[44px]">Capture</button>
-                    </>
-                  )}
-                </div>
-
-                {/* PIN */}
-                <div className="rounded-xl border border-gray-200 p-4">
-                  <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                    <svg className="h-4 w-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                    PIN Code
-                  </p>
-                  {pinStatus?.ok && <p className="mt-2 text-xs font-medium text-brand-700">✓ Set</p>}
-                  <input
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={8}
-                    value={pinInput}
-                    onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
-                    placeholder="4–8 digits"
-                    aria-label="New PIN"
-                    className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm tabular-nums focus:border-brand-500 focus:outline-none"
-                  />
-                  <button type="button" onClick={savePin} disabled={!pinInput} className="mt-2 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-40">
-                    Save PIN
-                  </button>
-                </div>
-
-                {/* QR */}
-                <div className="rounded-xl border border-gray-200 p-4">
-                  <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                    <QrGlyph className="h-4 w-4 text-brand-600" />
-                    QR Badge
-                  </p>
-                  {qrImg ? (
-                    <img src={qrImg} alt="Employee QR badge" className="mx-auto mt-2 h-24 w-24 rounded-lg bg-white p-1 ring-1 ring-gray-200" />
-                  ) : (
-                    <p className="mt-2 text-xs text-gray-400">Not generated</p>
-                  )}
-                  <button type="button" onClick={generateQr} aria-label={qrImg ? 'Regenerate QR badge' : 'Generate QR badge'} className="mt-2 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">
-                    {qrImg ? 'Regenerate' : 'Generate badge'}
-                  </button>
-                  {qrCodeStr && <p className="mt-1 break-all text-center text-[10px] tabular-nums text-gray-400">{qrCodeStr}</p>}
-                </div>
-              </div>
-            )}
-          </section>
-
-          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-gray-900">Device Settings</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="font-medium text-gray-700">Idle timeout:</span>
-                <select value={String(config.idleTimeout)} onChange={(e) => update('idleTimeout', Number(e.target.value))} className={inputCls}>
-                  <option value="30">30 seconds</option>
-                  <option value="60">60 seconds</option>
-                  <option value="120">2 minutes</option>
-                </select>
-              </label>
-              <label className="block text-sm">
-                <span className="font-medium text-gray-700">Assigned branch / site:</span>
-                <select
-                  value={config.siteId || ''}
-                  onChange={(e) => {
-                    const loc = locations.find((l) => String(l.id) === e.target.value)
-                    setConfig((c) => ({ ...c, siteId: loc ? loc.id : '', site: loc ? loc.name : '' }))
-                  }}
-                  disabled={!configLoaded || locations.length === 0}
-                  className={inputCls + ' bg-white disabled:cursor-not-allowed disabled:bg-gray-50'}
-                >
-                  {locations.length === 0 ? (
-                    <option value="">No work locations yet — add them in People first</option>
-                  ) : (
-                    <>
-                      <option value="">Select a work location…</option>
-                      {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                    </>
-                  )}
-                </select>
-                <span className="mt-1 block text-xs text-gray-500">
-                  Pulled from this company&apos;s work locations — the same list used when assigning
-                  employees. The Kiosk screen shows this site name.
-                </span>
-                {config.site ? (
-                  <p className="mt-1 text-xs font-medium text-emerald-700">Kiosk will display: {config.site}</p>
-                ) : null}
-              </label>
-            </div>
-          </section>
-        </div>
-
-        <aside className="self-start lg:sticky lg:top-24">
-          <p className="mb-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500">Live Preview</p>
-          <Preview
-            method={config.method}
-            systemName={systemName}
-            site={config.site}
-            pinLength={config.pinLength || 4}
-            pinFallback={pinFallbackEnabled}
-            requireReAuth={!!config.requireReAuth}
-          />
-        </aside>
+          </div>
+        </section>
       </div>
-    </form>
-  )
-}
 
-function Preview({ method, systemName, site, pinLength = 4, pinFallback = false, requireReAuth = false }) {
-  const [now, setNow] = useState(new Date())
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(t)
-  }, [])
-  const methodLabel = method === 'pin' ? 'PIN code' : method === 'qr' ? 'QR badge' : 'Fingerprint'
-  return (
-    <div className="mx-auto w-56 rounded-[2rem] border border-gray-200 bg-gray-900 p-2 shadow-xl">
-      <div className="mx-auto mb-1 h-1.5 w-16 rounded-full bg-gray-700" />
-      <div className="flex h-[26rem] flex-col overflow-hidden rounded-[1.6rem] bg-gradient-to-b from-brand-800 via-brand-600 to-emerald-500 px-4 py-4 text-white">
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-sm font-black text-brand-600">
-            {(systemName || 'U').charAt(0).toUpperCase()}
-          </span>
-          <span className="min-w-0 leading-tight">
-            <span className="block truncate text-[11px] font-bold">{systemName}</span>
-            <span className="block truncate text-[9px] font-medium text-emerald-100">Time Kiosk{site ? ` · ${site}` : ''}</span>
-          </span>
-        </div>
-        <div className="mt-3 text-center">
-          <p className="text-2xl font-black tabular-nums tracking-tight drop-shadow-lg">
-            {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </p>
-          <p className="mt-0.5 text-[9px] font-medium text-emerald-100">
-            {now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
-          </p>
-        </div>
-        <div className="flex flex-1 flex-col items-center justify-center gap-3">
-          <span className="rounded-full bg-white/15 px-3.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-emerald-50 ring-1 ring-white/25">
-            Clock in / out · {methodLabel}
-          </span>
-          {method === 'fingerprint' && (
-            <>
-              <span className="flex h-20 w-20 items-center justify-center rounded-full bg-white/15 ring-4 ring-white/40">
-                <svg className="h-11 w-11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2 12a10 10 0 0 1 18-6M21.8 16c.2-2 .131-5.354 0-6M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2M8.65 22c.21-.66.45-1.32.57-2M9 6.8a6 6 0 0 1 9 5.2v2M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4M14 13.12c0 2.38 0 6.38-1 8.88" />
-                </svg>
-              </span>
-              <p className="text-center text-[10px] font-semibold text-emerald-50">Touch the sensor to clock in / out</p>
-              {pinFallback && <span className="text-[9px] font-medium text-emerald-100 underline">Use PIN instead</span>}
-            </>
-          )}
-          {method === 'pin' && (
-            <>
-              <div className="flex gap-1.5">
-                {Array.from({ length: pinLength }).map((_, i) => <span key={i} className="h-2.5 w-2.5 rounded-full bg-white/30 ring-1 ring-white/50" />)}
-              </div>
-              <div className="grid w-36 grid-cols-3 gap-1">
-                {['1','2','3','4','5','6','7','8','9','C','0','OK'].map((k, i) => (
-                  <span key={i} className={`rounded-md py-1 text-center text-[9px] font-semibold ${k === 'OK' ? 'bg-white text-brand-700' : k === 'C' ? 'bg-gray-900/30 text-white' : 'bg-white/15 ring-1 ring-white/25'}`}>{k}</span>
-                ))}
-              </div>
-              <p className="text-center text-[9px] text-emerald-100">Enter your PIN · {pinLength} digits</p>
-            </>
-          )}
-          {method === 'qr' && (
-            <>
-              <svg viewBox="0 0 21 21" className="h-24 w-24 rounded-lg bg-white p-1.5 text-gray-900" aria-hidden="true">
-                <path fill="currentColor" d="M0 0h7v7H0zM2 2v3h3V2zM14 0h7v7h-7zM16 2v3h3V2zM0 14h7v7H0zM2 16v3h3v-3zM10 0h2v2h-2zM10 4h2v2h-2zM4 10h2v2H4zM8 8h2v2H8zM12 10h2v2h-2zM10 14h2v2h-2zM14 14h2v2h-2zM18 14h2v2h-2zM16 10h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z" />
-              </svg>
-              <p className="text-[10px] font-semibold text-emerald-50">Scan your employee QR badge</p>
-            </>
-          )}
-        </div>
-        {requireReAuth && <p className="mb-1.5 text-center text-[8px] text-emerald-100/90">Re-auth required after checkout</p>}
-        <div className="w-full rounded-lg bg-white/10 py-1.5 text-center text-[9px] font-semibold text-emerald-100 ring-1 ring-white/20">
-          Check In / Check Out
-        </div>
-      </div>
+      <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h2 className="font-semibold text-gray-900">Events needing attention</h2>
+        <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2">Received</th><th className="px-3 py-2">Terminal</th><th className="px-3 py-2">Employee</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Reason</th></tr></thead><tbody className="divide-y divide-gray-100">{issues.map((event) => <tr key={event.id}><td className="px-3 py-3">{new Date(event.received_at).toLocaleString()}</td><td className="px-3 py-3">{event.device_name || event.device_id}</td><td className="px-3 py-3">{event.email || 'Unknown mapping'}</td><td className="px-3 py-3 font-semibold">{event.status}</td><td className="px-3 py-3">{event.rejection_reason || 'Late or out of order'}</td></tr>)}{!issues.length && <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-500">No rejected or review-needed events.</td></tr>}</tbody></table></div>
+      </section>
+
+      <section className="rounded-xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-900">
+        <h2 className="font-semibold">Hardware requirements</h2>
+        <p className="mt-2 leading-relaxed">Choose a terminal that keeps fingerprints locally, supplies unique event IDs, employee IDs, timestamps, sequence numbers and clock actions, stores events while offline, keeps its clock synchronized, and can send signed HTTPS batches. A vendor adapter can then translate only that manufacturer’s format.</p>
+      </section>
     </div>
   )
 }

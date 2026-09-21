@@ -13,7 +13,13 @@ export async function handle({ request, env, path, method, isAdmin, claims }) {
     // One atomic D1 batch — every wipe succeeds or none does.
     await env.DB.batch([
       env.DB.prepare('DELETE FROM attendance'),
+      env.DB.prepare('DELETE FROM attendance_events'),
+      env.DB.prepare('DELETE FROM time_clock_nonces'),
+      env.DB.prepare('DELETE FROM terminal_employee_mappings'),
+      env.DB.prepare('DELETE FROM time_clock_devices'),
       env.DB.prepare('DELETE FROM employee_credentials'),
+      env.DB.prepare('DELETE FROM webauthn_credentials'),
+      env.DB.prepare('DELETE FROM webauthn_challenges'),
       env.DB.prepare('DELETE FROM employees'),
       env.DB.prepare('DELETE FROM companies'),
       env.DB.prepare('DELETE FROM tasks'),
@@ -25,9 +31,7 @@ export async function handle({ request, env, path, method, isAdmin, claims }) {
       ).bind(CEO_EMAIL),
       // Clear per-company settings (shifts, locations, kiosk configs) and
       // orphaned biometric data from the wiped employees.
-      env.DB.prepare("DELETE FROM settings WHERE key LIKE 'shift_schedules:%' OR key LIKE 'company_locations:%' OR key LIKE 'kiosk_configs:%' OR key LIKE 'kiosk_device_token:%'"),
-      env.DB.prepare('DELETE FROM webauthn_credentials'),
-      env.DB.prepare('DELETE FROM webauthn_challenges'),
+      env.DB.prepare("DELETE FROM settings WHERE key LIKE 'shift_schedules:%' OR key LIKE 'company_locations:%' OR key LIKE 'personal_time_clock_enabled:%' OR key LIKE 'kiosk_configs:%' OR key LIKE 'kiosk_device_token:%' OR key LIKE 'kiosk_token_expiry:%'"),
     ])
     return json({ ok: true, message: 'All tenant data reset.' })
   }

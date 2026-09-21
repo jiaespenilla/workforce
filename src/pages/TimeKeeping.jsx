@@ -6,6 +6,7 @@ import { getCompanyShifts, shiftForEmployee } from '../lib/shifts'
 import { api, apiEnabled } from '../lib/api'
 import { SkeletonRows } from '../components/Skeleton'
 import Avatar from '../components/Avatar'
+import PersonalTimeClock from '../components/PersonalTimeClock'
 
 function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
 function endOfDay(d) { const x = new Date(d); x.setHours(23, 59, 59, 999); return x }
@@ -927,6 +928,8 @@ return (
         </button>
       </div>
 
+      <PersonalTimeClock clockedIn={isClockedIn} onPunch={reload} />
+
       <div className="grid gap-4 lg:grid-cols-3">
         <div className={'rounded-xl p-6 shadow-sm ' + (isClockedIn ? 'bg-gradient-to-br from-brand-600 to-emerald-500 text-white' : 'border border-gray-200 bg-white')}>
           <p className={'text-sm font-medium ' + (isClockedIn ? 'text-emerald-100' : 'text-gray-500')}>Current status</p>
@@ -934,7 +937,7 @@ return (
             {isClockedIn ? 'Clocked In · ' + fmtClock(lastPunch.time) : lastPunch ? 'Clocked Out' : 'Not clocked in today'}
           </p>
           <div className="mt-4 space-y-1 text-xs">
-            {todayPunches.length === 0 && <p className={isClockedIn ? 'text-emerald-100/90' : 'text-gray-400'}>No punches yet today — use the kiosk to clock in.</p>}
+            {todayPunches.length === 0 && <p className={isClockedIn ? 'text-emerald-100/90' : 'text-gray-400'}>No punches yet today. Use the secure phone clock above.</p>}
             {todayPunches.map((p, i) => (
               <p key={i} className={isClockedIn || i % 2 === 0 ? 'text-emerald-50/90' : 'text-gray-500'}>
                 {p.type === 'in' ? 'Clock In' : 'Clock Out'}: <span className="font-semibold tabular-nums">{fmtClock(p.time)}</span>

@@ -148,7 +148,7 @@ export default function ShiftSchedules() {
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Main Menu</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Shift Schedules</h1>
           <p className="mt-1 text-sm leading-relaxed text-gray-500">
-            Define shifts per company and assign them to your team. Kiosk punches are automatically recorded as
+            Define shifts per company and assign them to your team. Verified punches are automatically recorded as
             clock-in or clock-out based on the assigned shift.
           </p>
         </div>
@@ -396,7 +396,7 @@ export default function ShiftSchedules() {
           </span>
         ) : (
           <span className="text-xs leading-relaxed text-gray-500 sm:text-sm">
-            {dirty ? 'Unsaved changes � save to apply them to kiosk punches.' : 'Changes apply to kiosk punches immediately.'}
+            {dirty ? 'Unsaved changes — save to apply them to future punches.' : 'Changes apply to future punches immediately.'}
           </span>
         )}
         <button type="button" onClick={save} disabled={!dirty || loading || saving} className="w-full rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-md hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto min-h-[44px]">

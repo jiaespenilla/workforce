@@ -14,6 +14,20 @@ export async function handle({ request, env, _url, path, method, claims, isAdmin
   /* per-company settings (shift schedules, locations, kiosk configs) */
   {
     const m = path.match(/^\/api\/company-settings\/([^/]+)$/)
+    if (m && method === 'GET') {
+      const companyId = decodeURIComponent(m[1])
+      const callerCompany = await callerCompanyId(env, claims)
+      if (!isAdmin && callerCompany !== companyId) return json({ error: 'You can only view settings for your own company.' }, 403, request)
+      const keys = COMPANY_SETTING_KEYS.map((key) => `${key}:${companyId}`)
+      const rows = await env.DB.prepare('SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?)')
+        .bind(...keys).all().then((result) => result.results || [])
+      const output = {}
+      for (const row of rows) {
+        const base = row.key.slice(0, row.key.lastIndexOf(':'))
+        try { output[base] = JSON.parse(row.value) } catch { output[base] = row.value }
+      }
+      return json(output, 200, request)
+    }
     if (m && method === 'PUT') {
       const companyId = decodeURIComponent(m[1])
       // Company owners may only change their own company's settings.

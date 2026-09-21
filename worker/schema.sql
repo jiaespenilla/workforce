@@ -118,6 +118,8 @@ CREATE TABLE IF NOT EXISTS document_metadata (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Legacy shared-kiosk credentials are retained only for upgrade compatibility.
+-- Secure-time-clock migration clears this table and no live route reads it.
 CREATE TABLE IF NOT EXISTS employee_credentials (
   email TEXT PRIMARY KEY,
   pin_salt TEXT,
@@ -135,6 +137,16 @@ CREATE TABLE IF NOT EXISTS attendance (
   time TEXT NOT NULL,
   overtime INTEGER DEFAULT 0,
   overtime_minutes INTEGER DEFAULT 0, -- minutes of overtime for the worked session (open shifts: beyond 8h; timed: flagged session)
+  source_event_id TEXT,
+  source TEXT,
+  device_id TEXT,
+  site_id TEXT,
+  received_at TEXT,
+  latitude REAL,
+  longitude REAL,
+  accuracy REAL,
+  location_status TEXT,
+  needs_review INTEGER NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -147,7 +159,7 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 CREATE INDEX IF NOT EXISTS idx_login_attempts_key_time ON login_attempts (key, attempt_at);
 CREATE INDEX IF NOT EXISTS idx_login_attempts_time ON login_attempts (attempt_at);
 
--- WebAuthn biometric (fingerprint/passkey) credentials for kiosk devices
+-- Personal passkeys. Only public keys are stored; biometrics remain on the phone.
 CREATE TABLE IF NOT EXISTS webauthn_credentials (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   email TEXT NOT NULL,
@@ -156,6 +168,9 @@ CREATE TABLE IF NOT EXISTS webauthn_credentials (
   public_key TEXT NOT NULL,
   counter INTEGER DEFAULT 0,
   transports TEXT,
+  label TEXT,
+  last_used_at TEXT,
+  revoked_at TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_wcred_email ON webauthn_credentials (email);
@@ -170,3 +185,69 @@ CREATE TABLE IF NOT EXISTS webauthn_challenges (
   expires_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_wchallenge_time ON webauthn_challenges (expires_at);
+
+-- Vendor-neutral workplace time-clock devices. The signing secret is derived
+-- from a Worker secret and is never stored in D1.
+CREATE TABLE IF NOT EXISTS time_clock_devices (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  site_id TEXT,
+  name TEXT NOT NULL,
+  vendor TEXT,
+  model TEXT,
+  adapter TEXT NOT NULL DEFAULT 'generic-v1',
+  secret_version INTEGER NOT NULL DEFAULT 1,
+  active INTEGER NOT NULL DEFAULT 1,
+  last_seen_at TEXT,
+  last_sequence INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_clock_devices_company ON time_clock_devices(company_id);
+
+CREATE TABLE IF NOT EXISTS terminal_employee_mappings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  device_id TEXT NOT NULL REFERENCES time_clock_devices(id) ON DELETE CASCADE,
+  terminal_user_id TEXT NOT NULL,
+  employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(device_id, terminal_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_terminal_mapping_employee ON terminal_employee_mappings(employee_id);
+
+CREATE TABLE IF NOT EXISTS time_clock_nonces (
+  device_id TEXT NOT NULL REFERENCES time_clock_devices(id) ON DELETE CASCADE,
+  nonce TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  PRIMARY KEY(device_id, nonce)
+);
+CREATE INDEX IF NOT EXISTS idx_clock_nonces_expiry ON time_clock_nonces(expires_at);
+
+-- Immutable source events. Accepted events create one linked attendance row;
+-- rejected and review-needed events remain visible to administrators.
+CREATE TABLE IF NOT EXISTS attendance_events (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  employee_id INTEGER REFERENCES employees(id),
+  email TEXT,
+  company_id TEXT NOT NULL,
+  device_id TEXT,
+  site_id TEXT,
+  occurred_at TEXT NOT NULL,
+  received_at TEXT NOT NULL,
+  punch_type TEXT,
+  sequence INTEGER,
+  status TEXT NOT NULL,
+  rejection_reason TEXT,
+  latitude REAL,
+  longitude REAL,
+  accuracy REAL,
+  location_status TEXT,
+  payload_json TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(source, device_id, event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_attendance_events_company_received ON attendance_events(company_id, received_at);
+CREATE INDEX IF NOT EXISTS idx_attendance_events_device_sequence ON attendance_events(device_id, sequence);
+CREATE INDEX IF NOT EXISTS idx_attendance_source_event ON attendance(source_event_id);

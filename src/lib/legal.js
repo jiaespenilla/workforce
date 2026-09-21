@@ -1,98 +1,86 @@
 export const DEFAULT_TERMS = `Terms & Conditions — CadensIQ by CelestSolutions
-Last updated: September 2, 2026
+Last updated: September 21, 2026
 
 1. Agreeing to these terms
 By creating an account or using CadensIQ, you agree to these rules and to our Privacy Policy. If you sign up on behalf of a company, you confirm you are allowed to make that decision for your company.
 
 2. Your account
-• Use your real name and a working email address. One account per person.
-• Keep your password private and change the temporary password you were given when you first sign in. You are responsible for everything done under your account.
-• We may pause or close accounts that break these rules, share logins, or try to cheat time keeping.
+- Use your real name and a working email address. One account per person.
+- Keep your password private and change the temporary password you were given when you first sign in.
+- We may pause or close accounts that share logins, break these rules, or try to falsify time keeping.
 
 3. Registering a company
-• Provide true and accurate company details. Company names must be unique — duplicates are not accepted.
-• New companies are reviewed before they become active. If an application is declined, we will tell you why and you may apply again.
-• Company owners are responsible for keeping their team list accurate and up to date.
+- Provide true and accurate company details. New companies are reviewed before they become active.
+- Company owners are responsible for keeping their team list accurate and up to date.
 
 4. Roles and permissions
-• Every user has a role (such as Employee, Team Lead, HR Manager, or Administrator) that decides what they can see and do.
-• Administrators and company owners decide which role each person gets — please contact them if you believe you need different access.
+- Every user has a role that decides what they can see and do.
+- Administrators and company owners decide which role each person gets.
 
 5. Time keeping
-• Attendance is recorded at your company's time kiosk using your PIN, QR badge, or fingerprint. Time records cannot be manually edited.
-• The system automatically decides whether a scan is a clock-in or clock-out based on your assigned shift. If your shift looks wrong, tell your manager.
-• Clock in and out only for yourself. Having someone else punch for you, sharing your PIN or badge, or faking time records is a serious violation and can lead to your account being deactivated.
+- Attendance is recorded from your signed-in personal phone after a passkey check, or from an approved workplace fingerprint terminal.
+- The system decides whether a verified phone punch is a clock-in or clock-out and records official server time. Delayed terminal events keep their device occurrence time and may be marked for review.
+- Clock in and out only for yourself. Sharing an account or faking time records can lead to account deactivation.
 
-6. Tasks
-• Tasks can be assigned to any active member of your company. Anyone whose role allows it can create, update, or remove tasks.
-• Finished tasks stay in the history for reporting.
+6. Tasks, payroll, and people records
+- Tasks can be assigned to active members of your company and finished tasks remain in history.
+- Payroll pages show summaries based on attendance. Actual salary processing happens outside CadensIQ.
+- People records are private to your company.
 
-7. Payroll and people records
-• Payroll pages show read-only summaries based on attendance. Actual salary processing happens outside CadensIQ.
-• People records are private to your company — no other company can see them.
+7. Fair use
+Do not try to access another company's information, damage or overload the system, upload harmful or illegal files, or pretend to be someone else.
 
-8. Fair use
-Please do not: try to access another company's information; hack, break, or overload the system; upload harmful or illegal files; or pretend to be someone else.
+8. Data ownership and availability
+Your company's information belongs to you. CadensIQ software and design belong to CelestSolutions. We work to keep the service available but cannot promise uninterrupted operation.
 
-9. Your data stays yours
-• Your company's and your employees' information belongs to you. We only store and process it to run the service for you.
-• The CadensIQ software, its name, and its design belong to CelestSolutions.
+9. Ending your use
+A company can stop using CadensIQ at any time and request an export or deletion, subject to required record-retention rules.
 
-10. Service availability
-We work hard to keep CadensIQ running smoothly, but we cannot guarantee it will always be available or error-free. We may improve or change features from time to time.
-
-11. Ending your use
-A company can stop using CadensIQ at any time, and its data can be exported or deleted on request. We may suspend accounts that violate these terms.
-
-12. Contact
+10. Contact
 Questions about these terms? CelestSolutions — jiaespenilla@gmail.com`
 
 export const DEFAULT_PRIVACY = `Privacy Policy — CadensIQ by CelestSolutions
-Last updated: September 2, 2026
+Last updated: September 21, 2026
 
 1. What we collect
-• Your name, email address, role, and company.
-• Your attendance records: when you clocked in or out, and which shift applies.
-• Your kiosk credentials: your PIN, your QR badge, and your fingerprint's digital signature. We never store an image of your fingerprint — only an encrypted signature that cannot be turned back into one.
-• Your tasks, notifications, and app settings. An optional profile photo if you choose to add one.
+- Your name, email address, role, and company.
+- Attendance records including clock time, source device/site, review status, and phone location when available.
+- Personal phone passkey public keys. Fingerprint and face information stays inside your phone or workplace terminal and is never sent to CadensIQ.
+- Your tasks, notifications, app settings, and an optional profile photo.
 
 2. How we use it
-• To confirm it is really you when you sign in or scan at the kiosk, and to record your attendance correctly.
-• To show you the right information for your company, and to send you important notifications.
-• To keep the system safe — for example, by slowing down repeated failed sign-in attempts.
+- To confirm a phone passkey or registered workplace terminal and record attendance correctly.
+- To show the right information for your company, send important notifications, and protect the service from abuse.
 
 3. What we never do
-• We never sell your data.
-• We never share your information with other companies using CadensIQ.
-• We never store your actual fingerprint.
+- We never sell your data or share it with other companies using CadensIQ.
+- We never store fingerprint images, fingerprint templates, or face scans.
 
 4. Where your data lives
-• Your data is stored securely in Cloudflare's global network, our hosting provider.
-• Passwords and PINs are scrambled so they cannot be read by anyone — not even by us.
+- Your service data is stored on Cloudflare, our hosting provider.
+- Passwords are scrambled so they cannot be read. Passkeys are stored as public keys only.
 
 5. How long we keep it
-• While your company uses CadensIQ, plus a short grace period in case you return.
-• Attendance records are kept as long as labor law requires (usually 5 years), then made anonymous.
-• Any data can be deleted sooner on request.
+- Data is kept while your company uses CadensIQ and as long as applicable employment or labor rules require.
+- Data may be exported or deleted on request where the law allows.
 
 6. How we protect it
-• All traffic is encrypted, passwords and PINs are never stored in plain text, and kiosk devices must be paired first before they can record anything.
+- Traffic is encrypted. Workplace terminals must sign every event batch, and repeated or expired requests are blocked.
+- Rejected, delayed, and out-of-order terminal events are kept for administrator review instead of silently rewriting attendance history.
 
-7. Your rights
-• You can view and edit your own profile at any time.
-• You can ask your company or us to export or delete your data. We respond within 30 days.
+7. Your choices and rights
+- Phone location is requested for attendance review but a denied or unavailable location does not block a punch.
+- You can view and edit your profile, remove your own phone passkeys, and request an export or deletion.
 
-8. Tracking
-• We only store what is needed to keep you signed in and remember your preferences. No advertising or third-party trackers are used.
+8. Tracking and children
+- We use only what is needed to keep you signed in and remember preferences. We do not use advertising trackers.
+- CadensIQ is for workers aged 16 and older.
 
-9. Children
-CadensIQ is for workers aged 16 and older.
+9. Contact
+Questions, requests, or concerns? CelestSolutions — jiaespenilla@gmail.com`
 
-10. Changes and contact
-We will update this page and the date above when something changes. Questions, requests, or concerns? CelestSolutions — jiaespenilla@gmail.com`
 const DEFAULTS = { terms: DEFAULT_TERMS, privacy: DEFAULT_PRIVACY }
 
-// Terms & Privacy are editable by the administrator (System Configuration → Terms & Policies).
 export function getLegalDocs() {
   try {
     return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('uw_legal')) }

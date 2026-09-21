@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getActiveSettings, isMaintenanceMode } from '../lib/systemSettings'
 import { getSystemIcon } from '../lib/documentMeta'
-import { kioskEnabled } from '../lib/roles'
 import NotificationBell from './NotificationBell'
 import DefaultPasswordBanner from './DefaultPasswordBanner'
 import Avatar from './Avatar'
@@ -130,9 +129,9 @@ export default function Layout({ children }) {
             </>
           )}
         </NavLink>
-        {user?.role === 'employee' && kioskEnabled(user?.perms) && (
+        {user?.role === 'employee' && user?.perms?.timekeeping !== false && (
           <NavLink
-            to="/kiosk-credentials"
+            to="/phone-passkeys"
             onClick={() => setOpen(false)}
             className={({ isActive }) =>
               `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
@@ -147,7 +146,7 @@ export default function Layout({ children }) {
                 <svg className={`h-5 w-5 ${isActive ? 'text-brand-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a3 3 0 01-3 3H8m6 0a3 3 0 00-3-3H8m0 0a3 3 0 100 6m9-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Kiosk Credentials
+                My Phone Passkeys
               </>
             )}
           </NavLink>

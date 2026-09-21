@@ -129,8 +129,8 @@ describe('GET /api/kiosk/directory — token-gated, company-scoped', () => {
   it('rejects callers without a kiosk device token (no employee data leaks)', async () => {
     const env = { DB: makeDb() }
     const res = await directory(env)
-    expect(res.status).toBe(401)
-    expect(await res.json()).toEqual({ error: 'Invalid kiosk device token.' })
+    expect(res.status).toBe(410)
+    expect((await res.json()).error).toMatch(/retired/i)
     // No employee query was issued at all.
     expect(env.DB.calls.some((c) => /FROM employees/.test(c.sql))).toBe(false)
   })
@@ -138,14 +138,11 @@ describe('GET /api/kiosk/directory — token-gated, company-scoped', () => {
   it('rejects unknown tokens and scopes valid tokens to their own company', async () => {
     const env = { DB: makeDb({ settings: { 'kiosk_device_token:uwk_good': 'co-9' } }) }
     const bad = await directory(env, 'uwk_unknown')
-    expect(bad.status).toBe(401)
+    expect(bad.status).toBe(410)
 
     const res = await directory(env, 'uwk_good')
-    expect(res.status).toBe(200)
-    const scoped = env.DB.calls.find((c) => c.op === 'all' && /FROM employees e JOIN companies c/.test(c.sql))
-    expect(scoped.sql).toContain('AND e.company_id = ?')
-    expect(scoped.args).toContain('co-9')
-    expect(await res.json()).toEqual([{ id: 1, name: 'Emp One', email: 'one@test.co', company: 'Test Co' }])
+    expect(res.status).toBe(410)
+    expect(env.DB.calls.some((c) => /FROM employees/.test(c.sql))).toBe(false)
   })
 })
 
@@ -172,26 +169,22 @@ describe('POST /api/attendance — signed-in punches are pinned to the caller', 
   it('rejects an employee punching for a coworker', async () => {
     const env = { DB: employeeEnv() }
     const res = await punch(env, { email: 'bob@acme.com', type: 'in' }, { sub: 'alice@acme.com', role: 'employee' })
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(405)
     expect(env.DB.calls.some((c) => /INSERT INTO attendance/.test(c.sql))).toBe(false)
   })
 
   it('allows an employee punching for themselves (company forced to their own)', async () => {
     const env = { DB: employeeEnv() }
     const res = await punch(env, { email: 'ALICE@acme.com', type: 'in' }, { sub: 'alice@acme.com', role: 'employee' })
-    expect(res.status).toBe(201)
-    const insert = env.DB.calls.find((c) => /INSERT INTO attendance/.test(c.sql))
-    expect(insert.args[0]).toBe('alice@acme.com')
-    expect(insert.args[1]).toBe('co-1')
+    expect(res.status).toBe(405)
+    expect(env.DB.calls.some((c) => /INSERT INTO attendance/.test(c.sql))).toBe(false)
   })
 
   it('still lets administrators record punches on behalf of employees', async () => {
     const env = { DB: makeDb() }
     const res = await punch(env, { email: 'bob@acme.com', type: 'out', company_id: 'co-1' }, { sub: 'admin_celestine', role: 'administrator' })
-    expect(res.status).toBe(201)
-    const insert = env.DB.calls.find((c) => /INSERT INTO attendance/.test(c.sql))
-    expect(insert.args[0]).toBe('bob@acme.com')
-    expect(insert.args[1]).toBe('co-1')
+    expect(res.status).toBe(405)
+    expect(env.DB.calls.some((c) => /INSERT INTO attendance/.test(c.sql))).toBe(false)
   })
 })
 describe('CORS — origins are never blindly reflected', () => {
@@ -277,7 +270,6 @@ describe('default password fails closed when unconfigured', () => {
 // Medium-effort scalability & auth hardening batch
 // ---------------------------------------------------------------------------
 import { handle as tasksHandle } from '../worker/src/routes/tasks.js'
-import { handle as kioskAdminHandle } from '../worker/src/routes/kioskAdmin.js'
 import { requireAuth } from '../worker/src/lib/auth.js'
 import { recordAttempts } from '../worker/src/lib/rateLimit.js'
 
@@ -359,52 +351,6 @@ describe('GET /api/tasks — SQL-level tenant scoping and pagination', () => {
     expect(list).toBeTruthy()
     expect(list.args.slice(-2)).toEqual([10, 5])
     expect(list.args).toContain('%audit%')
-  })
-})
-
-describe('GET /api/kiosk-token/:id — temporary tokens fetched without N+1', () => {
-  it('fetches all expiries in a single IN query', async () => {
-    const db = makeDb()
-    const origPrepare = db.prepare.bind(db)
-    db.prepare = (sql) => {
-      const stmt = origPrepare(sql)
-      const oldAll = stmt.all
-      stmt.all = async function () {
-        if (/key LIKE 'kiosk_device_token:%'/.test(sql)) {
-          db.calls.push({ sql, args: [...(stmt._args || [])], op: 'all' })
-          return { results: [{ key: 'kiosk_device_token:kw-t1', value: 'co1' }, { key: 'kiosk_device_token:kw-t2', value: 'co1' }] }
-        }
-        if (/key IN \(/.test(sql)) {
-          db.calls.push({ sql, args: [...(stmt._args || [])], op: 'all' })
-          return { results: [{ key: 'kiosk_token_expiry:kw-t1', value: new Date(Date.now() + 3600e3).toISOString() }] }
-        }
-        return oldAll.apply(stmt, arguments)
-      }
-      const oldFirst = stmt.first
-      stmt.first = async function () {
-        if (/key LIKE 'kiosk_device_token:%'/.test(sql) && stmt._args?.[0] === 'co1') {
-          db.calls.push({ sql, args: [...(stmt._args || [])], op: 'first' })
-          return { key: 'kiosk_device_token:kw-perm' }
-        }
-        return oldFirst.apply(stmt, arguments)
-      }
-      return stmt
-    }
-    const res = await kioskAdminHandle({
-      request: req('/api/kiosk-token/co1'),
-      env: { DB: db },
-      url: new URL('https://app.test/api/kiosk-token/co1'),
-      path: '/api/kiosk-token/co1',
-      method: 'GET',
-      isAdmin: true,
-    })
-    const data = await res.json()
-    expect(data.temporary).toEqual([{ token: 'kw-t1', expiresAt: expect.any(String) }])
-    const inQuery = db.calls.find((c) => c.op === 'all' && /key IN \(/.test(c.sql))
-    expect(inQuery).toBeTruthy()
-    // Both temp-token expiry keys were requested in ONE round trip.
-    expect(inQuery.args).toEqual(['kiosk_token_expiry:kw-t1', 'kiosk_token_expiry:kw-t2'])
-    expect(db.calls.filter((c) => /kiosk_token_expiry/.test(c.sql) && c.op === 'first')).toHaveLength(0)
   })
 })
 

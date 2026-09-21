@@ -1,7 +1,5 @@
-// WebAuthn (browser biometric fingerprint) support for the kiosk.
-// Wraps @simplewebauthn/server (v13). Fingerprint/passkey scanning uses the
-// platform authenticator built into the device (Touch ID, Face ID, Android
-// fingerprint) — no external hardware required.
+// Personal-device WebAuthn/passkey support. The phone verifies the employee
+// with fingerprint, Face ID, or its local PIN; the server stores public keys only.
 
 import {
   generateRegistrationOptions,
@@ -16,8 +14,6 @@ export class WebAuthnError extends Error {
     this.status = status
   }
 }
-
-/* ---------------- base64url helpers (global btoa/atob, available in Workers) ---------------- */
 
 function b64urlFromBytes(bytes) {
   let bin = ''
@@ -34,8 +30,6 @@ function base64UrlToBytes(input) {
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
   return arr
 }
-
-/* ---------------- challenge storage (D1) ---------------- */
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000
 
@@ -54,51 +48,72 @@ async function takeChallenge(env, challenge, kind) {
   return row
 }
 
-/* ---------------- helpers ---------------- */
-
 function decodeClientDataJSON(b64url) {
-  return JSON.parse(new TextDecoder().decode(base64UrlToBytes(b64url)))
+  try {
+    return JSON.parse(new TextDecoder().decode(base64UrlToBytes(b64url)))
+  } catch {
+    throw new WebAuthnError(400, 'The passkey response is invalid.')
+  }
 }
 
-/* ---------------- registration ---------------- */
+// The expected origin comes from the HTTP request, never from browser JSON.
+export function expectedWebAuthnOrigin(request, env = {}) {
+  const requestUrl = new URL(request.url)
+  const header = request.headers.get('Origin')
+  if (!header) return requestUrl.origin
+  let origin
+  try { origin = new URL(header).origin } catch { throw new WebAuthnError(403, 'Untrusted app origin.') }
+  const configured = String(env.ALLOWED_ORIGINS || '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean)
+  const lower = origin.toLowerCase()
+  const local = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(lower)
+  if (new URL(origin).host !== requestUrl.host && !configured.includes(lower) && !local) {
+    throw new WebAuthnError(403, 'Untrusted app origin.')
+  }
+  return origin
+}
 
-export async function buildRegistrationOptions(env, { username, origin }) {
-  const url = new URL(origin || `https://${'localhost'}`)
-  const rpID = url.hostname
+export async function buildRegistrationOptions(env, { username, request, kind = 'mobile-register' }) {
+  const origin = expectedWebAuthnOrigin(request, env)
+  const rpID = new URL(origin).hostname
+  const existing = await env.DB.prepare(
+    'SELECT credential_id, transports FROM webauthn_credentials WHERE lower(email) = lower(?) AND revoked_at IS NULL'
+  ).bind(username).all().then((result) => result.results || [])
   const options = await generateRegistrationOptions({
     rpName: 'CadensIQ',
     rpID,
     userName: username,
     userDisplayName: username,
-    // Stable but distinct user identifier derived from the email.
     userID: new TextEncoder().encode(`uid:${username}`),
     timeout: 120000,
     attestationType: 'none',
+    excludeCredentials: existing.map((credential) => ({
+      id: credential.credential_id,
+      type: 'public-key',
+      transports: credential.transports ? JSON.parse(credential.transports) : [],
+    })),
     authenticatorSelection: {
       authenticatorAttachment: 'platform',
-      residentKey: 'required',
+      residentKey: 'preferred',
       userVerification: 'required',
     },
   })
-  await storeChallenge(env, options.challenge, 'register', username, rpID, origin)
+  await storeChallenge(env, options.challenge, kind, username.toLowerCase(), rpID, origin)
   return { ...options, rpID }
 }
 
-export async function registerCredential(env, { response }) {
-  const client = decodeClientDataJSON(response.response.clientDataJSON)
-  const challenge = client.challenge
-  const stored = await takeChallenge(env, challenge, 'register')
+export async function registerCredential(env, { response, kind = 'mobile-register' }) {
+  const client = decodeClientDataJSON(response?.response?.clientDataJSON)
+  const stored = await takeChallenge(env, client.challenge, kind)
   if (!stored) throw new WebAuthnError(400, 'Registration session expired or invalid. Try again.')
-
   const verification = await verifyRegistrationResponse({
     response,
-    expectedChallenge: challenge,
+    expectedChallenge: client.challenge,
     expectedOrigin: stored.origin,
     expectedRPID: stored.rp_id,
     requireUserVerification: true,
   })
   if (!verification.verified || !verification.registrationInfo) {
-    throw new WebAuthnError(400, 'Biometric registration could not be verified.')
+    throw new WebAuthnError(400, 'Passkey registration could not be verified.')
   }
   const { credential } = verification.registrationInfo
   return {
@@ -110,55 +125,42 @@ export async function registerCredential(env, { response }) {
   }
 }
 
-/* ---------------- authentication (kiosk fingerprint scan) ---------------- */
-
-export async function buildAuthenticationOptions(env, { origin, email }) {
-  const url = new URL(origin || `https://${'localhost'}`)
-  const rpID = url.hostname
-  let allowCredentials = undefined
-  if (email) {
-    // User-directed scan (shared kiosk, 55): only offer THAT employee's
-    // passkey so the OS never shows an account picker a stranger could
-    // select a wrong account from.
-    const cred = await env.DB.prepare('SELECT * FROM webauthn_credentials WHERE lower(email) = lower(?) LIMIT 1').bind(email).first()
-    if (!cred) throw new WebAuthnError(404, 'This employee has no fingerprint enrolled. Register it in Kiosk Setup first.')
-    allowCredentials = [{
-      id: cred.credential_id,
-      type: 'public-key',
-      transports: cred.transports ? JSON.parse(cred.transports) : [],
-    }]
-  }
+export async function buildAuthenticationOptions(env, { request, email, kind = 'mobile-punch' }) {
+  const origin = expectedWebAuthnOrigin(request, env)
+  const rpID = new URL(origin).hostname
+  const credentials = await env.DB.prepare(
+    'SELECT credential_id, transports FROM webauthn_credentials WHERE lower(email) = lower(?) AND revoked_at IS NULL ORDER BY id'
+  ).bind(email).all().then((result) => result.results || [])
+  if (!credentials.length) throw new WebAuthnError(404, 'Register a passkey on this phone before clocking in or out.')
   const options = await generateAuthenticationOptions({
     rpID,
     timeout: 120000,
     userVerification: 'required',
-    ...(allowCredentials ? { allowCredentials } : {}),
+    allowCredentials: credentials.map((credential) => ({
+      id: credential.credential_id,
+      type: 'public-key',
+      transports: credential.transports ? JSON.parse(credential.transports) : [],
+    })),
   })
-  await storeChallenge(env, options.challenge, 'authentication', email ? email.toLowerCase() : null, rpID, origin)
+  await storeChallenge(env, options.challenge, kind, email.toLowerCase(), rpID, origin)
   return { ...options, rpID }
 }
 
-export async function verifyAuthentication(env, { response }) {
-  const client = decodeClientDataJSON(response.response.clientDataJSON)
-  const challenge = client.challenge
-  const stored = await takeChallenge(env, challenge, 'authentication')
-  if (!stored) throw new WebAuthnError(400, 'Authentication session expired or invalid. Try again.')
-
+export async function verifyAuthentication(env, { response, kind = 'mobile-punch' }) {
+  const client = decodeClientDataJSON(response?.response?.clientDataJSON)
+  const stored = await takeChallenge(env, client.challenge, kind)
+  if (!stored) throw new WebAuthnError(400, 'Passkey check expired or was already used. Try again.')
   const rawId = response.rawId || response.id
-  const cred = await env.DB.prepare('SELECT * FROM webauthn_credentials WHERE credential_id = ?').bind(rawId).first()
-  if (!cred) throw new WebAuthnError(404, 'This device is not registered for fingerprint.')
-  // Shared-kiosk binding (55): when the scan was started for a specific
-  // employee (tile tap → allowCredentials), the asserted credential MUST
-  // belong to that employee. A different account's credential — e.g. picked
-  // from the OS account sheet — is rejected even though its signature is
-  // valid, because any enrolled finger unlocks the shared device.
-  if (stored.email && String(cred.email || '').toLowerCase() !== String(stored.email).toLowerCase()) {
-    throw new WebAuthnError(401, 'This fingerprint does not match the selected employee. Tap your own name and scan again.')
+  const cred = await env.DB.prepare(
+    'SELECT * FROM webauthn_credentials WHERE credential_id = ? AND revoked_at IS NULL'
+  ).bind(rawId).first()
+  if (!cred) throw new WebAuthnError(404, 'This passkey is not active.')
+  if (String(cred.email || '').toLowerCase() !== String(stored.email || '').toLowerCase()) {
+    throw new WebAuthnError(401, 'This passkey belongs to a different employee.')
   }
-
   const verification = await verifyAuthenticationResponse({
     response,
-    expectedChallenge: challenge,
+    expectedChallenge: client.challenge,
     expectedOrigin: stored.origin,
     expectedRPID: stored.rp_id,
     requireUserVerification: true,
@@ -169,9 +171,9 @@ export async function verifyAuthentication(env, { response }) {
       transports: cred.transports ? JSON.parse(cred.transports) : [],
     },
   })
-  if (!verification.verified) throw new WebAuthnError(401, 'Fingerprint verification failed.')
-  await env.DB.prepare('UPDATE webauthn_credentials SET counter = ? WHERE credential_id = ?')
-    .bind(verification.authenticationInfo.newCounter, rawId).run()
-  return { email: cred.email }
+  if (!verification.verified) throw new WebAuthnError(401, 'Passkey verification failed.')
+  const usedAt = new Date().toISOString()
+  await env.DB.prepare('UPDATE webauthn_credentials SET counter = ?, last_used_at = ? WHERE credential_id = ?')
+    .bind(verification.authenticationInfo.newCounter, usedAt, rawId).run()
+  return { email: cred.email, credentialId: cred.credential_id, usedAt }
 }
-

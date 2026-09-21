@@ -1,163 +1,110 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// base64url-encode a string (mirrors webauthn.js encoding, using global btoa).
-const b64urlFromInput = (str) => btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-
+const b64url = (value) => btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 const calls = vi.hoisted(() => ({ reg: [], auth: [], verifyReg: [], verifyAuth: [] }))
 
 vi.mock('@simplewebauthn/server', () => ({
-  generateRegistrationOptions: async (opts) => {
-    calls.reg.push(opts)
-    return { challenge: 'reg-challenge', rpID: opts.rpID, timeout: 120000, attestationType: 'none' }
+  generateRegistrationOptions: async (options) => { calls.reg.push(options); return { challenge: 'reg-challenge' } },
+  verifyRegistrationResponse: async (options) => {
+    calls.verifyReg.push(options)
+    return { verified: true, registrationInfo: { credential: { id: 'cred-new', publicKey: new Uint8Array([1, 2, 3]), counter: 0, transports: ['internal'] } } }
   },
-  verifyRegistrationResponse: async (opts) => {
-    calls.verifyReg.push(opts)
-    return { verified: true, registrationInfo: { credential: { id: 'cred-1', publicKey: new Uint8Array([1, 2, 3]), counter: 0, transports: ['internal'] } } }
-  },
-  generateAuthenticationOptions: async (opts) => {
-    calls.auth.push(opts)
-    return { challenge: 'auth-challenge', rpID: opts.rpID, timeout: 120000, userVerification: opts.userVerification }
-  },
-  verifyAuthenticationResponse: async (opts) => {
-    calls.verifyAuth.push(opts)
-    return { verified: true, authenticationInfo: { newCounter: 5 } }
-  },
+  generateAuthenticationOptions: async (options) => { calls.auth.push(options); return { challenge: 'auth-challenge' } },
+  verifyAuthenticationResponse: async (options) => { calls.verifyAuth.push(options); return { verified: true, authenticationInfo: { newCounter: 5 } } },
 }))
 
 import * as webauthn from '../webauthn.js'
 
-// Minimal D1 mock: routes SQL by table name, first() returns canned rows.
-function mockEnv({ credRow } = {}) {
+function mockEnv({ challengeEmail = 'emp@acme.com', credential = true } = {}) {
   const runs = []
-  const challengeRow = { challenge: 'x', kind: 'y', email: 'emp@acme.com', rp_id: 'kiosk.example.com', origin: 'https://kiosk.example.com', expires_at: Date.now() + 60000 }
+  const activeCredentials = [
+    { credential_id: 'cred-1', transports: '["internal"]' },
+    { credential_id: 'cred-2', transports: '["internal"]' },
+  ]
   return {
     runs,
     DB: {
-      prepare(_sql) {
+      prepare(sql) {
         return {
           bind(...args) {
             return {
+              all: async () => ({ results: sql.includes('webauthn_credentials') ? activeCredentials : [] }),
               first: async () => {
-                if (_sql.includes('webauthn_credentials WHERE credential_id')) return credRow === undefined
-                  ? { credential_id: 'cred-1', public_key: b64urlFromInput('fake-key'), counter: 0, transports: '["internal"]', email: 'emp@acme.com' }
-                  : credRow
-                if (_sql.includes('webauthn_challenges')) return { ...challengeRow, challenge: args[0], kind: args[1] }
+                if (sql.includes('webauthn_challenges')) return {
+                  challenge: args[0], kind: args[1], email: challengeEmail,
+                  rp_id: 'app.example.com', origin: 'https://app.example.com', expires_at: Date.now() + 60000,
+                }
+                if (sql.includes('webauthn_credentials WHERE credential_id')) return credential ? {
+                  credential_id: 'cred-1', public_key: b64url('fake-key'), counter: 0,
+                  transports: '["internal"]', email: 'emp@acme.com', revoked_at: null,
+                } : null
                 return null
               },
-              run: async () => { runs.push({ sql: _sql, args }) },
-              all: async () => ({ results: [] }),
+              run: async () => { runs.push({ sql, args }) },
             }
           },
-          first: async () => null,
-          run: async () => {},
-          all: async () => ({ results: [] }),
         }
       },
-      batch: async () => {},
     },
   }
 }
 
-const clientDataJSON = (challenge) => b64urlFromInput(JSON.stringify({ challenge }))
+const request = (origin = 'https://app.example.com') => new Request('https://app.example.com/api/time-clock', { headers: { Origin: origin } })
+const response = (challenge = 'auth-challenge') => ({
+  response: { clientDataJSON: b64url(JSON.stringify({ challenge })) },
+  rawId: 'cred-1', id: 'cred-1',
+})
 
-describe('webauthn: single shared kiosk device for ALL employees', () => {
-  beforeEach(() => {
-    calls.reg.length = 0
-    calls.auth.length = 0
-    calls.verifyReg.length = 0
-    calls.verifyAuth.length = 0
-  })
+describe('personal passkeys', () => {
+  beforeEach(() => Object.values(calls).forEach((items) => { items.length = 0 }))
 
-  it('registration uses platform authenticator + REQUIRED discoverable credentials', async () => {
+  it('derives the relying-party origin from the HTTP request and excludes all existing phone passkeys', async () => {
     const env = mockEnv()
-    await webauthn.buildRegistrationOptions(env, { username: 'emp@acme.com', origin: 'https://kiosk.example.com' })
-    const opts = calls.reg[0]
-    // residentKey 'required' = credential lives ON the device, so one mobile
-    // device can hold every employee's fingerprint (many discoverable creds).
-    expect(opts.authenticatorSelection).toEqual({
-      authenticatorAttachment: 'platform',
-      residentKey: 'required',
-      userVerification: 'required',
+    await webauthn.buildRegistrationOptions(env, { username: 'emp@acme.com', request: request() })
+    expect(calls.reg[0].rpID).toBe('app.example.com')
+    expect(calls.reg[0].excludeCredentials).toHaveLength(2)
+    expect(calls.reg[0].authenticatorSelection).toEqual({
+      authenticatorAttachment: 'platform', residentKey: 'preferred', userVerification: 'required',
     })
+    expect(env.runs.some((entry) => entry.sql.includes('INSERT INTO webauthn_challenges'))).toBe(true)
   })
 
-  it('authentication options omit allowCredentials so the device offers every enrolled employee', async () => {
+  it('offers every active passkey registered to that employee and requires phone verification', async () => {
     const env = mockEnv()
-    const options = await webauthn.buildAuthenticationOptions(env, { origin: 'https://kiosk.example.com' })
-    const opts = calls.auth[0]
-    expect('allowCredentials' in opts).toBe(false)
-    expect(opts.userVerification).toBe('required')
-    expect(options.challenge).toBe('auth-challenge')
+    await webauthn.buildAuthenticationOptions(env, { request: request(), email: 'emp@acme.com' })
+    expect(calls.auth[0].allowCredentials.map((item) => item.id)).toEqual(['cred-1', 'cred-2'])
+    expect(calls.auth[0].userVerification).toBe('required')
   })
 
-  it('verifyAuthentication resolves the employee from the scanned credential', async () => {
+  it('rejects a foreign browser origin that is not configured', () => {
+    expect(() => webauthn.expectedWebAuthnOrigin(request('https://evil.example'))).toThrow(/Untrusted/)
+  })
+
+  it('accepts an explicitly configured browser origin', () => {
+    expect(webauthn.expectedWebAuthnOrigin(request('https://staff.example'), { ALLOWED_ORIGINS: 'https://staff.example' })).toBe('https://staff.example')
+  })
+
+  it('binds the one-time challenge to the employee and records last use', async () => {
     const env = mockEnv()
-    const result = await webauthn.verifyAuthentication(env, {
-      response: { response: { clientDataJSON: clientDataJSON('auth-challenge') }, rawId: 'cred-1', id: 'cred-1' },
-    })
-    expect(result).toEqual({ email: 'emp@acme.com' })
-    expect(calls.verifyAuth[0].expectedChallenge).toBe('auth-challenge')
-    expect(calls.verifyAuth[0].expectedOrigin).toBe('https://kiosk.example.com')
-    // counter is persisted after a successful scan
-    expect(env.runs.some((r) => r.sql.includes('UPDATE webauthn_credentials SET counter'))).toBe(true)
+    const result = await webauthn.verifyAuthentication(env, { response: response() })
+    expect(result).toMatchObject({ email: 'emp@acme.com', credentialId: 'cred-1' })
+    expect(calls.verifyAuth[0].expectedOrigin).toBe('https://app.example.com')
+    expect(env.runs.some((entry) => entry.sql.includes('last_used_at'))).toBe(true)
   })
 
-  it('rejects a credential bound to a different employee than the challenge (shared-kiosk anti-impersonation)', async () => {
-    // Challenge was issued for other@acme.com but the asserted credential
-    // belongs to emp@acme.com (e.g. wrong account picked in the OS sheet).
+  it('rejects a passkey belonging to a different employee', async () => {
+    const env = mockEnv({ challengeEmail: 'other@acme.com' })
+    await expect(webauthn.verifyAuthentication(env, { response: response() })).rejects.toMatchObject({ status: 401 })
+  })
+
+  it('rejects a revoked or unknown passkey', async () => {
+    const env = mockEnv({ credential: false })
+    await expect(webauthn.verifyAuthentication(env, { response: response() })).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('rejects an expired or already-used challenge', async () => {
     const env = mockEnv()
-    env.DB.prepare = (_sql) => ({
-      bind: (...args) => ({
-        first: async () => {
-          if (_sql.includes('webauthn_credentials WHERE credential_id')) {
-            return { credential_id: 'cred-1', public_key: b64urlFromInput('fake-key'), counter: 0, transports: '["internal"]', email: 'emp@acme.com' }
-          }
-          if (_sql.includes('webauthn_challenges')) {
-            return { challenge: args[0], kind: args[1], email: 'other@acme.com', rp_id: 'kiosk.example.com', origin: 'https://kiosk.example.com', expires_at: Date.now() + 60000 }
-          }
-          return null
-        },
-        run: async () => {},
-        all: async () => ({ results: [] }),
-      }),
-      first: async () => null,
-      run: async () => {},
-      all: async () => ({ results: [] }),
-    })
-    await expect(webauthn.verifyAuthentication(env, {
-      response: { response: { clientDataJSON: clientDataJSON('auth-challenge') }, rawId: 'cred-1', id: 'cred-1' },
-    })).rejects.toMatchObject({ status: 401 })
-  })
-
-  it('accepts when the asserted credential matches the bound challenge email', async () => {
-    const env = mockEnv()
-    const result = await webauthn.verifyAuthentication(env, {
-      response: { response: { clientDataJSON: clientDataJSON('auth-challenge') }, rawId: 'cred-1', id: 'cred-1' },
-    })
-    expect(result).toEqual({ email: 'emp@acme.com' })
-  })
-
-  it('rejects an unknown credential with 404', async () => {
-    const env = mockEnv({ credRow: null })
-    await expect(webauthn.verifyAuthentication(env, {
-      response: { response: { clientDataJSON: clientDataJSON('auth-challenge') }, rawId: 'cred-404', id: 'cred-404' },
-    })).rejects.toMatchObject({ status: 404 })
-  })
-
-  it('rejects an expired/unknown challenge with 400', async () => {
-    const env = mockEnv()
-    env.DB.prepare = (_sql) => ({
-      bind: () => ({ first: async () => null, run: async () => {}, all: async () => ({ results: [] }) }),
-      first: async () => null, run: async () => {}, all: async () => ({ results: [] }),
-    })
-    await expect(webauthn.verifyAuthentication(env, {
-      response: { response: { clientDataJSON: clientDataJSON('stale') }, rawId: 'cred-1', id: 'cred-1' },
-    })).rejects.toMatchObject({ status: 400 })
-  })
-
-  it('stores a one-time challenge for registration (replay protection)', async () => {
-    const env = mockEnv()
-    await webauthn.buildRegistrationOptions(env, { username: 'emp@acme.com', origin: 'https://kiosk.example.com' })
-    expect(env.runs.some((r) => r.sql.includes('INSERT INTO webauthn_challenges'))).toBe(true)
+    env.DB.prepare = () => ({ bind: () => ({ first: async () => null, run: async () => {}, all: async () => ({ results: [] }) }) })
+    await expect(webauthn.verifyAuthentication(env, { response: response('stale') })).rejects.toMatchObject({ status: 400 })
   })
 })
