@@ -1,5 +1,6 @@
 import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Logo } from '../components/Layout'
 import { getLegalDocs } from '../lib/legal'
 import { getConfiguredRoles } from '../lib/roles'
@@ -12,21 +13,21 @@ const _NOTIFICATION_RECIPIENT = 'jiaespenilla@gmail.com'
 function LegalModal({ title, content, onConfirm, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-gray-900/50" />
+      <div className="absolute inset-0 bg-slate-950/65 backdrop-blur-sm" />
       <div
-        className="relative flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl"
+        className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-          <h3 className="text-base font-bold text-gray-900">{title}</h3>
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+          <h3 className="text-lg font-bold text-slate-950">{title}</h3>
           <button onClick={onClose} aria-label="Close" className="touch-44 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
-        <div className="overflow-y-auto whitespace-pre-line px-6 py-4 text-sm leading-relaxed text-gray-600">{content}</div>
-        <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-3">
+        <div className="overflow-y-auto whitespace-pre-line px-6 py-5 text-sm leading-7 text-slate-600">{content}</div>
+        <div className="flex flex-col-reverse gap-2 border-t border-slate-100 px-6 py-4 sm:flex-row sm:justify-end">
           <button onClick={onClose} className="min-h-[44px] rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
           <button onClick={onConfirm} className="min-h-[44px] rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
             I have read and understood
@@ -37,7 +38,7 @@ function LegalModal({ title, content, onConfirm, onClose }) {
   )
 }
 
-const inputCls = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10'
+const inputCls = 'min-h-12 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-3 text-base text-slate-950 placeholder:text-slate-400 transition hover:border-slate-300 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-500/10 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const isEmailValid = (v) => EMAIL_RE.test(String(v || '').trim())
@@ -161,28 +162,30 @@ export default function CompanyRegistration() {
   if (submitted) {
     const s = submittedSummary || { name: companyName || 'your company', members: people.length }
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-brand-700 via-brand-600 to-emerald-500 px-4 py-10">
-        <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white text-center shadow-2xl">
-          <div className="h-2 w-full bg-gradient-to-r from-brand-600 to-emerald-400" />
-          <div className="p-8 sm:p-10">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-100">
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-10">
+        <div className="pointer-events-none absolute -left-40 top-0 h-96 w-96 rounded-full bg-brand-500/20 blur-3xl" aria-hidden="true" />
+        <div className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white text-center shadow-2xl ring-1 ring-white/20">
+          <div className="h-1.5 w-full bg-gradient-to-r from-brand-500 to-emerald-300" />
+          <div className="p-7 sm:p-10">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-50 ring-1 ring-brand-100">
               <svg className="h-7 w-7 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-xl font-bold text-gray-900">Registration submitted!</h1>
-            <p className="mt-2 text-sm leading-relaxed text-gray-500">
+            <p className="text-sm font-semibold text-brand-700">Registration received</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">Your company is ready for review</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-500">
               <span className="font-semibold text-gray-800">{s.name}</span> ({s.members} member{s.members !== 1 ? 's' : ''}) is now pending review by an administrator.
             </p>
-            <ol className="mt-5 space-y-2 rounded-xl bg-gray-50 p-4 text-left text-xs leading-relaxed text-gray-600 ring-1 ring-gray-100">
+            <ol className="mt-6 space-y-3 rounded-2xl bg-slate-50 p-5 text-left text-sm leading-6 text-slate-600 ring-1 ring-slate-100">
               <li className="flex gap-2"><span className="font-bold text-brand-600">1.</span> An administrator reviews and approves your registration.</li>
               <li className="flex gap-2"><span className="font-bold text-brand-600">2.</span> Each team member signs in with their registered email.</li>
               <li className="flex gap-2"><span className="font-bold text-brand-600">3.</span> Set up shifts and start secure clocking from Time Keeping.</li>
             </ol>
-            <a href="/login" className="mt-6 inline-block w-full rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow hover:bg-brand-700">Go to login</a>
+            <Link to="/login" className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-600/20 transition hover:bg-brand-700">Go to login</Link>
           </div>
         </div>
-      </div>
+      </main>
     )
   }
 
@@ -278,8 +281,14 @@ export default function CompanyRegistration() {
     setSubmitted(true)
   }
 
+  const progressSteps = [
+    { label: 'Company', detail: 'Organization details', done: !!(companyName.trim() && company.address.trim() && company.city.trim() && isEmailValid(company.contactEmail) && company.contactPhone.trim()) },
+    { label: 'Team', detail: 'Owner and employees', done: people.some((person) => person.name.trim() && isEmailValid(person.email)) },
+    { label: 'Agreement', detail: 'Terms and privacy', done: bothDocsRead && agree },
+  ]
+
   return (
-    <main className="min-h-screen bg-gradient-to-b from-brand-700 via-brand-600 to-emerald-500 px-4 py-8 sm:py-12">
+    <main className="min-h-screen bg-slate-50">
       {legalView && (
         <LegalModal
           title={legalView === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
@@ -289,42 +298,49 @@ export default function CompanyRegistration() {
         />
       )}
 
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <Logo light />
-          <a href="/login" className="rounded-full bg-white/15 px-4 py-1.5 text-xs font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/25">
-            Already registered? Sign in
-          </a>
+      <header className="border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          <Logo />
+          <Link to="/login" className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-800 sm:px-4 sm:text-sm">
+            Sign in
+          </Link>
         </div>
+      </header>
 
-        {(() => {
-          const companyDone = companyName.trim() && company.address.trim() && company.city.trim() && isEmailValid(company.contactEmail) && company.contactPhone.trim()
-          const teamDone = people.some((p) => p.name.trim() && isEmailValid(p.email))
-          const agreeDone = bothDocsRead && agree
-          const steps = [
-            ['Company', !!companyDone],
-            ['Team', !!teamDone],
-            ['Agreement', !!agreeDone],
-          ]
-          return (
-            <ol className="mb-5 flex items-center gap-1 rounded-2xl bg-white/10 p-2 ring-1 ring-white/20 backdrop-blur" aria-label="Registration progress">
-              {steps.map(([label, done], i) => (
-                <li key={label} className="flex min-h-[44px] flex-1 items-center gap-1.5 px-1.5 py-1.5 sm:gap-2 sm:px-2" aria-current={done ? undefined : 'step'}>
-                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${done ? 'bg-white text-brand-700' : 'bg-white/20 text-white'}`}>
-                    {done ? '✓' : i + 1}
+      <div className="mx-auto grid max-w-6xl items-start gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-8 lg:px-8 lg:py-10">
+        <aside className="relative overflow-hidden rounded-3xl bg-slate-950 p-6 text-white shadow-xl lg:sticky lg:top-6 lg:p-7">
+          <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-brand-500/20 blur-3xl" aria-hidden="true" />
+          <div className="relative">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">Organization setup</p>
+            <h1 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">Register your company</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-300">Create your workspace and add the people who will use it.</p>
+
+            <ol className="mt-6 grid grid-cols-3 gap-2 lg:grid-cols-1 lg:gap-3" aria-label="Registration progress">
+              {progressSteps.map((step, index) => (
+                <li key={step.label} className={`rounded-2xl border p-3 transition lg:flex lg:items-center lg:gap-3 ${step.done ? 'border-emerald-300/25 bg-emerald-300/10' : 'border-white/10 bg-white/[0.05]'}`} aria-current={step.done ? undefined : 'step'}>
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${step.done ? 'bg-emerald-300 text-slate-950' : 'bg-white/10 text-white'}`}>
+                    {step.done ? (
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    ) : index + 1}
                   </span>
-                  <span className={`truncate text-xs font-semibold ${done ? 'text-white' : 'text-emerald-50'}`}>{label}</span>
-                  {i < steps.length - 1 && <span className="ml-auto hidden h-px flex-1 bg-white/25 sm:block" aria-hidden="true" />}
+                  <span className="mt-2 block min-w-0 lg:mt-0">
+                    <span className="block truncate text-xs font-semibold text-white sm:text-sm">{step.label}</span>
+                    <span className="mt-0.5 hidden text-xs text-slate-400 lg:block">{step.detail}</span>
+                  </span>
                 </li>
               ))}
             </ol>
-          )
-        })()}
 
-        <form onSubmit={handleSubmit} className="space-y-7 rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-gray-100 sm:p-8">
+            <div className="mt-6 hidden rounded-2xl border border-white/10 bg-white/[0.05] p-4 text-xs leading-5 text-slate-300 lg:block">
+              Your registration is reviewed before the workspace becomes active.
+            </div>
+          </div>
+        </aside>
+
+        <form onSubmit={handleSubmit} className="space-y-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_20px_60px_-32px_rgba(15,23,42,0.3)] sm:p-8">
           <div ref={formTopRef} className="scroll-mt-4" />
           {formError && (
-            <div role="alert" className="flex items-start gap-2.5 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700 ring-1 ring-red-200">
+            <div role="alert" className="flex items-start gap-2.5 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700 ring-1 ring-inset ring-red-200">
               <svg className="mt-0.5 h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
               <span className="flex-1">{formError}</span>
               <button type="button" onClick={() => setFormError('')} aria-label="Dismiss error" className="rounded-lg p-0.5 text-red-400 hover:bg-red-100 hover:text-red-600">
@@ -333,16 +349,16 @@ export default function CompanyRegistration() {
             </div>
           )}
           {/* Section 1 — Company */}
-          <section aria-labelledby="sec-company">
+          <section aria-labelledby="sec-company" className="rounded-2xl border border-slate-200 p-5 sm:p-6">
             <div className="mb-5 flex items-center gap-3">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white shadow">1</span>
               <div>
-                <h2 id="sec-company" className="text-base font-bold text-gray-900 sm:text-lg">Company information</h2>
-                <p className="text-xs leading-relaxed text-gray-500">Tell us about your organization — used for verification and branding.</p>
+                <h2 id="sec-company" className="text-base font-bold text-slate-950 sm:text-lg">Company information</h2>
+                <p className="text-xs leading-relaxed text-slate-500">Tell us about your organization for verification and branding.</p>
               </div>
             </div>
 
-            <label className="mb-4 block cursor-pointer rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50 px-4 py-6 text-center text-sm text-gray-500 transition hover:border-brand-300 hover:bg-brand-50/40">
+            <label className="mb-5 block cursor-pointer rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-5 text-center text-sm text-slate-500 transition hover:border-brand-300 hover:bg-brand-50/50">
               <input
                 type="file"
                 accept="image/*"
@@ -420,16 +436,16 @@ export default function CompanyRegistration() {
             </div>
           </section>
 
-          <hr className="border-gray-100" />
+          <div className="hidden" aria-hidden="true" />
 
           {/* Section 2 — Team (bulk) */}
-          <section aria-labelledby="sec-team">
+          <section aria-labelledby="sec-team" className="rounded-2xl border border-slate-200 p-5 sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">2</span>
                 <div>
-                  <h2 id="sec-team" className="text-base font-bold text-gray-900">Team members</h2>
-                  <p className="text-xs text-gray-500">Add your CEO and employees — they'll use these emails to sign in.</p>
+                  <h2 id="sec-team" className="text-base font-bold text-slate-950">Team members</h2>
+                  <p className="text-xs text-slate-500">Add your account owner and employees who will sign in.</p>
                 </div>
               </div>
               <button
@@ -531,15 +547,15 @@ export default function CompanyRegistration() {
             </button>
           </section>
 
-          <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent" />
+          <div className="hidden" aria-hidden="true" />
 
           {/* Section 3 — Agreement */}
-          <section aria-labelledby="sec-agreement" ref={agreementRef}>
+          <section aria-labelledby="sec-agreement" ref={agreementRef} className="rounded-2xl border border-slate-200 p-5 sm:p-6">
             <div className="mb-5 flex items-center gap-3">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white shadow">3</span>
               <div>
-                <h2 id="sec-agreement" className="text-base font-bold text-gray-900 sm:text-lg">Agreement</h2>
-                <p className="text-xs text-gray-500">Review and agree to continue</p>
+                <h2 id="sec-agreement" className="text-base font-bold text-slate-950 sm:text-lg">Agreement</h2>
+                <p className="text-xs text-slate-500">Review the documents before submitting.</p>
               </div>
             </div>
 
@@ -592,7 +608,7 @@ export default function CompanyRegistration() {
           <button
             type="submit"
             disabled={!!nameError || checkingName || submitting}
-            className={`group w-full rounded-xl py-4 text-sm font-semibold shadow-lg transition focus:outline-none focus:ring-4 ${nameError || checkingName || submitting ? 'cursor-not-allowed bg-gray-300 text-gray-500 focus:ring-gray-300/30' : 'bg-gradient-to-r from-brand-600 to-brand-700 text-white hover:from-brand-700 hover:to-brand-800 focus:ring-brand-500/30 hover:shadow-xl'}`}
+            className={`group min-h-12 w-full rounded-xl px-4 py-3.5 text-sm font-semibold shadow-lg transition focus:outline-none focus:ring-4 ${nameError || checkingName || submitting ? 'cursor-not-allowed bg-slate-200 text-slate-500 focus:ring-slate-300/30' : 'bg-brand-600 text-white shadow-brand-600/20 hover:-translate-y-0.5 hover:bg-brand-700 hover:shadow-xl focus:ring-brand-500/30'}`}
           >
             <span className="inline-flex items-center gap-2">
               {submitting ? (
@@ -609,9 +625,9 @@ export default function CompanyRegistration() {
           </button>
 
           <p className="text-center text-sm text-gray-500">
-            Already registered? <a href="/login" className="font-semibold text-brand-600 underline decoration-brand-200 underline-offset-2 hover:text-brand-700 hover:decoration-brand-600">Sign in</a>
+            Already registered? <Link to="/login" className="font-semibold text-brand-700 underline decoration-brand-200 underline-offset-2 hover:text-brand-800 hover:decoration-brand-600">Sign in</Link>
           </p>
-          <p className="text-center text-[11px] text-white/70">Secure registration • Encrypted • GDPR compliant</p>
+          <p className="text-center text-[11px] text-slate-400">Secure registration - Encrypted connection</p>
         </form>
       </div>
     </main>
