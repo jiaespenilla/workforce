@@ -108,6 +108,64 @@ body {
   animation: pulse-slow 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* Signed-in application theme. The shared wrapper keeps these visual changes
+   away from public pages while giving every workspace screen one design. */
+.app-page {
+  color: #334155;
+}
+
+.app-page :where(h1) {
+  color: #0f172a;
+  letter-spacing: -0.025em;
+}
+
+.app-page :where(h2, h3) {
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.app-page :where(.text-gray-900) { color: #0f172a; }
+.app-page :where(.text-gray-800) { color: #1e293b; }
+.app-page :where(.text-gray-700) { color: #334155; }
+.app-page :where(.text-gray-600) { color: #475569; }
+.app-page :where(.text-gray-500) { color: #64748b; }
+.app-page :where(.text-gray-400) { color: #94a3b8; }
+.app-page :where(.border-gray-100) { border-color: #f1f5f9; }
+.app-page :where(.border-gray-200) { border-color: #e2e8f0; }
+.app-page :where(.border-gray-300) { border-color: #cbd5e1; }
+.app-page :where(.bg-gray-50) { background-color: #f8fafc; }
+.app-page :where(.bg-gray-100) { background-color: #f1f5f9; }
+
+.app-page :where(.rounded-xl.border.border-gray-200.bg-white),
+.app-page :where(.rounded-2xl.border.border-gray-200.bg-white),
+.app-page :where(.rounded-lg.border.border-gray-200.bg-white) {
+  border-color: #e2e8f0;
+  border-radius: 1rem;
+  box-shadow: 0 16px 42px -32px rgba(15, 23, 42, 0.42);
+}
+
+.app-page :where(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']), select, textarea) {
+  border-color: #cbd5e1;
+  border-radius: 0.75rem;
+}
+
+.app-page :where(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']), select, textarea):focus {
+  border-color: var(--color-brand-500);
+}
+
+.app-page :where(table) {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.app-page :where(thead) {
+  background-color: #f8fafc;
+}
+
+.app-page :where(button, a) {
+  transition-duration: 160ms;
+}
+
 @keyframes shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }

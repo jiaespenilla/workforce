@@ -86,14 +86,14 @@ export default function WelcomeIntro() {
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={dismiss}>
-      <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
-      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" />
+      <div className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-white/20" onClick={(e) => e.stopPropagation()}>
         <div className="h-1.5 w-full bg-gradient-to-r from-brand-600 to-emerald-400" />
         <div className="px-6 pt-6">
           <div className="flex items-start gap-4">
             {logoSrc ? <img src={logoSrc} alt="" className="h-12 w-12 rounded-xl object-cover ring-1 ring-gray-200 bg-white" /> : <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-base font-bold text-white">{initialsOf(companyName)}</div>}
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Welcome to {companyName}!</h2>
+              <h2 className="text-xl font-bold tracking-tight text-slate-950">Welcome to {companyName}!</h2>
               <p className="mt-1 text-xs text-gray-500">{settings.name} · {company?.industry || 'Workforce Management'} {company?.city ? `· ${company.city}` : ''}</p>
             </div>
           </div>
@@ -103,7 +103,7 @@ export default function WelcomeIntro() {
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {steps.map((s) => (
-              <div key={s.title} className="flex gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-3">
+              <div key={s.title} className="flex gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-gray-200 text-brand-600">
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7"><path strokeLinecap="round" strokeLinejoin="round" d={s.icon} /></svg>
                 </div>
@@ -117,7 +117,7 @@ export default function WelcomeIntro() {
           <p className="mt-4 text-[11px] text-gray-400">Tip: Your progress is saved — this welcome appears only on your first sign-in. Find it again in the bell icon (Notifications) if you close it.</p>
         </div>
         <div className="mt-6 flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
-          <button onClick={dismiss} className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow hover:bg-brand-700">Get started</button>
+          <button onClick={dismiss} className="rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-600/20 hover:bg-brand-700">Get started</button>
         </div>
       </div>
     </div>

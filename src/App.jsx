@@ -91,18 +91,19 @@ function MaintenanceGate({ children }) {
 
   if (on && user?.role !== 'administrator') {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gradient-to-b from-brand-700 to-emerald-500 p-6 text-center text-white">
-        <svg className="h-14 w-14 text-white/90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+      <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-slate-950 p-6 text-center text-white">
+        <div className="pointer-events-none absolute -left-40 top-1/4 h-96 w-96 rounded-full bg-brand-500/20 blur-3xl" aria-hidden="true" />
+        <svg className="relative h-14 w-14 text-emerald-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
           <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
-        <h1 className="text-2xl font-bold">Scheduled Maintenance</h1>
-        <p className="max-w-md text-sm leading-relaxed text-emerald-50">
+        <h1 className="relative text-3xl font-bold tracking-tight">Scheduled Maintenance</h1>
+        <p className="relative max-w-md text-sm leading-6 text-slate-300">
           The system is currently undergoing maintenance and will be back shortly.
           Please check with your system administrator for updates.
         </p>
         <button
           onClick={() => { logout(); navigate('/login') }}
-          className="mt-2 rounded-xl bg-white px-6 py-2.5 text-sm font-semibold text-brand-700 shadow-md transition hover:bg-emerald-50"
+          className="relative mt-2 rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-600/20 transition hover:bg-brand-700"
         >
           Back to login
         </button>

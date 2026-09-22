@@ -11,7 +11,7 @@ export default function PhonePasskeys() {
         <p className="mt-1 text-sm text-gray-500">Add more than one personal phone, review when each was used, or remove a lost device.</p>
       </div>
       <PersonalTimeClock manageOnly />
-      <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 text-sm leading-relaxed text-blue-800">
+      <div className="rounded-2xl border border-brand-100 bg-brand-50/70 p-5 text-sm leading-relaxed text-brand-900 shadow-sm">
         The app never receives or stores your fingerprint or face scan. Your phone keeps that information and sends only a secure approval.
       </div>
     </div>

@@ -32,10 +32,11 @@ export default function HelpGuide() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Help &amp; Guide</h1>
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Support center</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Help &amp; Guide</h1>
           <p className="mt-1 text-sm text-gray-500">
             A plain-language walkthrough of everything <span className="font-semibold text-gray-700">{user?.roleLabel}</span> can use —
             and answers to the questions people ask most.
@@ -44,7 +45,7 @@ export default function HelpGuide() {
         <button
           type="button"
           onClick={downloadPdf}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-600/15 transition hover:bg-brand-700"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4H7v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -75,7 +76,7 @@ export default function HelpGuide() {
         <p className="mt-1 text-sm text-gray-500">The questions people ask most.</p>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {QUICK_ANSWERS.map((f) => (
-            <div key={f.q} className="rounded-xl bg-gray-50 p-4 ring-1 ring-gray-100">
+            <div key={f.q} className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-100">
               <p className="text-sm font-semibold text-gray-900">{f.q}</p>
               <p className="mt-1.5 text-sm leading-relaxed text-gray-600">{f.a}</p>
             </div>
@@ -85,7 +86,7 @@ export default function HelpGuide() {
 
       <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <p className="text-xs text-gray-500">Prefer paper? The PDF above matches this page exactly for your role.</p>
-        <button type="button" onClick={() => navigate(-1)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-brand-400 hover:text-brand-700">
+        <button type="button" onClick={() => navigate(-1)} className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700">
           Go back
         </button>
       </div>

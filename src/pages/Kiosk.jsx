@@ -103,12 +103,15 @@ export default function Kiosk() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-950 via-brand-900 to-emerald-800 p-4 sm:p-8">
-      <section className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl sm:p-10">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 p-4 sm:p-8">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-900/80 via-slate-950 to-slate-950" aria-hidden="true" />
+      <div className="pointer-events-none absolute -left-40 top-1/4 h-96 w-96 rounded-full bg-emerald-400/15 blur-3xl" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-0 opacity-[0.07]" aria-hidden="true" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.8) 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
+      <section className="relative w-full max-w-2xl rounded-3xl border border-white bg-white p-6 shadow-2xl ring-1 ring-white/20 sm:p-10">
         <div className="text-center">
           <p className="text-xs font-bold uppercase tracking-[0.24em] text-brand-600">Standalone workplace device</p>
-          <h1 className="mt-2 text-3xl font-bold text-gray-950">Head Office Time Clock</h1>
-          <p className="mt-2 text-sm text-gray-500">No employee login is required. Fingerprint information stays inside the reader.</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Head Office Time Clock</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-500">No employee login is required. Fingerprint information stays inside the reader.</p>
         </div>
 
         {notice && (
@@ -118,7 +121,7 @@ export default function Kiosk() {
         )}
 
         {!token ? (
-          <form onSubmit={pair} className="mt-8 space-y-4 rounded-2xl border border-gray-200 bg-gray-50 p-5 sm:p-6">
+          <form onSubmit={pair} className="mt-8 space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:p-6">
             <div>
               <h2 className="font-semibold text-gray-900">Pair this kiosk once</h2>
               <p className="mt-1 text-sm text-gray-500">Ask an administrator to generate a pairing code in Time Clock Setup.</p>
@@ -129,7 +132,7 @@ export default function Kiosk() {
             <label className="block text-sm font-medium text-gray-700">One-time pairing code
               <input value={code} onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))} required autoComplete="one-time-code" inputMode="text" placeholder="ABCD2345" className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-4 py-4 text-center font-mono text-2xl font-bold tracking-[0.28em] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
             </label>
-            <button disabled={busy || code.length !== 8} className="w-full rounded-xl bg-brand-600 px-5 py-3 font-semibold text-white hover:bg-brand-700 disabled:opacity-50">{busy ? 'Pairing…' : 'Pair this kiosk'}</button>
+            <button disabled={busy || code.length !== 8} className="min-h-12 w-full rounded-xl bg-brand-600 px-5 py-3 font-semibold text-white shadow-lg shadow-brand-600/20 transition hover:bg-brand-700 disabled:opacity-50">{busy ? 'Pairing…' : 'Pair this kiosk'}</button>
           </form>
         ) : (
           <div className="mt-8">

@@ -139,12 +139,12 @@ export default function PersonalTimeClock({ clockedIn = false, onPunch, manageOn
   }
 
   if (!apiEnabled()) {
-    return <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">Personal phone clocking needs the online server and is not available in local demo mode.</div>
+    return <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800 shadow-sm">Personal phone clocking needs the online server and is not available in local demo mode.</div>
   }
 
   if (!access.loading && !access.enabled) {
     return (
-      <section className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm sm:p-6">
+      <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm sm:p-6">
         <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Work-from-home phone clock</p>
         <h2 className="mt-1 text-xl font-bold text-gray-900">Phone clocking needs to be enabled</h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-amber-900">
@@ -156,7 +156,7 @@ export default function PersonalTimeClock({ clockedIn = false, onPunch, manageOn
   }
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Secure personal phone</p>
@@ -170,7 +170,7 @@ export default function PersonalTimeClock({ clockedIn = false, onPunch, manageOn
             type="button"
             onClick={passkeys.length === 0 ? register : punch}
             disabled={!!busy || access.loading || !supported || platformReady === false}
-            className="min-h-14 rounded-xl bg-brand-600 px-8 py-3 text-base font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-14 rounded-xl bg-brand-600 px-8 py-3 text-base font-bold text-white shadow-lg shadow-brand-600/15 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy === 'register' ? 'Setting up…' : busy === 'verify' ? 'Verifying…' : busy === 'punch' ? 'Sending…' : passkeys.length === 0 ? 'Set up this phone' : clockedIn ? 'Clock Out' : 'Clock In'}
           </button>
@@ -178,7 +178,7 @@ export default function PersonalTimeClock({ clockedIn = false, onPunch, manageOn
       </div>
 
       {!manageOnly && (
-        <div className="mt-4 grid gap-2 rounded-xl bg-brand-50 p-4 text-sm text-brand-900 sm:grid-cols-3">
+        <div className="mt-4 grid gap-2 rounded-xl border border-brand-100 bg-brand-50/70 p-4 text-sm text-brand-900 sm:grid-cols-3">
           <p><span className="font-bold">1.</span> Sign in on your own phone.</p>
           <p><span className="font-bold">2.</span> Set up this phone once.</p>
           <p><span className="font-bold">3.</span> Tap Clock In or Clock Out.</p>
@@ -209,7 +209,7 @@ export default function PersonalTimeClock({ clockedIn = false, onPunch, manageOn
 
         <div className="mt-4 space-y-2">
           {passkeys.map((passkey) => (
-            <div key={passkey.id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-4 py-3">
+            <div key={passkey.id} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-slate-50/60 px-4 py-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-gray-900">{passkey.name}</p>
                 <p className="text-xs text-gray-500">{passkey.lastUsedAt ? `Last used ${new Date(passkey.lastUsedAt).toLocaleString()}` : `Added ${new Date(passkey.createdAt).toLocaleDateString()}`}</p>

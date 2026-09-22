@@ -85,7 +85,7 @@ export function SkeletonCards({ cards = 4, className = '', label, page }) {
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: cards }, (_, i) => (
-          <div key={i} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div key={i} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <SkeletonRow className="h-3 w-24" />
             <SkeletonRow className="mt-3 h-8 w-16" />
             <SkeletonRow className="mt-3 h-3 w-28" />

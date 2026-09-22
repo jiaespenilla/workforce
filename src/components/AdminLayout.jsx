@@ -46,16 +46,16 @@ export default function AdminLayout({ children }) {
           to={item.to}
           onClick={onNavigate}
           className={({ isActive }) =>
-            `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+            `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
               isActive
-                ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                ? 'bg-emerald-300/10 text-emerald-200 ring-1 ring-emerald-300/20'
+                : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
             }`
           }
         >
           {({ isActive }) => (
             <>
-              <svg className={`h-5 w-5 ${isActive ? 'text-brand-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+              <svg className={`h-5 w-5 ${isActive ? 'text-emerald-300' : 'text-slate-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
                 <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
               </svg>
               {item.label}
@@ -67,16 +67,16 @@ export default function AdminLayout({ children }) {
         to="/profile"
         onClick={onNavigate}
         className={({ isActive }) =>
-          `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+          `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
             isActive
-              ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200'
-              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              ? 'bg-emerald-300/10 text-emerald-200 ring-1 ring-emerald-300/20'
+              : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
           }`
         }
       >
         {({ isActive }) => (
           <>
-            <svg className={`h-5 w-5 ${isActive ? 'text-brand-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+            <svg className={`h-5 w-5 ${isActive ? 'text-emerald-300' : 'text-slate-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
               <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
             My Profile
@@ -87,8 +87,8 @@ export default function AdminLayout({ children }) {
   )
 
   return (
-    <div className="min-h-screen bg-gray-100/60">
-      <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-2 border-b border-gray-200 bg-white px-3 sm:px-4 lg:px-8">
+    <div className="min-h-screen bg-slate-50">
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-3 shadow-sm backdrop-blur sm:px-4 lg:px-8">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button
             type="button"
@@ -127,25 +127,28 @@ export default function AdminLayout({ children }) {
         </div>
       </header>
 
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-gray-200 bg-white lg:flex">
-        <div className="flex h-16 items-center border-b border-gray-200 px-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Administration Console</p>
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-slate-800 bg-slate-950 lg:flex">
+        <div className="flex h-16 items-center border-b border-white/10 px-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">Administration</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">System console</p>
+          </div>
         </div>
         {navLinks()}
-        <div className="mt-auto space-y-1 border-t border-gray-200 p-4">
+        <div className="mt-auto space-y-1 border-t border-white/10 p-4">
           <button
             type="button"
             onClick={() => navigate('/help')}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition-colors hover:bg-white/[0.06] hover:text-white"
           >
-            <svg className="h-5 w-5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+            <svg className="h-5 w-5 shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             Help &amp; Guide
           </button>
-          <SignOutButton onConfirm={signOut} />
-          <div className="mt-3 border-t border-gray-100 px-3 pt-3 text-[11px] text-gray-400">
-            <p><span className="font-semibold text-gray-500">{settings.name} {settings.version}</span> - <span className="font-semibold">CelestSolutions</span></p>
+          <SignOutButton onConfirm={signOut} className="text-slate-300 hover:bg-white/[0.06] hover:text-red-300" />
+          <div className="mt-3 border-t border-white/10 px-3 pt-3 text-[11px] text-slate-500">
+            <p><span className="font-semibold text-slate-400">{settings.name} {settings.version}</span> - <span className="font-semibold">CelestSolutions</span></p>
           </div>
         </div>
       </aside>
@@ -153,13 +156,13 @@ export default function AdminLayout({ children }) {
       {/* Mobile navigation drawer */}
       {menuOpen && (
         <div className="fixed inset-0 z-30 lg:hidden" onClick={() => setMenuOpen(false)}>
-          <div className="absolute inset-0 bg-gray-900/40" />
-          <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex h-16 items-center border-b border-gray-200 px-5">
-              {getSystemIcon() ? <img src={getSystemIcon()} alt="" className="h-8 w-8 rounded-lg bg-white object-contain p-0.5 ring-1 ring-gray-200" /> : <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 font-bold text-sm text-white">{brandLetter}</div>}
+          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" />
+          <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-slate-950 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex h-16 items-center border-b border-white/10 px-5">
+              {getSystemIcon() ? <img src={getSystemIcon()} alt="" className="h-8 w-8 rounded-lg bg-white object-contain p-0.5" /> : <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 font-bold text-sm text-white ring-1 ring-white/20">{brandLetter}</div>}
               <div className="ml-2.5 leading-tight">
-                <p className="text-sm font-semibold text-gray-900">{settings.name}</p>
-                <p className="text-[11px] text-gray-400">System Administration</p>
+                <p className="text-sm font-semibold text-white">{settings.name}</p>
+                <p className="text-[11px] text-slate-400">System Administration</p>
               </div>
             </div>
             <div className="flex flex-1 flex-col overflow-y-auto">
@@ -168,16 +171,16 @@ export default function AdminLayout({ children }) {
                 <button
                   type="button"
                   onClick={() => { setMenuOpen(false); navigate('/help') }}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition-colors hover:bg-white/[0.06] hover:text-white"
                 >
-                  <svg className="h-5 w-5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+                  <svg className="h-5 w-5 shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   Help &amp; Guide
                 </button>
-                <SignOutButton onConfirm={signOut} />
-                <div className="mt-3 space-y-0.5 border-t border-gray-100 px-3 pt-3 text-[11px] leading-relaxed text-gray-400">
-                  <p className="font-semibold text-gray-500">{settings.name}</p>
+                <SignOutButton onConfirm={signOut} className="text-slate-300 hover:bg-white/[0.06] hover:text-red-300" />
+                <div className="mt-3 space-y-0.5 border-t border-white/10 px-3 pt-3 text-[11px] leading-relaxed text-slate-500">
+                  <p className="font-semibold text-slate-400">{settings.name}</p>
                   <p>{settings.version}</p>
                   <p>by <span className="font-semibold">CelestSolutions</span></p>
                 </div>
@@ -189,10 +192,10 @@ export default function AdminLayout({ children }) {
 
 
 
-      <main className="min-w-0 lg:pl-64">
+      <main className="min-w-0 lg:pl-72">
         <div className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6 lg:p-8">
           <DefaultPasswordBanner />
-          {children ?? <Outlet />}
+          <div className="app-page">{children ?? <Outlet />}</div>
         </div>
       </main>
     </div>

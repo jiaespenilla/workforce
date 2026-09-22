@@ -9,7 +9,7 @@ export default function SignOutButton({ onConfirm, className = '' }) {
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-red-50 hover:text-red-600 ${className}`}
+        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-red-50 hover:text-red-600 ${className}`}
       >
         <svg className="h-5 w-5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
           <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -19,16 +19,16 @@ export default function SignOutButton({ onConfirm, className = '' }) {
 
       {confirming && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => setConfirming(false)}>
-          <div className="absolute inset-0 bg-gray-900/50" />
-          <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute inset-0 bg-slate-950/65 backdrop-blur-sm" />
+          <div className="relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-white/20" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 ring-1 ring-red-100">
                 <svg className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
               </div>
               <div>
-                <h3 className="text-base font-bold text-gray-900">Sign out?</h3>
+                <h3 className="text-lg font-bold tracking-tight text-slate-950">Sign out?</h3>
                 <p className="mt-1 text-sm leading-relaxed text-gray-500">
                   You will be returned to the login page. Unsaved changes may be lost.
                 </p>

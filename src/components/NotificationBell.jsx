@@ -83,9 +83,9 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 z-50 w-80 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
-          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-            <p className="text-sm font-bold text-gray-900">Notifications</p>
+        <div className="absolute right-0 top-12 z-50 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-900/5">
+          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-4 py-3.5">
+            <p className="text-sm font-bold text-slate-950">Notifications</p>
             {visible.length > 0 && (
               <button
                 onClick={async () => { await clearNotificationsRemote(); setNotifications([]) }}

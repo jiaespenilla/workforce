@@ -21,7 +21,7 @@ export default function Pagination({ page, pageSize, total, onPageChange }) {
   for (let i = start; i < end; i++) pages.push(i)
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 bg-slate-50/60 px-4 py-3">
       <p className="text-xs text-gray-500">
         Showing <span className="font-medium text-gray-900">{total === 0 ? 0 : page * pageSize + 1}</span>–
         <span className="font-medium text-gray-900">{Math.min((page + 1) * pageSize, total)}</span> of{' '}
@@ -32,7 +32,7 @@ export default function Pagination({ page, pageSize, total, onPageChange }) {
           type="button"
           onClick={() => onPageChange(page - 1)}
           disabled={!canPrev}
-          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+          className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-brand-300 hover:bg-brand-50 disabled:opacity-40"
         >
           Prev
         </button>
@@ -43,7 +43,7 @@ export default function Pagination({ page, pageSize, total, onPageChange }) {
             onClick={() => onPageChange(p)}
             aria-current={p === page}
             className={`min-w-8 rounded-lg px-3 py-1.5 text-xs font-medium ${
-              p === page ? 'bg-brand-600 text-white' : 'border border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+              p === page ? 'bg-brand-600 text-white shadow-sm' : 'border border-gray-300 bg-white text-gray-600 hover:border-brand-300 hover:bg-brand-50'
             }`}
           >
             {p + 1}
@@ -53,7 +53,7 @@ export default function Pagination({ page, pageSize, total, onPageChange }) {
           type="button"
           onClick={() => onPageChange(page + 1)}
           disabled={!canNext}
-          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+          className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-brand-300 hover:bg-brand-50 disabled:opacity-40"
         >
           Next
         </button>

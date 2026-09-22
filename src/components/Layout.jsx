@@ -74,8 +74,8 @@ export default function Layout({ children }) {
         }
         return (
           <>
-            <p className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Main Menu</p>
-                        <nav className="space-y-1">
+            <p className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Main Menu</p>
+            <nav className="space-y-1">
               {allowed.map((item) => (
                 <NavLink
                   key={item.to}
@@ -83,16 +83,16 @@ export default function Layout({ children }) {
                   end={item.to === '/'}
                   onClick={() => setOpen(false)}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
                       isActive
-                        ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        ? 'bg-emerald-300/10 text-emerald-200 ring-1 ring-emerald-300/20'
+                        : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
                     }`
                   }
                 >
                   {({ isActive }) => (
                     <>
-                      <svg className={`h-5 w-5 ${isActive ? 'text-brand-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+                      <svg className={`h-5 w-5 ${isActive ? 'text-emerald-300' : 'text-slate-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
                         <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
                       </svg>
                       {item.label}
@@ -107,22 +107,22 @@ export default function Layout({ children }) {
         )
       })()}
 
-      <p className="px-3 pb-2 pt-6 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Account</p>
+      <p className="px-3 pb-2 pt-6 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Account</p>
       <nav className="space-y-1">
         <NavLink
           to="/profile"
           onClick={() => setOpen(false)}
           className={({ isActive }) =>
-            `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+            `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
               isActive
-                ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                ? 'bg-emerald-300/10 text-emerald-200 ring-1 ring-emerald-300/20'
+                : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
             }`
           }
         >
           {({ isActive }) => (
             <>
-              <svg className={`h-5 w-5 ${isActive ? 'text-brand-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+              <svg className={`h-5 w-5 ${isActive ? 'text-emerald-300' : 'text-slate-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
               My Profile
@@ -134,16 +134,16 @@ export default function Layout({ children }) {
             to="/phone-passkeys"
             onClick={() => setOpen(false)}
             className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
                 isActive
-                  ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  ? 'bg-emerald-300/10 text-emerald-200 ring-1 ring-emerald-300/20'
+                  : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
               }`
             }
           >
             {({ isActive }) => (
               <>
-                <svg className={`h-5 w-5 ${isActive ? 'text-brand-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+                <svg className={`h-5 w-5 ${isActive ? 'text-emerald-300' : 'text-slate-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a3 3 0 01-3 3H8m6 0a3 3 0 00-3-3H8m0 0a3 3 0 100 6m9-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 My Phone Passkeys
@@ -162,27 +162,27 @@ export default function Layout({ children }) {
   }
 
   const sidebarFooter = (
-    <div className="space-y-1 border-t border-gray-200 p-4">
+    <div className="space-y-1 border-t border-white/10 p-4">
       <button
         type="button"
         onClick={() => navigate('/help')}
-        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
+        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition-colors hover:bg-white/[0.06] hover:text-white"
       >
-        <svg className="h-5 w-5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+        <svg className="h-5 w-5 shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
           <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         Help &amp; Guide
       </button>
-      <SignOutButton onConfirm={signOut} />
-      <div className="mt-3 border-t border-gray-100 px-3 pt-3 text-[11px] text-gray-400">
-        <p><span className="font-semibold text-gray-500">{settings.name} {settings.version}</span> · <span className="font-semibold">CelestSolutions</span></p>
+      <SignOutButton onConfirm={signOut} className="text-slate-300 hover:bg-white/[0.06] hover:text-red-300" />
+      <div className="mt-3 border-t border-white/10 px-3 pt-3 text-[11px] text-slate-500">
+        <p><span className="font-semibold text-slate-400">{settings.name} {settings.version}</span> - <span className="font-semibold">CelestSolutions</span></p>
       </div>
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-gray-100/60">
-      <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-2 border-b border-gray-200 bg-white px-3 sm:px-4 lg:px-8">
+    <div className="min-h-screen bg-slate-50">
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-3 shadow-sm backdrop-blur sm:px-4 lg:px-8">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button className="touch-44 shrink-0 rounded-lg text-gray-500 hover:bg-gray-100 lg:hidden" onClick={() => setOpen(!open)} aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open}>
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -212,9 +212,9 @@ export default function Layout({ children }) {
         </div>
       </header>
 
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-gray-200 bg-white lg:flex">
-        <div className="flex h-16 items-center border-b border-gray-200 px-5">
-          <Logo />
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-slate-800 bg-slate-950 lg:flex">
+        <div className="flex h-16 items-center border-b border-white/10 px-5">
+          <Logo light />
         </div>
         <div className="flex flex-1 flex-col overflow-y-auto p-4">
           {links}
@@ -224,9 +224,9 @@ export default function Layout({ children }) {
 
       {open && (
         <div className="fixed inset-0 z-30 lg:hidden" onClick={() => setOpen(false)}>
-          <div className="absolute inset-0 bg-gray-900/40" />
-          <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex h-16 items-center border-b border-gray-200 px-5"><Logo /></div>
+          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" />
+          <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-slate-950 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex h-16 items-center border-b border-white/10 px-5"><Logo light /></div>
             <div className="flex flex-1 flex-col overflow-y-auto p-4">{links}</div>
             {sidebarFooter}
           </div>
@@ -235,10 +235,10 @@ export default function Layout({ children }) {
 
 
 
-      <main className="min-w-0 lg:pl-64">
+      <main className="min-w-0 lg:pl-72">
         <div className="mx-auto max-w-7xl space-y-4 p-4 sm:p-6 lg:p-8">
           <DefaultPasswordBanner />
-          {children ?? <Outlet />}
+          <div className="app-page">{children ?? <Outlet />}</div>
         </div>
       </main>
     </div>
