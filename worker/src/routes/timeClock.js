@@ -289,6 +289,23 @@ export async function handlePublic({ request, env, path, method }) {
 export async function handle({ request, env, url, path, method, claims, isAdmin }) {
   const email = String(claims.sub || '').toLowerCase()
 
+  if (path === '/api/time-clock/personal-status' && method === 'GET') {
+    const employee = await activeEmployee(env, email)
+    const [enabled, credentialRow] = await Promise.all([
+      pilotEnabled(env, employee.company_id),
+      env.DB.prepare(
+        'SELECT COUNT(*) AS count FROM webauthn_credentials WHERE lower(email) = ? AND revoked_at IS NULL'
+      ).bind(email).first(),
+    ])
+    return json({
+      enabled,
+      credentialCount: Number(credentialRow?.count || 0),
+      message: enabled
+        ? 'Personal phone clocking is ready for your company.'
+        : 'Personal phone clocking must be enabled by your administrator.',
+    }, 200, request)
+  }
+
   if (path === '/api/time-clock/passkeys' && method === 'GET') {
     const rows = await env.DB.prepare(
       `SELECT credential_id, label, created_at, last_used_at

@@ -71,7 +71,7 @@ export default function TimeClockSetup() {
     try {
       await api('/api/time-clock/admin/config', { method: 'PUT', body: { companyId, personalPhoneEnabled: enabled } })
       setPhoneEnabled(enabled)
-      setNotice({ type: 'success', text: enabled ? 'Personal phone pilot enabled.' : 'Personal phone clocking paused.' })
+      setNotice({ type: 'success', text: enabled ? 'Personal phone clocking enabled.' : 'Personal phone clocking paused.' })
     } catch (error) { setNotice({ type: 'error', text: error.message }) }
     finally { setBusy(false) }
   }
@@ -187,11 +187,11 @@ export default function TimeClockSetup() {
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-semibold text-gray-900">Personal phone pilot</h2>
-            <p className="mt-1 text-sm text-gray-500">Employees use their own phone passkey. GPS is requested, but a denied or unavailable location does not block the punch.</p>
+            <h2 className="font-semibold text-gray-900">Personal phone clocking</h2>
+            <p className="mt-1 text-sm text-gray-500">Enable this for office, field, or permanent work-from-home employees. They use their phone’s fingerprint, Face ID, PIN, or pattern—no plug-in device is needed. GPS is requested, but unavailable location does not block a punch.</p>
           </div>
           <button onClick={() => savePilot(!phoneEnabled)} disabled={busy || !companyId} className={`rounded-lg px-4 py-2 text-sm font-semibold ${phoneEnabled ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-700'}`}>
-            {phoneEnabled ? 'Enabled — click to pause' : 'Enable pilot'}
+            {phoneEnabled ? 'Enabled — click to pause' : 'Enable phone clocking'}
           </button>
         </div>
       </section>

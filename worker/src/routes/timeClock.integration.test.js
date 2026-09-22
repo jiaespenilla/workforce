@@ -7,6 +7,7 @@ const schema = `
 CREATE TABLE IF NOT EXISTS companies (id TEXT PRIMARY KEY, name TEXT, active INTEGER, status TEXT);
 CREATE TABLE IF NOT EXISTS employees (id INTEGER PRIMARY KEY, email TEXT, name TEXT, company_id TEXT, active INTEGER);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS webauthn_credentials (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, company_id TEXT, credential_id TEXT UNIQUE, public_key TEXT, counter INTEGER, transports TEXT, created_at TEXT, label TEXT, last_used_at TEXT, revoked_at TEXT);
 CREATE TABLE IF NOT EXISTS login_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT, attempt_at TEXT);
 CREATE TABLE IF NOT EXISTS attendance (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, company_id TEXT, type TEXT, time TEXT, overtime INTEGER, overtime_minutes INTEGER, source_event_id TEXT, source TEXT, device_id TEXT, site_id TEXT, received_at TEXT, latitude REAL, longitude REAL, accuracy REAL, location_status TEXT, needs_review INTEGER);
 CREATE TABLE IF NOT EXISTS time_clock_devices (id TEXT PRIMARY KEY, company_id TEXT, site_id TEXT, name TEXT, vendor TEXT, model TEXT, adapter TEXT DEFAULT 'generic-v1', secret_version INTEGER, active INTEGER, last_seen_at TEXT, last_sequence INTEGER, created_at TEXT, updated_at TEXT);
@@ -30,6 +31,7 @@ async function seed() {
     env.DB.prepare('DELETE FROM employees'),
     env.DB.prepare('DELETE FROM companies'),
     env.DB.prepare('DELETE FROM settings'),
+    env.DB.prepare('DELETE FROM webauthn_credentials'),
     env.DB.prepare('DELETE FROM login_attempts'),
   ])
   await env.DB.batch([
@@ -114,6 +116,22 @@ describe('signed terminal batches in the Workers runtime', () => {
     expect(response.status).toBe(202)
     expect((await response.json()).results[0]).toEqual(expect.objectContaining({ status: 'accepted', action: 'in' }))
     expect((await env.DB.prepare('SELECT source FROM attendance').first()).source).toBe('terminal')
+  })
+
+  it('reports whether an employee can use personal phone clocking', async () => {
+    await env.DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('personal_time_clock_enabled:co-1', '1')").run()
+    const request = new Request('https://app.example/api/time-clock/personal-status')
+    const response = await handle({
+      request,
+      env,
+      url: new URL(request.url),
+      path: '/api/time-clock/personal-status',
+      method: 'GET',
+      claims: { sub: 'emp@acme.com', role: 'employee' },
+      isAdmin: false,
+    })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(expect.objectContaining({ enabled: true, credentialCount: 0 }))
   })
 
   it('pairs a standalone kiosk once and records scans without an employee login', async () => {

@@ -1,12 +1,13 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ api: vi.fn(), startAuthentication: vi.fn(), startRegistration: vi.fn() }))
+const mocks = vi.hoisted(() => ({ api: vi.fn(), startAuthentication: vi.fn(), startRegistration: vi.fn(), platformAuthenticatorIsAvailable: vi.fn() }))
 
 vi.mock('../src/lib/api', () => ({ apiEnabled: () => true, api: mocks.api }))
 vi.mock('@simplewebauthn/browser', () => ({
   startAuthentication: mocks.startAuthentication,
   startRegistration: mocks.startRegistration,
+  platformAuthenticatorIsAvailable: mocks.platformAuthenticatorIsAvailable,
 }))
 
 import PersonalTimeClock from '../src/components/PersonalTimeClock.jsx'
@@ -23,7 +24,9 @@ describe('personal phone clock', () => {
     })
     if (!crypto.randomUUID) vi.stubGlobal('crypto', { ...crypto, randomUUID: () => 'request-0001' })
     mocks.startAuthentication.mockResolvedValue({ id: 'cred-1', rawId: 'cred-1', response: {} })
+    mocks.platformAuthenticatorIsAvailable.mockResolvedValue(true)
     mocks.api.mockImplementation(async (path) => {
+      if (path === '/api/time-clock/personal-status') return { enabled: true, credentialCount: 1 }
       if (path === '/api/time-clock/passkeys') return passkeys
       if (path === '/api/time-clock/clock-options') return { challenge: 'challenge' }
       if (path === '/api/time-clock/clock-punch') return { action: 'in', time: '2026-09-21T01:00:00.000Z', locationStatus: 'denied' }
@@ -46,6 +49,7 @@ describe('personal phone clock', () => {
   it('retries the exact same request after a network failure', async () => {
     let attempts = 0
     mocks.api.mockImplementation(async (path) => {
+      if (path === '/api/time-clock/personal-status') return { enabled: true, credentialCount: 1 }
       if (path === '/api/time-clock/passkeys') return passkeys
       if (path === '/api/time-clock/clock-options') return { challenge: 'challenge' }
       if (path === '/api/time-clock/clock-punch') {
@@ -71,7 +75,36 @@ describe('personal phone clock', () => {
     mocks.startAuthentication.mockRejectedValue(Object.assign(new Error('cancelled'), { name: 'NotAllowedError' }))
     render(<PersonalTimeClock />)
     fireEvent.click(await screen.findByRole('button', { name: 'Clock In' }))
-    await screen.findByText(/verification was cancelled/i)
+    await screen.findByText(/verification was cancelled or this phone could not find its passkey/i)
     await waitFor(() => expect(mocks.api.mock.calls.some(([path]) => path === '/api/time-clock/clock-punch')).toBe(false))
+  })
+
+  it('guides a new work-from-home employee through phone setup without external hardware', async () => {
+    let registered = false
+    mocks.api.mockImplementation(async (path) => {
+      if (path === '/api/time-clock/personal-status') return { enabled: true, credentialCount: registered ? 1 : 0 }
+      if (path === '/api/time-clock/passkeys') return registered ? passkeys : []
+      if (path === '/api/time-clock/passkeys/register/options') return { challenge: 'register' }
+      if (path === '/api/time-clock/passkeys/register/verify') { registered = true; return { ok: true } }
+      return { ok: true }
+    })
+    mocks.startRegistration.mockResolvedValue({ id: 'new-passkey', response: {} })
+    render(<PersonalTimeClock />)
+    expect(await screen.findByText(/No external fingerprint reader is needed/i)).toBeTruthy()
+    const setupButtons = await screen.findAllByRole('button', { name: 'Set up this phone' })
+    fireEvent.click(setupButtons[0])
+    await screen.findByText(/ready for secure clocking/i)
+    expect(mocks.startRegistration).toHaveBeenCalledTimes(1)
+  })
+
+  it('explains when the administrator has not enabled personal phone clocking', async () => {
+    mocks.api.mockImplementation(async (path) => {
+      if (path === '/api/time-clock/personal-status') return { enabled: false, credentialCount: 0 }
+      if (path === '/api/time-clock/passkeys') return []
+      return { ok: true }
+    })
+    render(<PersonalTimeClock />)
+    expect(await screen.findByText(/Phone clocking needs to be enabled/i)).toBeTruthy()
+    expect(screen.getByText(/No fingerprint reader or plug-in device is needed/i)).toBeTruthy()
   })
 })

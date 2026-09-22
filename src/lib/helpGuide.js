@@ -50,7 +50,7 @@ function adminSections() {
       'The service decides clock-in, clock-out, and overtime on the server.',
     ]),
     section('time-clock-setup', 'Time Clock Setup', 'Enable personal phones and prepare workplace fingerprint terminals.', [
-      'Turn on the personal-phone pilot for the chosen company.',
+      'Turn on Personal phone clocking for the chosen company. This supports permanent work-from-home employees without any external fingerprint reader.',
       'Add a terminal, assign its work site, and match terminal employee numbers to staff.',
       'Create a one-time pairing code, open /kiosk on the head-office computer, and enter the code there. Employees do not sign in on that computer.',
       'Use the simulator before buying hardware and review rejected or delayed events.',
@@ -84,7 +84,7 @@ function companySections({ role, perms = {} }) {
     'Review start, finish, total hours, and overtime.',
     'Check any event marked as delayed or needing attention.',
   ] : [
-    'Register a phone passkey, then use the large Clock In or Clock Out button.',
+    'For home or field work, tap Set up this phone once, then use the large Clock In or Clock Out button. No plug-in fingerprint device is needed.',
     'Your fingerprint or face scan stays on your phone.',
     'Location is requested for review, but an unavailable location does not block your punch.',
     'A failed network request is not shown as successful; use the safe retry button.',
