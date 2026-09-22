@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePageTitle } from '../lib/documentMeta'
 import { api } from '../lib/api'
 import { getCompanyLocations } from '../lib/locations'
@@ -23,10 +23,11 @@ export default function TimeClockSetup() {
   const [newDevice, setNewDevice] = useState({ name: 'Main entrance terminal', siteId: '' })
   const [newMapping, setNewMapping] = useState({ terminalUserId: '', employeeId: '' })
   const [sim, setSim] = useState({ terminalUserId: '', action: 'in', occurredAt: '' })
-  const [revealedSecret, setRevealedSecret] = useState('')
+  const [revealedSecret, setRevealedSecret] = useState(null)
   const [pairingCode, setPairingCode] = useState(null)
   const [notice, setNotice] = useState(null)
   const [busy, setBusy] = useState(false)
+  const selectedPanelRef = useRef(null)
 
   const company = companies.find((item) => item.id === companyId)
   const selected = devices.find((item) => item.id === selectedId)
@@ -56,6 +57,8 @@ export default function TimeClockSetup() {
   }
 
   useEffect(() => {
+    setRevealedSecret(null)
+    setPairingCode(null)
     loadCompany().catch((error) => setNotice({ type: 'error', text: error.message }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId])
@@ -65,6 +68,14 @@ export default function TimeClockSetup() {
     api(`/api/time-clock/admin/mappings?deviceId=${encodeURIComponent(selectedId)}`)
       .then(setMappings).catch((error) => setNotice({ type: 'error', text: error.message }))
   }, [selectedId])
+
+  const selectDevice = (id, scroll = true) => {
+    setSelectedId(id)
+    setPairingCode(null)
+    if (scroll) {
+      setTimeout(() => selectedPanelRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 0)
+    }
+  }
 
   const savePilot = async (enabled) => {
     setBusy(true)
@@ -82,10 +93,11 @@ export default function TimeClockSetup() {
     setNotice(null)
     try {
       const result = await api('/api/time-clock/admin/devices', { method: 'POST', body: { companyId, ...newDevice } })
-      setRevealedSecret(result.signingSecret)
-      setSelectedId(result.device.id)
+      setRevealedSecret({ deviceId: result.device.id, value: result.signingSecret, version: result.device.secret_version || 1, purpose: 'created' })
+      selectDevice(result.device.id, false)
       setNotice({ type: 'success', text: 'Terminal record created. Copy the signing secret now; it is shown only for setup.' })
       await loadCompany()
+      setTimeout(() => selectedPanelRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 0)
     } catch (error) { setNotice({ type: 'error', text: error.message }) }
     finally { setBusy(false) }
   }
@@ -96,12 +108,14 @@ export default function TimeClockSetup() {
   }
 
   const rotateSecret = async (device) => {
-    if (!confirm('Rotate this terminal secret? The terminal will stop syncing until the new secret is installed.')) return
+    if (!confirm('Replace the lost connector secret? The old secret will stop working immediately.')) return
+    setBusy(true)
     try {
       const result = await api(`/api/time-clock/admin/devices/${encodeURIComponent(device.id)}/rotate-secret`, { method: 'POST' })
-      setRevealedSecret(result.signingSecret)
-      setNotice({ type: 'success', text: 'Signing secret rotated. Copy the new value to the terminal now.' })
+      setRevealedSecret({ deviceId: device.id, value: result.signingSecret, version: result.secretVersion, purpose: 'replaced' })
+      setNotice({ type: 'success', text: 'Replacement secret created. Copy it now; the previous secret no longer works.' })
     } catch (error) { setNotice({ type: 'error', text: error.message }) }
+    finally { setBusy(false) }
   }
 
   const createPairingCode = async (device) => {
@@ -207,21 +221,14 @@ export default function TimeClockSetup() {
             </select>
           </div>
           <button onClick={createDevice} disabled={busy || !companyId} className="mt-3 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Add terminal</button>
-          {revealedSecret && (
-            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <p className="text-xs font-semibold text-amber-800">Network-terminal signing secret</p>
-              <code className="mt-2 block break-all rounded bg-white p-2 text-xs text-gray-700">{revealedSecret}</code>
-              <button onClick={() => navigator.clipboard.writeText(revealedSecret)} className="mt-2 text-xs font-semibold text-amber-800">Copy secret</button>
-              <p className="mt-2 text-xs text-amber-700">Use this only in a terminal vendor connector. The browser kiosk uses the safer pairing code below.</p>
-            </div>
-          )}
           <div className="mt-4 space-y-2">
             {devices.map((device) => {
               const [label, cls] = statusLabel(device)
               return (
-                <button key={device.id} onClick={() => setSelectedId(device.id)} className={`w-full rounded-lg border p-4 text-left ${selectedId === device.id ? 'border-brand-400 bg-brand-50' : 'border-gray-200'}`}>
+                <button key={device.id} type="button" aria-pressed={selectedId === device.id} aria-controls="selected-terminal-panel" onClick={() => selectDevice(device.id)} className={`w-full rounded-lg border p-4 text-left transition ${selectedId === device.id ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-100' : 'border-gray-200 hover:border-brand-300 hover:bg-gray-50'}`}>
                   <div className="flex items-start justify-between gap-2"><span className="font-semibold text-gray-900">{device.name}</span><span className={`rounded-full px-2 py-1 text-xs font-medium ${cls}`}>{label}</span></div>
                   <p className="mt-1 text-xs text-gray-500">Last sync: {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : 'Never'} · Kiosks: {device.paired_kiosk_count || 0} · Mappings: {device.mapping_count} · Issues: {device.issue_count}</p>
+                  <p className={`mt-2 text-xs font-semibold ${selectedId === device.id ? 'text-brand-700' : 'text-gray-500'}`}>{selectedId === device.id ? '✓ Selected — manage below' : 'Click to manage this terminal'}</p>
                 </button>
               )
             })}
@@ -229,10 +236,36 @@ export default function TimeClockSetup() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <section id="selected-terminal-panel" ref={selectedPanelRef} className="scroll-mt-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3">
-            <div><h2 className="font-semibold text-gray-900">Employee mappings</h2><p className="mt-1 text-xs text-gray-500">Connect the employee number stored in the terminal to the correct app employee.</p></div>
-            {selected && <div className="flex flex-wrap justify-end gap-2"><button onClick={() => rotateSecret(selected)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700">Rotate connector secret</button><button onClick={() => toggleDevice(selected)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700">{selected.active ? 'Revoke device' : 'Reactivate'}</button></div>}
+            <div><p className="text-xs font-semibold uppercase tracking-wider text-brand-600">{selected ? 'Selected terminal' : 'Terminal controls'}</p><h2 className="mt-1 font-semibold text-gray-900">{selected ? selected.name : 'Select a terminal first'}</h2><p className="mt-1 text-xs text-gray-500">{selected ? 'Pair its kiosk, manage its connector secret, and map employees below.' : 'Click a terminal card on the left to manage it.'}</p></div>
+            {selected && <button onClick={() => toggleDevice(selected)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700">{selected.active ? 'Revoke device' : 'Reactivate'}</button>}
+          </div>
+
+          {selected && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-amber-900">Network-terminal connector secret</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-amber-800">For safety, a secret is shown only when the terminal is created or when you replace a lost secret. It disappears after refresh and cannot be displayed again. The standalone browser kiosk does not use this secret.</p>
+                </div>
+                <button onClick={() => rotateSecret(selected)} disabled={busy || !selected.active} className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 disabled:opacity-50">Replace lost secret</button>
+              </div>
+              {revealedSecret?.deviceId === selected.id ? (
+                <div className="mt-3 rounded-lg bg-white p-3">
+                  <p className="text-xs font-semibold text-amber-800">Copy this {revealedSecret.purpose === 'replaced' ? 'replacement ' : ''}secret now{revealedSecret.version ? ` · Version ${revealedSecret.version}` : ''}</p>
+                  <code className="mt-2 block break-all rounded bg-gray-50 p-2 text-xs text-gray-700">{revealedSecret.value}</code>
+                  <button onClick={() => navigator.clipboard.writeText(revealedSecret.value)} className="mt-2 text-xs font-semibold text-amber-800">Copy secret</button>
+                </div>
+              ) : (
+                <p className="mt-3 rounded-lg bg-white/70 px-3 py-2 text-xs text-amber-800">No secret is currently displayed. If you already copied it, keep using that copy. If it was lost, create a replacement.</p>
+              )}
+            </div>
+          )}
+
+          <div className="mt-5">
+            <h3 className="font-semibold text-gray-900">Employee mappings</h3>
+            <p className="mt-1 text-xs text-gray-500">Connect the employee number stored in the terminal to the correct app employee.</p>
           </div>
 
           {selected && selected.active ? (

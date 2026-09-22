@@ -134,6 +134,22 @@ describe('signed terminal batches in the Workers runtime', () => {
     expect(await response.json()).toEqual(expect.objectContaining({ enabled: true, credentialCount: 0 }))
   })
 
+  it('replaces a lost terminal secret and immediately rejects the previous one', async () => {
+    const oldSecret = await hmac('device:terminal-1:v1', env.TIME_CLOCK_DEVICE_MASTER_SECRET)
+    const rotated = await adminRequest('/api/time-clock/admin/devices/terminal-1/rotate-secret')
+    const replacement = await rotated.json()
+    expect(replacement.secretVersion).toBe(2)
+    expect(replacement.signingSecret).not.toBe(oldSecret)
+
+    const body = { events: [event({ eventId: 'old-secret-event' })] }
+    expect((await send(await signedRequest(body))).status).toBe(401)
+
+    const timestamp = Date.now()
+    const nonce = 'replacement-secret-nonce'
+    const signature = await hmac(`${timestamp}\n${nonce}\n${JSON.stringify(body)}`, replacement.signingSecret)
+    expect((await send(await signedRequest(body, { timestamp, nonce, signature }))).status).toBe(202)
+  })
+
   it('pairs a standalone kiosk once and records scans without an employee login', async () => {
     const { token } = await pairKiosk()
     expect(token).toBeTruthy()
