@@ -51,8 +51,8 @@ function adminSections() {
     ]),
     section('time-clock-setup', 'Time Clock Setup', 'Enable personal phones and prepare workplace fingerprint terminals.', [
       'Turn on Personal phone clocking for the chosen company. This supports permanent work-from-home employees without any external fingerprint reader.',
-      'Add a terminal, assign its work site, and match terminal employee numbers to staff.',
-      'Create a one-time pairing code, open /kiosk on the head-office computer, and enter the code there. Employees do not sign in on that computer.',
+      'Add a terminal and assign its work site. Active employees map automatically using their App employee ID; manual mapping is only for vendors that force another number.',
+      'Create a one-time pairing code, open /kiosk on the head-office computer, and enter the code there. The pairing log shows whether the code is waiting, used, or expired and lists active kiosks.',
       'Use the simulator before buying hardware and review rejected or delayed events.',
       'The fingerprint reader still needs its manufacturer-specific Windows connector. Fingerprint information stays inside the phone, reader, or terminal.',
     ]),

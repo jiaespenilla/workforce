@@ -74,6 +74,11 @@ async function adminRequest(path, body) {
   return handle({ request, env, url: new URL(request.url), path, method: 'POST', claims: { sub: 'admin', role: 'administrator' }, isAdmin: true })
 }
 
+async function adminGet(path) {
+  const request = new Request(`https://app.example${path}`)
+  return handle({ request, env, url: new URL(request.url), path: new URL(request.url).pathname, method: 'GET', claims: { sub: 'admin', role: 'administrator' }, isAdmin: true })
+}
+
 async function pairKiosk() {
   const codeResponse = await adminRequest('/api/time-clock/admin/devices/terminal-1/pairing-code')
   const { code } = await codeResponse.json()
@@ -116,6 +121,30 @@ describe('signed terminal batches in the Workers runtime', () => {
     expect(response.status).toBe(202)
     expect((await response.json()).results[0]).toEqual(expect.objectContaining({ status: 'accepted', action: 'in' }))
     expect((await env.DB.prepare('SELECT source FROM attendance').first()).source).toBe('terminal')
+  })
+
+  it('automatically maps an exact App employee ID when a device first sends it', async () => {
+    await env.DB.prepare("DELETE FROM terminal_employee_mappings WHERE device_id = 'terminal-1'").run()
+    const response = await send(await signedRequest({ events: [event({ eventId: 'automatic-map-event', terminalUserId: '1' })] }))
+    expect((await response.json()).results[0]).toEqual(expect.objectContaining({ status: 'accepted', action: 'in' }))
+    expect(await env.DB.prepare("SELECT terminal_user_id, employee_id FROM terminal_employee_mappings WHERE device_id = 'terminal-1'").first())
+      .toEqual(expect.objectContaining({ terminal_user_id: '1', employee_id: 1 }))
+  })
+
+  it('automatically creates mappings for active employees when a terminal is added', async () => {
+    const response = await adminRequest('/api/time-clock/admin/devices', { companyId: 'co-1', name: 'New terminal' })
+    const result = await response.json()
+    expect(result.automaticMappings).toBe(1)
+    expect(await env.DB.prepare('SELECT terminal_user_id, employee_id FROM terminal_employee_mappings WHERE device_id = ?').bind(result.device.id).first())
+      .toEqual(expect.objectContaining({ terminal_user_id: '1', employee_id: 1 }))
+  })
+
+  it('backfills automatic mappings for a terminal created before this update', async () => {
+    await env.DB.prepare("DELETE FROM terminal_employee_mappings WHERE device_id = 'terminal-1'").run()
+    const response = await adminRequest('/api/time-clock/admin/devices/terminal-1/sync-mappings')
+    expect(await response.json()).toEqual(expect.objectContaining({ ok: true, added: 1 }))
+    expect(await env.DB.prepare("SELECT terminal_user_id, employee_id FROM terminal_employee_mappings WHERE device_id = 'terminal-1'").first())
+      .toEqual(expect.objectContaining({ terminal_user_id: '1', employee_id: 1 }))
   })
 
   it('reports whether an employee can use personal phone clocking', async () => {
@@ -169,6 +198,11 @@ describe('signed terminal batches in the Workers runtime', () => {
     expect(punch.status).toBe(201)
     expect(await punch.json()).toEqual(expect.objectContaining({ action: 'in', employeeName: 'Employee' }))
     expect(await env.DB.prepare('SELECT source FROM attendance').first()).toEqual({ source: 'standalone-kiosk' })
+
+    const activity = await adminGet('/api/time-clock/admin/kiosk-activity?deviceId=terminal-1')
+    const activityBody = await activity.json()
+    expect(activityBody.codes[0]).toEqual(expect.objectContaining({ status: 'used', usedAt: expect.any(String) }))
+    expect(activityBody.sessions[0]).toEqual(expect.objectContaining({ label: 'Front desk PC', active: true }))
   })
 
   it('rejects invalid pairing codes and revokes every paired browser from admin setup', async () => {

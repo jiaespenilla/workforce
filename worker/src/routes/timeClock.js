@@ -6,7 +6,9 @@ import {
   activeEmployee,
   createAttendanceEvent,
   deviceSigningSecret,
+  employeeForTerminal,
   recordRejectedEvent,
+  syncAutomaticMappings,
 } from '../lib/timeClock.js'
 import { normalizeTerminalBatch } from '../timeClockAdapters.js'
 
@@ -161,13 +163,11 @@ export async function handlePublic({ request, env, path, method }) {
       "SELECT id, punch_type, occurred_at, status, email FROM attendance_events WHERE source = 'standalone-kiosk' AND device_id = ? AND event_id = ? LIMIT 1"
     ).bind(session.device_id, eventId).first()
     if (prior) return json({ duplicate: true, eventId: prior.id, action: prior.punch_type, time: prior.occurred_at, reviewStatus: prior.status }, 200, request)
-    const employee = await env.DB.prepare(
-      `SELECT e.id, e.email, e.name, e.company_id, e.active, c.active AS company_active, c.status AS company_status
-       FROM terminal_employee_mappings m
-       JOIN employees e ON e.id = m.employee_id
-       JOIN companies c ON c.id = e.company_id
-       WHERE m.device_id = ? AND m.terminal_user_id = ? LIMIT 1`
-    ).bind(session.device_id, terminalUserId).first()
+    const employee = await employeeForTerminal(env, {
+      deviceId: session.device_id,
+      companyId: session.company_id,
+      terminalUserId,
+    })
     const now = new Date().toISOString()
     if (!employee || employee.company_id !== session.company_id || employee.active !== 1 || employee.company_active !== 1 || employee.company_status === 'rejected') {
       const reason = !employee ? 'unknown_employee_mapping' : 'inactive_or_cross_company_employee'
@@ -243,13 +243,11 @@ export async function handlePublic({ request, env, path, method }) {
   for (const event of events) {
     try {
       safeEvent(event)
-      const mapping = await env.DB.prepare(
-        `SELECT e.id, e.email, e.name, e.company_id, e.active, c.active AS company_active, c.status AS company_status
-         FROM terminal_employee_mappings m
-         JOIN employees e ON e.id = m.employee_id
-         JOIN companies c ON c.id = e.company_id
-         WHERE m.device_id = ? AND m.terminal_user_id = ? LIMIT 1`
-      ).bind(device.id, event.terminalUserId).first()
+      const mapping = await employeeForTerminal(env, {
+        deviceId: device.id,
+        companyId: device.company_id,
+        terminalUserId: event.terminalUserId,
+      })
       if (!mapping || mapping.company_id !== device.company_id || mapping.active !== 1 || mapping.company_active !== 1) {
         const reason = !mapping ? 'unknown_employee_mapping' : 'inactive_or_cross_company_employee'
         await recordRejectedEvent(env, { ...event, source: 'terminal', companyId: device.company_id, deviceId: device.id, siteId: device.site_id, receivedAt, reason, payload: event })
@@ -451,8 +449,14 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
     await env.DB.prepare(
       'INSERT INTO time_clock_devices (id, company_id, site_id, name, vendor, model) VALUES (?, ?, ?, ?, ?, ?)'
     ).bind(device.id, device.company_id, device.site_id, device.name, device.vendor, device.model).run()
+    const mappingResult = await syncAutomaticMappings(env, { companyId: device.company_id, deviceId: device.id })
     const signingSecret = await deviceSigningSecret(env, device)
-    return json({ device, signingSecret, note: 'Copy this signing secret now. It is not stored in the database.' }, 201, request)
+    return json({
+      device,
+      signingSecret,
+      automaticMappings: mappingResult.meta?.changes || 0,
+      note: 'Copy this signing secret now. It is not stored in the database.',
+    }, 201, request)
   }
 
   {
@@ -484,13 +488,25 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
       const code = randomPairingCode()
       const expiresAt = Date.now() + PAIRING_CODE_TTL_MS
       const now = new Date().toISOString()
+      const pairingId = crypto.randomUUID()
       await env.DB.batch([
-        env.DB.prepare('DELETE FROM time_clock_pairing_codes WHERE device_id = ?').bind(id),
+        // Invalidate older unused codes but preserve used rows as an audit log.
+        env.DB.prepare('DELETE FROM time_clock_pairing_codes WHERE device_id = ? AND used_at IS NULL').bind(id),
         env.DB.prepare(
           'INSERT INTO time_clock_pairing_codes (id, device_id, code_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)'
-        ).bind(crypto.randomUUID(), id, await kioskDigest(env, 'pairing', code), expiresAt, now),
+        ).bind(pairingId, id, await kioskDigest(env, 'pairing', code), expiresAt, now),
       ])
-      return json({ code, expiresAt, kioskPath: '/kiosk' }, 201, request)
+      return json({ pairingId, code, expiresAt, createdAt: now, kioskPath: '/kiosk' }, 201, request)
+    }
+  }
+  {
+    const match = path.match(/^\/api\/time-clock\/admin\/devices\/([^/]+)\/sync-mappings$/)
+    if (match && method === 'POST') {
+      const id = decodeURIComponent(match[1])
+      const device = await env.DB.prepare('SELECT id, company_id FROM time_clock_devices WHERE id = ?').bind(id).first()
+      if (!device) return json({ error: 'Device not found.' }, 404, request)
+      const result = await syncAutomaticMappings(env, { companyId: device.company_id, deviceId: device.id })
+      return json({ ok: true, added: result.meta?.changes || 0 }, 200, request)
     }
   }
   {
@@ -526,6 +542,40 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
        WHERE m.device_id = ? ORDER BY e.name`
     ).bind(deviceId).all().then((result) => result.results || [])
     return json(rows, 200, request)
+  }
+
+  if (path === '/api/time-clock/admin/kiosk-activity' && method === 'GET') {
+    const deviceId = url.searchParams.get('deviceId') || ''
+    const device = await env.DB.prepare('SELECT id FROM time_clock_devices WHERE id = ?').bind(deviceId).first()
+    if (!device) return json({ error: 'Device not found.' }, 404, request)
+    const now = Date.now()
+    const [codes, sessions] = await Promise.all([
+      env.DB.prepare(
+        `SELECT id, created_at, expires_at, used_at
+         FROM time_clock_pairing_codes WHERE device_id = ? ORDER BY created_at DESC LIMIT 20`
+      ).bind(deviceId).all().then((result) => result.results || []),
+      env.DB.prepare(
+        `SELECT id, label, paired_at, last_seen_at, active, revoked_at
+         FROM time_clock_kiosk_sessions WHERE device_id = ? ORDER BY paired_at DESC LIMIT 20`
+      ).bind(deviceId).all().then((result) => result.results || []),
+    ])
+    return json({
+      codes: codes.map((row) => ({
+        id: row.id,
+        createdAt: row.created_at,
+        expiresAt: Number(row.expires_at),
+        usedAt: row.used_at,
+        status: row.used_at ? 'used' : Number(row.expires_at) < now ? 'expired' : 'waiting',
+      })),
+      sessions: sessions.map((row) => ({
+        id: row.id,
+        label: row.label || 'Standalone kiosk',
+        pairedAt: row.paired_at,
+        lastSeenAt: row.last_seen_at,
+        active: row.active === 1 && !row.revoked_at,
+        revokedAt: row.revoked_at,
+      })),
+    }, 200, request)
   }
   if (path === '/api/time-clock/admin/mappings' && method === 'POST') {
     const body = await readJson(request)

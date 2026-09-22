@@ -80,6 +80,58 @@ export async function activeEmployee(env, email) {
   return row
 }
 
+const TERMINAL_EMPLOYEE_SELECT = `SELECT e.id, e.email, e.name, e.company_id, e.active,
+  c.active AS company_active, c.status AS company_status
+  FROM employees e JOIN companies c ON c.id = e.company_id`
+
+// Automatic mappings use the employee's stable app ID as the terminal ID.
+// Manual mappings remain authoritative when a vendor assigns a different ID.
+export async function syncAutomaticMappings(env, { companyId, deviceId = null, employeeId = null }) {
+  if (deviceId) {
+    return env.DB.prepare(
+      `INSERT OR IGNORE INTO terminal_employee_mappings (device_id, terminal_user_id, employee_id)
+       SELECT ?, CAST(id AS TEXT), id FROM employees WHERE company_id = ? AND active = 1`
+    ).bind(deviceId, companyId).run()
+  }
+  if (employeeId) {
+    return env.DB.prepare(
+      `INSERT OR IGNORE INTO terminal_employee_mappings (device_id, terminal_user_id, employee_id)
+       SELECT id, CAST(? AS TEXT), ? FROM time_clock_devices WHERE company_id = ? AND active = 1`
+    ).bind(employeeId, employeeId, companyId).run()
+  }
+  return { meta: { changes: 0 } }
+}
+
+export async function employeeForTerminal(env, { deviceId, companyId, terminalUserId }) {
+  const value = String(terminalUserId || '').trim()
+  let employee = await env.DB.prepare(
+    `${TERMINAL_EMPLOYEE_SELECT}
+     JOIN terminal_employee_mappings m ON m.employee_id = e.id
+     WHERE m.device_id = ? AND m.terminal_user_id = ? LIMIT 1`
+  ).bind(deviceId, value).first()
+  if (employee) return employee
+
+  // Recover safely when an old device has not yet been synchronized. Only an
+  // exact app employee ID or exact company email can create an automatic map.
+  employee = /^\d+$/.test(value)
+    ? await env.DB.prepare(`${TERMINAL_EMPLOYEE_SELECT} WHERE e.company_id = ? AND e.id = ? LIMIT 1`)
+      .bind(companyId, Number(value)).first()
+    : value.includes('@')
+      ? await env.DB.prepare(`${TERMINAL_EMPLOYEE_SELECT} WHERE e.company_id = ? AND lower(e.email) = lower(?) LIMIT 1`)
+        .bind(companyId, value).first()
+      : null
+  if (!employee) return null
+
+  await env.DB.prepare(
+    'INSERT OR IGNORE INTO terminal_employee_mappings (device_id, terminal_user_id, employee_id) VALUES (?, ?, ?)'
+  ).bind(deviceId, value, employee.id).run()
+  return env.DB.prepare(
+    `${TERMINAL_EMPLOYEE_SELECT}
+     JOIN terminal_employee_mappings m ON m.employee_id = e.id
+     WHERE m.device_id = ? AND m.terminal_user_id = ? LIMIT 1`
+  ).bind(deviceId, value).first()
+}
+
 async function assignedShift(env, employee) {
   const [shiftRow, timezoneRow] = await Promise.all([
     env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(`shift_schedules:${employee.company_id}`).first(),

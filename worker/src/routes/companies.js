@@ -5,6 +5,7 @@ import { json, readJson } from '../lib/http.js'
 import { callerCompanyId } from '../lib/auth.js'
 import { mapCompany, insertEmployee, ensureUser, escapeLike } from '../lib/db.js'
 import { parsePagination, paginate } from '../lib/pagination.js'
+import { syncAutomaticMappings } from '../lib/timeClock.js'
 
 // (70) Resignation guard — an employee with active (non-completed) tasks must
 // have them transferred (Tasks → staff table → Transfer) or completed before
@@ -73,6 +74,11 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
       await insertEmployee(env, m[1], emp)
       const roleForUser = (emp.role || '').trim().toLowerCase() === 'ceo' ? 'ceo' : 'employee'
       await ensureUser(env, emp.email, emp.name, roleForUser, getDefaultEmployeePassword(env))
+      const added = await env.DB.prepare('SELECT id, active FROM employees WHERE company_id = ? AND lower(email) = lower(?) LIMIT 1')
+        .bind(m[1], emp.email || '').first()
+      if (added?.id && added.active === 1) {
+        await syncAutomaticMappings(env, { companyId: m[1], employeeId: added.id })
+      }
       return json({ ok: true }, 201)
     }
   }
@@ -124,6 +130,11 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
           if (empRow?.email) {
             await env.DB.prepare('UPDATE users SET role = ? WHERE lower(email) = lower(?)').bind(roleForUser, empRow.email).run()
           }
+        }
+        const updated = await env.DB.prepare('SELECT id, company_id, active FROM employees WHERE id = ?')
+          .bind(Number(m[1])).first()
+        if (updated?.active === 1) {
+          await syncAutomaticMappings(env, { companyId: updated.company_id, employeeId: updated.id })
         }
         return json({ ok: true })
       }

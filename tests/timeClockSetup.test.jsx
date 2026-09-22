@@ -26,6 +26,10 @@ describe('time clock terminal selection', () => {
       if (path.startsWith('/api/time-clock/admin/events?')) return []
       if (path.startsWith('/api/time-clock/admin/config?')) return { personalPhoneEnabled: true }
       if (path.startsWith('/api/time-clock/admin/mappings?')) return []
+      if (path.startsWith('/api/time-clock/admin/kiosk-activity?')) return {
+        codes: [{ id: 'pair-1', createdAt: '2026-09-22T00:00:00.000Z', expiresAt: Date.now() + 60000, usedAt: '2026-09-22T00:01:00.000Z', status: 'used' }],
+        sessions: [{ id: 'session-1', label: 'Front desk kiosk', pairedAt: '2026-09-22T00:01:00.000Z', lastSeenAt: null, active: true }],
+      }
       if (path === '/api/time-clock/admin/devices/terminal-b/rotate-secret') return { signingSecret: 'replacement-secret-value', secretVersion: 2 }
       return { ok: true }
     })
@@ -39,6 +43,8 @@ describe('time clock terminal selection', () => {
     expect(await screen.findByRole('heading', { name: 'Beta terminal' })).toBeTruthy()
     expect(beta.getAttribute('aria-pressed')).toBe('true')
     await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled())
+    expect(await screen.findByText('Front desk kiosk')).toBeTruthy()
+    expect(screen.getByText('Automatic mapping is on.')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Replace lost secret' }))
     expect(await screen.findByText('replacement-secret-value')).toBeTruthy()

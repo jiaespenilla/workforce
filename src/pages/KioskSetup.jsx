@@ -10,6 +10,12 @@ function statusLabel(device) {
   return recent ? ['Connected', 'bg-emerald-50 text-emerald-700'] : ['Offline', 'bg-amber-50 text-amber-700']
 }
 
+function pairingBadge(status) {
+  if (status === 'used') return ['Used', 'bg-emerald-100 text-emerald-800']
+  if (status === 'expired') return ['Expired', 'bg-gray-100 text-gray-600']
+  return ['Waiting', 'bg-amber-100 text-amber-800']
+}
+
 export default function TimeClockSetup() {
   usePageTitle('Time Clock Setup')
   const [companies, setCompanies] = useState([])
@@ -18,6 +24,7 @@ export default function TimeClockSetup() {
   const [devices, setDevices] = useState([])
   const [selectedId, setSelectedId] = useState('')
   const [mappings, setMappings] = useState([])
+  const [kioskActivity, setKioskActivity] = useState({ codes: [], sessions: [] })
   const [issues, setIssues] = useState([])
   const [phoneEnabled, setPhoneEnabled] = useState(false)
   const [newDevice, setNewDevice] = useState({ name: 'Main entrance terminal', siteId: '' })
@@ -31,6 +38,7 @@ export default function TimeClockSetup() {
 
   const company = companies.find((item) => item.id === companyId)
   const selected = devices.find((item) => item.id === selectedId)
+  const currentPairing = pairingCode ? kioskActivity.codes.find((item) => item.id === pairingCode.pairingId) : null
   const employees = useMemo(() => (company?.employees || []).filter((employee) => employee.active !== false), [company])
 
   useEffect(() => {
@@ -64,9 +72,27 @@ export default function TimeClockSetup() {
   }, [companyId])
 
   useEffect(() => {
-    if (!selectedId) { setMappings([]); return }
-    api(`/api/time-clock/admin/mappings?deviceId=${encodeURIComponent(selectedId)}`)
-      .then(setMappings).catch((error) => setNotice({ type: 'error', text: error.message }))
+    if (!selectedId) { setMappings([]); setKioskActivity({ codes: [], sessions: [] }); return }
+    let cancelled = false
+    const loadSelected = async () => {
+      try {
+        await api(`/api/time-clock/admin/devices/${encodeURIComponent(selectedId)}/sync-mappings`, { method: 'POST' })
+        const [mappingRows, activity] = await Promise.all([
+          api(`/api/time-clock/admin/mappings?deviceId=${encodeURIComponent(selectedId)}`),
+          api(`/api/time-clock/admin/kiosk-activity?deviceId=${encodeURIComponent(selectedId)}`),
+        ])
+        if (!cancelled) { setMappings(mappingRows); setKioskActivity(activity) }
+      } catch (error) {
+        if (!cancelled) setNotice({ type: 'error', text: error.message })
+      }
+    }
+    loadSelected()
+    const timer = setInterval(() => {
+      api(`/api/time-clock/admin/kiosk-activity?deviceId=${encodeURIComponent(selectedId)}`)
+        .then((activity) => { if (!cancelled) setKioskActivity(activity) })
+        .catch(() => {})
+    }, 5000)
+    return () => { cancelled = true; clearInterval(timer) }
   }, [selectedId])
 
   const selectDevice = (id, scroll = true) => {
@@ -95,7 +121,7 @@ export default function TimeClockSetup() {
       const result = await api('/api/time-clock/admin/devices', { method: 'POST', body: { companyId, ...newDevice } })
       setRevealedSecret({ deviceId: result.device.id, value: result.signingSecret, version: result.device.secret_version || 1, purpose: 'created' })
       selectDevice(result.device.id, false)
-      setNotice({ type: 'success', text: 'Terminal record created. Copy the signing secret now; it is shown only for setup.' })
+      setNotice({ type: 'success', text: `Terminal created with ${result.automaticMappings || 0} automatic employee mapping(s). Copy the signing secret now; it is shown only for setup.` })
       await loadCompany()
       setTimeout(() => selectedPanelRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 0)
     } catch (error) { setNotice({ type: 'error', text: error.message }) }
@@ -124,6 +150,7 @@ export default function TimeClockSetup() {
     try {
       const result = await api(`/api/time-clock/admin/devices/${encodeURIComponent(device.id)}/pairing-code`, { method: 'POST' })
       setPairingCode({ ...result, deviceId: device.id })
+      setKioskActivity(await api(`/api/time-clock/admin/kiosk-activity?deviceId=${encodeURIComponent(device.id)}`))
       setNotice({ type: 'success', text: 'Pairing code created. Enter it on the standalone /kiosk page within ten minutes.' })
     } catch (error) { setNotice({ type: 'error', text: error.message }) }
     finally { setBusy(false) }
@@ -137,6 +164,7 @@ export default function TimeClockSetup() {
       setPairingCode(null)
       setNotice({ type: 'success', text: `${result.revoked || 0} kiosk pairing(s) removed.` })
       await loadCompany()
+      setKioskActivity(await api(`/api/time-clock/admin/kiosk-activity?deviceId=${encodeURIComponent(device.id)}`))
     } catch (error) { setNotice({ type: 'error', text: error.message }) }
     finally { setBusy(false) }
   }
@@ -265,8 +293,10 @@ export default function TimeClockSetup() {
 
           <div className="mt-5">
             <h3 className="font-semibold text-gray-900">Employee mappings</h3>
-            <p className="mt-1 text-xs text-gray-500">Connect the employee number stored in the terminal to the correct app employee.</p>
+            <p className="mt-1 text-xs text-gray-500">Employees are mapped automatically using their App employee ID. New employees are added to active terminals automatically.</p>
           </div>
+
+          {selected && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"><strong>Automatic mapping is on.</strong> Enroll each fingerprint in the hardware using the employee’s App ID shown below. Use the manual form only when a vendor device forces a different number.</div>}
 
           {selected && selected.active ? (
             <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 p-4">
@@ -278,18 +308,38 @@ export default function TimeClockSetup() {
                 <div className="mt-4 rounded-lg bg-white p-4 text-center shadow-sm">
                   <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Enter this code at /kiosk</p>
                   <p className="mt-2 font-mono text-3xl font-bold tracking-[0.24em] text-gray-950">{pairingCode.code}</p>
-                  <p className="mt-2 text-xs text-gray-500">Expires {new Date(pairingCode.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. It works once.</p>
+                  <div className="mt-2 flex items-center justify-center gap-2 text-xs text-gray-500">
+                    <span>Expires {new Date(pairingCode.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. It works once.</span>
+                    {currentPairing && (() => { const [label, cls] = pairingBadge(currentPairing.status); return <span className={`rounded-full px-2 py-1 font-semibold ${cls}`}>{label}</span> })()}
+                  </div>
                 </div>
               )}
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg bg-white/80 p-3">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-800">Pairing-code log</h4>
+                  <div className="mt-2 space-y-2">
+                    {kioskActivity.codes.map((entry) => { const [label, cls] = pairingBadge(entry.status); return <div key={entry.id} className="flex items-center justify-between gap-2 text-xs"><span className="text-gray-600">Created {new Date(entry.createdAt).toLocaleString()}{entry.usedAt ? ` · Used ${new Date(entry.usedAt).toLocaleString()}` : ''}</span><span className={`rounded-full px-2 py-1 font-semibold ${cls}`}>{label}</span></div> })}
+                    {!kioskActivity.codes.length && <p className="text-xs text-gray-500">No pairing code created yet.</p>}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-white/80 p-3">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-800">Paired kiosks</h4>
+                  <div className="mt-2 space-y-2">
+                    {kioskActivity.sessions.map((session) => <div key={session.id} className="text-xs"><div className="flex items-center justify-between gap-2"><span className="font-semibold text-gray-800">{session.label}</span><span className={`rounded-full px-2 py-1 font-semibold ${session.active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'}`}>{session.active ? 'Active' : 'Unpaired'}</span></div><p className="mt-1 text-gray-500">Paired {new Date(session.pairedAt).toLocaleString()}{session.lastSeenAt ? ` · Last seen ${new Date(session.lastSeenAt).toLocaleString()}` : ''}</p></div>)}
+                    {!kioskActivity.sessions.length && <p className="text-xs text-gray-500">No kiosk has used a code yet.</p>}
+                  </div>
+                </div>
+              </div>
             </div>
           ) : selected ? <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Reactivate this device before pairing a kiosk.</p> : null}
-          <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_1.5fr_auto]">
+          <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Manual vendor-ID exception</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1.5fr_auto]">
             <input value={newMapping.terminalUserId} onChange={(event) => setNewMapping({ ...newMapping, terminalUserId: event.target.value })} placeholder="Terminal employee ID" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            <select value={newMapping.employeeId} onChange={(event) => setNewMapping({ ...newMapping, employeeId: event.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="">Choose employee</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} — {employee.email}</option>)}</select>
+            <select value={newMapping.employeeId} onChange={(event) => setNewMapping({ ...newMapping, employeeId: event.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="">Choose employee</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>App ID {employee.id} — {employee.name} — {employee.email}</option>)}</select>
             <button onClick={addMapping} disabled={busy || !selectedId} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Map</button>
           </div>
           <div className="mt-4 divide-y divide-gray-100 rounded-lg border border-gray-200">
-            {mappings.map((mapping) => <div key={mapping.id} className="flex items-center justify-between gap-3 px-4 py-3"><div><p className="text-sm font-semibold text-gray-900">{mapping.terminal_user_id} → {mapping.name}</p><p className="text-xs text-gray-500">{mapping.email}</p></div><button onClick={() => removeMapping(mapping.id)} className="text-xs font-semibold text-red-600">Remove</button></div>)}
+            {mappings.map((mapping) => { const automatic = String(mapping.employee_id) === String(mapping.terminal_user_id); return <div key={mapping.id} className="flex items-center justify-between gap-3 px-4 py-3"><div><p className="text-sm font-semibold text-gray-900">{mapping.terminal_user_id} → {mapping.name}</p><p className="text-xs text-gray-500">{mapping.email} · {automatic ? 'Automatic App ID' : 'Manual vendor ID'}</p></div>{automatic ? <span className="text-xs font-semibold text-emerald-700">Managed automatically</span> : <button onClick={() => removeMapping(mapping.id)} className="text-xs font-semibold text-red-600">Remove</button>}</div> })}
             {!mappings.length && <p className="p-4 text-sm text-gray-500">No mappings for the selected terminal.</p>}
           </div>
 
