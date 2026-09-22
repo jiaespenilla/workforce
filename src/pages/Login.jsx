@@ -1,25 +1,24 @@
-import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiEnabled } from '../lib/api'
+import { fetchPublicSystemIcon, getSystemIcon, usePageTitle } from '../lib/documentMeta'
 import { getActiveSettings } from '../lib/systemSettings'
-import { fetchPublicSystemIcon, getSystemIcon } from '../lib/documentMeta'
 
 const features = [
   {
-    title: 'Time Keeping',
-    desc: 'Secure phone passkeys and workplace time clocks.',
+    title: 'Reliable attendance',
+    desc: 'Simple clocking for office and remote teams.',
     icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
   },
   {
-    title: 'Tasks',
-    desc: 'Assign, track and complete team work.',
+    title: 'Clear team progress',
+    desc: 'Keep people, tasks and schedules aligned.',
     icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
   },
   {
-    title: 'Payroll & People',
-    desc: 'One record for every team member.',
+    title: 'Connected workforce',
+    desc: 'One dependable place for daily operations.',
     icon: 'M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6 1.37a6 6 0 10-6-6 6 6 0 006 6z',
   },
 ]
@@ -34,8 +33,8 @@ export default function Login() {
   const [sessionExpired] = useState(() => sessionStorage.getItem('uw_session_expired') === '1')
   const settings = getActiveSettings()
   const brandLetter = (settings.name || 'C').charAt(0).toUpperCase()
-  // Pull the admin-selected icon so the login brand matches the rest of the system.
   const [brandIcon, setBrandIcon] = useState(getSystemIcon)
+
   useEffect(() => {
     let live = true
     fetchPublicSystemIcon().then((icon) => { if (live && icon) setBrandIcon(icon) })
@@ -44,15 +43,13 @@ export default function Login() {
 
   if (sessionExpired) sessionStorage.removeItem('uw_session_expired')
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  const handleSubmit = async (event) => {
+    event.preventDefault()
     if (submitting) return
-    const email = e.target.email.value.trim()
-    const password = e.target.password.value
+    const email = event.target.email.value.trim()
+    const password = event.target.password.value
     if (!email || !password) return setError('Please enter your email and password.')
-    if (!apiEnabled()) {
-      return setError('The API is not configured. Set VITE_API_URL to continue.')
-    }
+    if (!apiEnabled()) return setError('The API is not configured. Set VITE_API_URL to continue.')
     setError(null)
     setSubmitting(true)
     try {
@@ -69,94 +66,117 @@ export default function Login() {
     }
   }
 
-  const inputCls =
-    'mt-1.5 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 placeholder-gray-400 transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10'
+  const inputClass = 'w-full rounded-xl border border-slate-200 bg-slate-50/70 py-3.5 pl-11 pr-4 text-base text-slate-950 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/10 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm'
 
   return (
-    <main className="flex min-h-screen bg-gray-50">
-      {/* Brand panel — desktop only, one message + what the platform does */}
-      <div className="relative hidden w-[44%] shrink-0 flex-col justify-between overflow-hidden bg-gradient-to-br from-brand-800 via-brand-600 to-emerald-500 p-10 lg:flex xl:p-12">
-        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10" aria-hidden="true" />
-        <div className="pointer-events-none absolute -bottom-28 -left-20 h-80 w-80 rounded-full bg-black/10" aria-hidden="true" />
-        <div className="relative flex items-center gap-3">
+    <main className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[minmax(0,1.08fr)_minmax(440px,0.92fr)]">
+      <section className="relative hidden min-h-screen overflow-hidden bg-slate-950 px-10 py-10 lg:flex lg:flex-col lg:justify-between xl:px-16 xl:py-14" aria-label="Platform overview">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-900/90 via-slate-950 to-slate-950" aria-hidden="true" />
+        <div className="pointer-events-none absolute -left-32 top-1/4 h-96 w-96 rounded-full bg-emerald-400/15 blur-3xl" aria-hidden="true" />
+        <div className="pointer-events-none absolute -right-32 -top-24 h-96 w-96 rounded-full bg-brand-500/15 blur-3xl" aria-hidden="true" />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.07]"
+          aria-hidden="true"
+          style={{
+            backgroundImage: 'linear-gradient(rgba(255,255,255,.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.8) 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
+          }}
+        />
+
+        <div className="relative flex items-center gap-3.5">
           {brandIcon
-            ? <img src={brandIcon} alt="" className="h-10 w-10 rounded-xl bg-white object-contain p-1 shadow" />
-            : <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 text-sm font-bold text-white ring-1 ring-white/25">{brandLetter}</div>}
+            ? <img src={brandIcon} alt="" className="h-11 w-11 rounded-xl bg-white object-contain p-1.5 shadow-lg shadow-black/20" />
+            : <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-base font-bold text-white ring-1 ring-white/20">{brandLetter}</div>}
           <div className="leading-tight">
-            <p className="text-base font-bold text-white">{settings.name}</p>
-            <p className="text-xs text-emerald-100">by CelestSolutions</p>
+            <p className="text-lg font-bold tracking-tight text-white">{settings.name}</p>
+            <p className="mt-0.5 text-xs font-medium text-emerald-200">Workforce management</p>
           </div>
         </div>
 
-        <div className="relative">
-          <h2 className="max-w-md text-3xl font-bold leading-tight text-white xl:text-4xl">
-            Your workforce,<br />in one place.
+        <div className="relative max-w-2xl py-12">
+          <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+            One secure workspace
+          </p>
+          <h2 className="text-4xl font-bold leading-[1.08] tracking-tight text-white xl:text-5xl">
+            Run every workday<br />with confidence.
           </h2>
-          <ul className="mt-8 space-y-4">
-            {features.map((f) => (
-              <li key={f.title} className="flex items-start gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/25">
-                  <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
-                    <path strokeLinecap="round" strokeLinejoin="round" d={f.icon} />
+          <p className="mt-5 max-w-lg text-base leading-7 text-slate-300">
+            Give your team a simpler way to manage attendance, schedules and daily work.
+          </p>
+          <ul className="mt-10 grid gap-3 xl:grid-cols-3">
+            {features.map((feature) => (
+              <li key={feature.title} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 backdrop-blur-sm">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-300/10 ring-1 ring-emerald-200/15">
+                  <svg className="h-5 w-5 text-emerald-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d={feature.icon} />
                   </svg>
                 </span>
-                <span>
-                  <span className="block text-sm font-semibold text-white">{f.title}</span>
-                  <span className="block text-xs text-emerald-50">{f.desc}</span>
-                </span>
+                <span className="mt-4 block text-sm font-semibold text-white">{feature.title}</span>
+                <span className="mt-1 block text-xs leading-5 text-slate-300">{feature.desc}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <p className="relative text-xs font-semibold tabular-nums text-emerald-100">{settings.version || 'v0.1.0'}</p>
-      </div>
+        <div className="relative flex items-center justify-between text-xs text-slate-400">
+          <p>Built for focused teams</p>
+          <p className="font-semibold tabular-nums text-slate-300">{settings.version || 'v0.1.0'}</p>
+        </div>
+      </section>
 
-      {/* Form panel */}
-      <div className="flex flex-1 items-center justify-center px-4 py-10 sm:px-6">
-        <div className="w-full max-w-sm">
-          <div className="mb-6 flex items-center gap-3 lg:hidden">
+      <section className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-8 sm:px-8 lg:px-10" aria-label="Sign in">
+        <div className="pointer-events-none absolute -right-32 top-0 h-80 w-80 rounded-full bg-brand-100/60 blur-3xl lg:hidden" aria-hidden="true" />
+        <div className="relative w-full max-w-md">
+          <div className="mb-8 flex items-center justify-center gap-3 lg:hidden">
             {brandIcon
-              ? <img src={brandIcon} alt="" className="h-11 w-11 rounded-xl bg-white object-contain p-1 shadow ring-1 ring-gray-200" />
-              : <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 font-bold text-white shadow">{brandLetter}</div>}
+              ? <img src={brandIcon} alt="" className="h-12 w-12 rounded-xl bg-white object-contain p-1.5 shadow-sm ring-1 ring-slate-200" />
+              : <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-600 font-bold text-white shadow-sm">{brandLetter}</div>}
             <div className="leading-tight">
-              <p className="text-base font-bold text-gray-900">{settings.name}</p>
-              <p className="text-xs text-gray-500">Workforce Management Platform</p>
+              <p className="text-lg font-bold tracking-tight text-slate-950">{settings.name}</p>
+              <p className="mt-0.5 text-xs font-medium text-slate-500">Workforce management</p>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl sm:p-8">
-            <h1 className="text-xl font-bold tracking-tight text-gray-900">Welcome back</h1>
-            <p className="mt-1 text-sm text-gray-500">Sign in to continue to your workspace.</p>
+          <div className="rounded-3xl border border-white bg-white/95 p-6 shadow-[0_24px_70px_-25px_rgba(15,23,42,0.24)] ring-1 ring-slate-200/70 backdrop-blur sm:p-9">
+            <p className="text-sm font-semibold text-brand-700">Welcome back</p>
+            <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">Sign in to your account</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-500">Enter your account details to continue.</p>
 
-            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <form onSubmit={handleSubmit} className="mt-7 space-y-5" aria-busy={submitting}>
               {sessionExpired && (
-                <p className="rounded-xl bg-amber-50 px-3.5 py-2.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
+                <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 ring-1 ring-inset ring-amber-200" role="status">
                   Your session expired due to inactivity. Please sign in again.
                 </p>
               )}
+
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                  Email or username
-                </label>
-                <input
-                  id="email"
-                  type="text"
-                  required
-                  placeholder="you@company.com or admin username"
-                  autoComplete="username"
-                  inputMode="email"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  disabled={submitting}
-                  className={`${inputCls} disabled:opacity-60`}
-                />
+                <label htmlFor="email" className="block text-sm font-semibold text-slate-700">Email or username</label>
+                <div className="relative mt-2">
+                  <svg className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM5 21a7 7 0 0114 0" />
+                  </svg>
+                  <input
+                    id="email"
+                    type="text"
+                    required
+                    placeholder="Email or username"
+                    autoComplete="username"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    disabled={submitting}
+                    className={inputClass}
+                  />
+                </div>
               </div>
+
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  Password
-                </label>
-                <div className="relative mt-1.5">
+                <label htmlFor="password" className="block text-sm font-semibold text-slate-700">Password</label>
+                <div className="relative mt-2">
+                  <svg className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6-7V8a6 6 0 1112 0v2m-13 0h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1z" />
+                  </svg>
                   <input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
@@ -164,32 +184,22 @@ export default function Login() {
                     placeholder="Enter your password"
                     autoComplete="current-password"
                     disabled={submitting}
-                    className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-4 pr-11 text-sm text-gray-900 placeholder-gray-400 transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10 disabled:opacity-60"
+                    className={`${inputClass} pr-16`}
                   />
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
+                    onClick={() => setShowPassword((current) => !current)}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    title={showPassword ? 'Hide password' : 'Show password'}
-                    className="touch-44 absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                    className="absolute right-2 top-1/2 min-h-10 -translate-y-1/2 rounded-lg px-2.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
                   >
-                    {showPassword ? (
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                      </svg>
-                    ) : (
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    )}
+                    {showPassword ? 'Hide' : 'Show'}
                   </button>
                 </div>
               </div>
 
               {error && (
-                <p className="flex items-start gap-2 rounded-xl bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-700 ring-1 ring-red-200" role="alert">
-                  <svg className="mt-0.5 h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <p className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700 ring-1 ring-inset ring-red-200" role="alert">
+                  <svg className="mt-0.5 h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                   {error}
@@ -199,7 +209,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-500/30 disabled:cursor-not-allowed disabled:opacity-70"
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-600/20 transition hover:-translate-y-0.5 hover:bg-brand-700 hover:shadow-xl hover:shadow-brand-600/25 focus:outline-none focus:ring-4 focus:ring-brand-500/25 disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-70"
               >
                 {submitting && (
                   <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -207,25 +217,23 @@ export default function Login() {
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
                   </svg>
                 )}
-                {submitting ? 'Signing in…' : 'Sign in'}
+                {submitting ? 'Signing in...' : 'Sign in'}
               </button>
             </form>
+
+            <div className="mt-7 border-t border-slate-100 pt-6 text-center">
+              <p className="text-sm text-slate-600">
+                New organization?{' '}
+                <Link to="/register" className="font-semibold text-brand-700 underline-offset-4 hover:text-brand-800 hover:underline">
+                  Register your company
+                </Link>
+              </p>
+            </div>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 text-center shadow-sm">
-            <p className="text-sm text-gray-600">
-              New organization?{' '}
-              <a href="/register" className="font-semibold text-brand-600 hover:text-brand-700">
-                Register your company
-              </a>
-            </p>
-          </div>
-
-          <p className="mt-6 text-center text-xs text-gray-400">
-            {settings.name} · CelestSolutions
-          </p>
+          <p className="mt-6 text-center text-xs text-slate-400">{settings.name} - CelestSolutions</p>
         </div>
-      </div>
+      </section>
     </main>
   )
 }
