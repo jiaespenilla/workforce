@@ -592,7 +592,7 @@ function MonitoringBoard() {
       {viewingTask && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={() => setViewingTask(null)}>
           <div className="absolute inset-0 bg-gray-900/50" />
-          <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="relative flex max-h-[92dvh] w-full flex-col overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="h-1.5 w-full shrink-0 bg-gradient-to-r from-brand-600 to-emerald-400" />
             <div className="flex items-start justify-between gap-3 px-5 pt-4 sm:px-6">
               <div className="min-w-0">

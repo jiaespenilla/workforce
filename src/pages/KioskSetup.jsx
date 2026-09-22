@@ -218,7 +218,7 @@ export default function TimeClockSetup() {
           <p className="mt-1 text-sm text-gray-500">Manage personal phone access and workplace fingerprint terminals without storing biometric data.</p>
         </div>
         <label className="text-sm font-medium text-gray-700">Company
-          <select value={companyId} onChange={(event) => setCompanyId(event.target.value)} className="mt-1 block min-w-64 rounded-lg border border-gray-300 bg-white px-3 py-2">
+          <select value={companyId} onChange={(event) => setCompanyId(event.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 sm:min-w-64">
             {companies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
         </label>
@@ -318,14 +318,14 @@ export default function TimeClockSetup() {
                 <div className="rounded-lg bg-white/80 p-3">
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-800">Pairing-code log</h4>
                   <div className="mt-2 space-y-2">
-                    {kioskActivity.codes.map((entry) => { const [label, cls] = pairingBadge(entry.status); return <div key={entry.id} className="flex items-center justify-between gap-2 text-xs"><span className="text-gray-600">Created {new Date(entry.createdAt).toLocaleString()}{entry.usedAt ? ` · Used ${new Date(entry.usedAt).toLocaleString()}` : ''}</span><span className={`rounded-full px-2 py-1 font-semibold ${cls}`}>{label}</span></div> })}
+                    {kioskActivity.codes.map((entry) => { const [label, cls] = pairingBadge(entry.status); return <div key={entry.id} className="flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between"><span className="text-gray-600">Created {new Date(entry.createdAt).toLocaleString()}{entry.usedAt ? ` · Used ${new Date(entry.usedAt).toLocaleString()}` : ''}</span><span className={`self-start rounded-full px-2 py-1 font-semibold sm:self-auto ${cls}`}>{label}</span></div> })}
                     {!kioskActivity.codes.length && <p className="text-xs text-gray-500">No pairing code created yet.</p>}
                   </div>
                 </div>
                 <div className="rounded-lg bg-white/80 p-3">
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-800">Paired kiosks</h4>
                   <div className="mt-2 space-y-2">
-                    {kioskActivity.sessions.map((session) => <div key={session.id} className="text-xs"><div className="flex items-center justify-between gap-2"><span className="font-semibold text-gray-800">{session.label}</span><span className={`rounded-full px-2 py-1 font-semibold ${session.active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'}`}>{session.active ? 'Active' : 'Unpaired'}</span></div><p className="mt-1 text-gray-500">Paired {new Date(session.pairedAt).toLocaleString()}{session.lastSeenAt ? ` · Last seen ${new Date(session.lastSeenAt).toLocaleString()}` : ''}</p></div>)}
+                    {kioskActivity.sessions.map((session) => <div key={session.id} className="text-xs"><div className="flex flex-wrap items-center justify-between gap-2"><span className="min-w-0 break-words font-semibold text-gray-800">{session.label}</span><span className={`shrink-0 rounded-full px-2 py-1 font-semibold ${session.active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'}`}>{session.active ? 'Active' : 'Unpaired'}</span></div><p className="mt-1 break-words text-gray-500">Paired {new Date(session.pairedAt).toLocaleString()}{session.lastSeenAt ? ` · Last seen ${new Date(session.lastSeenAt).toLocaleString()}` : ''}</p></div>)}
                     {!kioskActivity.sessions.length && <p className="text-xs text-gray-500">No kiosk has used a code yet.</p>}
                   </div>
                 </div>
@@ -339,7 +339,7 @@ export default function TimeClockSetup() {
             <button onClick={addMapping} disabled={busy || !selectedId} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Map</button>
           </div>
           <div className="mt-4 divide-y divide-gray-100 rounded-lg border border-gray-200">
-            {mappings.map((mapping) => { const automatic = String(mapping.employee_id) === String(mapping.terminal_user_id); return <div key={mapping.id} className="flex items-center justify-between gap-3 px-4 py-3"><div><p className="text-sm font-semibold text-gray-900">{mapping.terminal_user_id} → {mapping.name}</p><p className="text-xs text-gray-500">{mapping.email} · {automatic ? 'Automatic App ID' : 'Manual vendor ID'}</p></div>{automatic ? <span className="text-xs font-semibold text-emerald-700">Managed automatically</span> : <button onClick={() => removeMapping(mapping.id)} className="text-xs font-semibold text-red-600">Remove</button>}</div> })}
+            {mappings.map((mapping) => { const automatic = String(mapping.employee_id) === String(mapping.terminal_user_id); return <div key={mapping.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="break-words text-sm font-semibold text-gray-900">{mapping.terminal_user_id} → {mapping.name}</p><p className="break-all text-xs text-gray-500 sm:break-words">{mapping.email} · {automatic ? 'Automatic App ID' : 'Manual vendor ID'}</p></div>{automatic ? <span className="shrink-0 self-start text-xs font-semibold text-emerald-700 sm:self-auto">Managed automatically</span> : <button onClick={() => removeMapping(mapping.id)} className="self-start text-xs font-semibold text-red-600 sm:self-auto">Remove</button>}</div> })}
             {!mappings.length && <p className="p-4 text-sm text-gray-500">No mappings for the selected terminal.</p>}
           </div>
 

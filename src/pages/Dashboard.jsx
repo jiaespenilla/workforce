@@ -183,10 +183,10 @@ function TaskProgressModal({ task, onClose, onStatusChange }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-gray-900/50" />
-      <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="relative flex max-h-[92dvh] w-full flex-col overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="h-1.5 w-full shrink-0 bg-gradient-to-r from-brand-600 to-emerald-400" />
 
-        <div className="flex items-start justify-between gap-3 overflow-y-auto px-6 pt-5">
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 sm:px-6">
           <div className="min-w-0">
             <h3 className="text-lg font-bold leading-snug text-gray-900">{task.title}</h3>
             <p className="mt-1 truncate text-xs text-gray-500">Assigned to: <span className="font-medium text-gray-700">{task.assignee}</span></p>

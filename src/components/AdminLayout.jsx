@@ -157,7 +157,7 @@ export default function AdminLayout({ children }) {
       {menuOpen && (
         <div className="fixed inset-0 z-30 lg:hidden" onClick={() => setMenuOpen(false)}>
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" />
-          <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-slate-950 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute inset-y-0 left-0 flex w-[min(18rem,calc(100vw-2rem))] flex-col bg-slate-950 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex h-16 items-center border-b border-white/10 px-5">
               {getSystemIcon() ? <img src={getSystemIcon()} alt="" className="h-8 w-8 rounded-lg bg-white object-contain p-0.5" /> : <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 font-bold text-sm text-white ring-1 ring-white/20">{brandLetter}</div>}
               <div className="ml-2.5 leading-tight">

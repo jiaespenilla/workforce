@@ -34,7 +34,7 @@ function Logo({ light = false }) {
       )}
       <div className="leading-tight">
         <p className={`text-sm font-semibold ${light ? 'text-white' : 'text-gray-900'}`}>{settings.name}</p>
-        <p className={`text-[11px] ${light ? 'text-emerald-100' : 'text-gray-500'}`}>Workforce Management Suite</p>
+        <p className={`text-[11px] max-[359px]:hidden ${light ? 'text-emerald-100' : 'text-gray-500'}`}>Workforce Management Suite</p>
       </div>
     </div>
   )
@@ -225,7 +225,7 @@ export default function Layout({ children }) {
       {open && (
         <div className="fixed inset-0 z-30 lg:hidden" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" />
-          <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-slate-950 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute inset-y-0 left-0 flex w-[min(18rem,calc(100vw-2rem))] flex-col bg-slate-950 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex h-16 items-center border-b border-white/10 px-5"><Logo light /></div>
             <div className="flex flex-1 flex-col overflow-y-auto p-4">{links}</div>
             {sidebarFooter}

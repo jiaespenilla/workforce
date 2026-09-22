@@ -87,7 +87,7 @@ export default function WelcomeIntro() {
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={dismiss}>
       <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" />
-      <div className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-white/20" onClick={(e) => e.stopPropagation()}>
+      <div className="relative max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-3xl bg-white shadow-2xl ring-1 ring-white/20" onClick={(e) => e.stopPropagation()}>
         <div className="h-1.5 w-full bg-gradient-to-r from-brand-600 to-emerald-400" />
         <div className="px-6 pt-6">
           <div className="flex items-start gap-4">

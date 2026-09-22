@@ -51,7 +51,7 @@ export default function SessionManager() {
   const remainingSec = Math.max(0, Math.ceil(minutes * 60 - (Date.now() - lastActivity.current) / 1000))
 
   return (
-    <div className="fixed bottom-4 right-4 z-[70] w-80 rounded-xl border border-amber-200 bg-white p-4 shadow-xl" role="alert">
+    <div className="fixed inset-x-4 bottom-4 z-[70] rounded-2xl border border-amber-200 bg-white p-4 shadow-xl sm:left-auto sm:w-80" role="alert">
       <div className="flex items-start gap-3">
         <svg className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />

@@ -301,7 +301,7 @@ export default function CompanyRegistration() {
       <header className="border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <Logo />
-          <Link to="/login" className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-800 sm:px-4 sm:text-sm">
+          <Link to="/login" className="whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-800 sm:px-4 sm:text-sm">
             Sign in
           </Link>
         </div>
