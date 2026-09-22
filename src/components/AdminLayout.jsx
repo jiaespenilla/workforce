@@ -145,7 +145,7 @@ export default function AdminLayout({ children }) {
           </button>
           <SignOutButton onConfirm={signOut} />
           <div className="mt-3 border-t border-gray-100 px-3 pt-3 text-[11px] text-gray-400">
-            <p><span className="font-semibold text-gray-500">{settings.name} {settings.version}</span> Â· <span className="font-semibold">CelestSolutions</span></p>
+            <p><span className="font-semibold text-gray-500">{settings.name} {settings.version}</span> - <span className="font-semibold">CelestSolutions</span></p>
           </div>
         </div>
       </aside>

@@ -223,9 +223,9 @@ describe('aggregateWindow — weekly report columns', () => {
     expect(agg.total).toBe(0)
   })
 })
-describe('Open shifts � late is not applicable (54)', () => {
+describe('Open shifts - late is not applicable (54)', () => {
   const openShift = { id: 'sh-open', name: 'Flexible', open: true }
-  // A mid-day clock-in would be Late on a timed shift � never on an open one.
+  // A mid-day clock-in would be Late on a timed shift - never on an open one.
   const midDayPunch = [{ type: 'in', time: '2026-09-01T04:00:00.000Z' } // 12:00 Manila
   ]
   const monday = new Date(2026, 7, 31, 12, 0, 0) // Monday of the week containing Sep 1

@@ -340,7 +340,7 @@ export default function ShiftSchedules() {
                       <Avatar user={{ name: e.name, initials: e.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(), avatar: e.avatar }} size="h-9 w-9 text-xs" />
                       <div className="min-w-0 flex-1 basis-40">
                         <p className="truncate text-sm font-semibold text-gray-900">{e.name}</p>
-                        <p className="truncate text-xs text-gray-400">{e.role || 'Unassigned'}{shift ? ' � ' + shift.name : ''}</p>
+                        <p className="truncate text-xs text-gray-400">{e.role || 'Unassigned'}{shift ? ' - ' + shift.name : ''}</p>
                       </div>
                       <select
                         value={assignedId}
@@ -350,7 +350,7 @@ export default function ShiftSchedules() {
                       >
                         <option value="">No shift</option>
                         {(data.shifts || []).map((s) => (
-                          <option key={s.id} value={s.id}>{s.open ? s.name + ' (open)' : s.name + ' � ' + s.start + '�' + s.end}</option>
+                          <option key={s.id} value={s.id}>{s.open ? s.name + ' (open)' : s.name + ' - ' + s.start + '-' + s.end}</option>
                         ))}
                       </select>
                     </div>
@@ -369,7 +369,7 @@ export default function ShiftSchedules() {
         )}
       </section>
 
-      {/* Overtime grace � full width on mobile */}
+      {/* Overtime grace - full width on mobile */}
       <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
         <h2 className="text-base font-bold text-gray-900 sm:text-lg">Overtime</h2>
         <p className="mt-1 text-sm leading-relaxed text-gray-500">
@@ -400,7 +400,7 @@ export default function ShiftSchedules() {
           </span>
         )}
         <button type="button" onClick={save} disabled={!dirty || loading || saving} className="w-full rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-md hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto min-h-[44px]">
-          {saving ? 'Saving�' : (dirty ? 'Save schedules' : 'Changes saved')}
+          {saving ? 'Saving...' : (dirty ? 'Save schedules' : 'Changes saved')}
         </button>
       </div>
     </div>
