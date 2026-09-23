@@ -13,6 +13,18 @@ function makeEnv(tasks, people = {}) {
         return {
           bind(...args) { state.args = args; return this },
           async first() {
+            if (/FROM employees e\s+JOIN companies c/.test(sql)) {
+              const person = people[String(state.args[0]).toLowerCase()]
+              return person ? {
+                employee_id: person.id || 1,
+                company_id: person.company_id,
+                employee_role: person.role,
+                employee_active: 1,
+                company_active: 1,
+                company_status: 'approved',
+                perms_json: JSON.stringify({ tasks: true }),
+              } : null
+            }
             if (/SELECT \* FROM tasks WHERE id = \?/.test(sql)) {
               return tasks.find((t) => t.id === state.args[0]) || null
             }
@@ -54,6 +66,7 @@ function makeEnv(tasks, people = {}) {
 const PEOPLE = {
   'alice@acme.com': { company_id: 'co1', role: 'Employee' },
   'mandy@acme.com': { company_id: 'co1', role: 'HR Manager' },
+  'ceo@acme.com': { company_id: 'co1', role: 'CEO' },
 }
 
 const putTask = (env, id, body, claims, isAdmin = false) =>
@@ -75,6 +88,7 @@ const baseTask = {
   title: 'Draft report',
   assignee: 'Alice Cruz (Acme)',
   assignee_company_id: 'co1',
+  assignee_email: 'alice@acme.com',
   status: 'pending',
   due: '2026-01-15',
 }
@@ -82,14 +96,14 @@ const baseTask = {
 describe('PUT /api/tasks/:id — due date is a management action (69)', () => {
   it('lets the CEO change the due date', async () => {
     const tasks = [{ ...baseTask }]
-    const res = await putTask(makeEnv(tasks), 1, { due: '2026-02-01' }, { sub: 'ceo@acme.com', role: 'ceo' })
+    const res = await putTask(makeEnv(tasks, PEOPLE), 1, { due: '2026-02-01' }, { sub: 'ceo@acme.com', role: 'ceo' })
     expect(res.status).toBe(200)
     expect(tasks[0].due).toBe('2026-02-01')
   })
 
   it('lets administrators change the due date', async () => {
     const tasks = [{ ...baseTask }]
-    const res = await putTask(makeEnv(tasks), 1, { due: '2026-03-01' }, { sub: 'a@x.com', role: 'employee' }, true)
+    const res = await putTask(makeEnv(tasks), 1, { due: '2026-03-01' }, { sub: 'a@x.com', role: 'administrator' }, true)
     expect(res.status).toBe(200)
     expect(tasks[0].due).toBe('2026-03-01')
   })
@@ -110,7 +124,7 @@ describe('PUT /api/tasks/:id — due date is a management action (69)', () => {
 
   it('clears the due date when an empty value is sent', async () => {
     const tasks = [{ ...baseTask }]
-    const res = await putTask(makeEnv(tasks), 1, { due: '' }, { sub: 'ceo@acme.com', role: 'ceo' })
+    const res = await putTask(makeEnv(tasks, PEOPLE), 1, { due: '' }, { sub: 'ceo@acme.com', role: 'ceo' })
     expect(res.status).toBe(200)
     expect(tasks[0].due).toBeNull()
   })

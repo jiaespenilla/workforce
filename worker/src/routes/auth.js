@@ -3,7 +3,7 @@
 import { getDefaultEmployeePassword, NOTIFICATION_RECIPIENT, GLOBAL_SETTINGS_SQL } from '../lib/constants.js'
 import { verifyPassword, hashPassword } from '../lib/crypto.js'
 import { json, readJson } from '../lib/http.js'
-import { callerCompanyId } from '../lib/auth.js'
+import { callerAccess, canAccessPage } from '../lib/auth.js'
 import { mapCompany, mapTask, mapNotification, safeParse, escapeLike } from '../lib/db.js'
 
 export async function handle({ request, env, _url, path, method, claims }) {
@@ -60,15 +60,21 @@ export async function handle({ request, env, _url, path, method, claims }) {
   if (path === '/api/bootstrap' && method === 'GET') {
     const settingsRows = await env.DB.prepare(GLOBAL_SETTINGS_SQL).all().then((r) => r.results)
     const roleRows = await env.DB.prepare('SELECT * FROM roles ORDER BY id').all().then((r) => r.results)
-    // Tenant scoping: company accounts only see their own company, employees
-    // and tasks; platform accounts (admin / platform CEO) see everything.
-    const companyId = await callerCompanyId(env, claims)
+    // Tenant scoping and field visibility are enforced here as well as on the
+    // individual endpoints because bootstrap contains the same sensitive data.
+    const access = await callerAccess(env, claims)
+    const companyId = access.companyId
     const companyRows = companyId
       ? await env.DB.prepare('SELECT * FROM companies WHERE id = ?').bind(companyId).all().then((r) => r.results)
       : await env.DB.prepare('SELECT * FROM companies ORDER BY created_at DESC').all().then((r) => r.results)
     const employeeRows = companyId
       ? await env.DB.prepare('SELECT e.*, u.avatar AS user_avatar FROM employees e LEFT JOIN users u ON lower(u.email) = lower(e.email) WHERE e.company_id = ?').bind(companyId).all().then((r) => r.results)
       : await env.DB.prepare('SELECT e.*, u.avatar AS user_avatar FROM employees e LEFT JOIN users u ON lower(u.email) = lower(e.email)').all().then((r) => r.results)
+    const mayViewPeople = access.isAdmin || claims.role === 'ceo' || canAccessPage(access, claims, 'employees')
+    const mayViewPay = access.isAdmin || claims.role === 'ceo' || canAccessPage(access, claims, 'payroll')
+    const visibleEmployeeRows = mayViewPeople
+      ? employeeRows
+      : employeeRows.filter((employee) => String(employee.email || '').toLowerCase() === String(claims.sub || '').toLowerCase())
     let taskRows
     if (companyId) {
       // Tenant scoping at the SQL level (uses idx_tasks_company) instead of
@@ -79,6 +85,9 @@ export async function handle({ request, env, _url, path, method, claims }) {
       taskRows = await env.DB.prepare(
         "SELECT * FROM tasks WHERE assignee_company_id = ? OR (assignee_company_id IS NULL AND assignee LIKE ? ESCAPE '\\') ORDER BY id DESC"
       ).bind(companyId, `%${escapeLike(suffix)}`).all().then((r) => r.results)
+      if (claims.role !== 'ceo') {
+        taskRows = taskRows.filter((task) => String(task.assignee_email || '').toLowerCase() === String(claims.sub || '').toLowerCase())
+      }
     } else {
       taskRows = await env.DB.prepare('SELECT * FROM tasks ORDER BY id DESC').all().then((r) => r.results)
     }
@@ -94,7 +103,10 @@ export async function handle({ request, env, _url, path, method, claims }) {
     return json({
       settings,
       roles: roleRows.map((r) => ({ id: r.id, name: r.name, perms: safeParse(r.perms_json) })),
-      companies: companyRows.map((row) => mapCompany(row, employeeRows)),
+      companies: companyRows.map((row) => mapCompany(row, visibleEmployeeRows)).map((company) => ({
+        ...company,
+        employees: company.employees.map((employee) => mayViewPay ? employee : { ...employee, payType: undefined, payRate: undefined }),
+      })),
       tasks: taskRows.map(mapTask),
       notifications,
     })

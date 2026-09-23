@@ -2,7 +2,7 @@
 
 import { COMPANY_SETTING_KEYS, GLOBAL_SETTINGS_SQL } from '../lib/constants.js'
 import { json, readJson } from '../lib/http.js'
-import { callerCompanyId } from '../lib/auth.js'
+import { callerCompanyId, requireActionPermission, requirePagePermission } from '../lib/auth.js'
 import { safeParse } from '../lib/db.js'
 
 export async function handle({ request, env, _url, path, method, claims, isAdmin }) {
@@ -24,6 +24,7 @@ export async function handle({ request, env, _url, path, method, claims, isAdmin
       const output = {}
       for (const row of rows) {
         const base = row.key.slice(0, row.key.lastIndexOf(':'))
+        if (base === 'attachment_storage' && !isAdmin) continue
         try { output[base] = JSON.parse(row.value) } catch { output[base] = row.value }
       }
       return json(output, 200, request)
@@ -37,6 +38,13 @@ export async function handle({ request, env, _url, path, method, claims, isAdmin
       const statements = []
       for (const [key, value] of Object.entries(body)) {
         if (!COMPANY_SETTING_KEYS.includes(key)) return json({ error: `Key "${key}" is not company-scoped.` }, 400)
+        if (key === 'shift_schedules') {
+          await requirePagePermission(env, claims, 'shifts', 'You do not have permission to change shift schedules.')
+        } else if (key === 'company_locations') {
+          await requireActionPermission(env, claims, 'employees', 'locations', 'edit', 'You do not have permission to change work locations.')
+        } else if (key === 'attachment_storage' && !isAdmin) {
+          return json({ error: 'Only administrators can change attachment storage.' }, 403)
+        }
         statements.push(
           env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
             .bind(`${key}:${companyId}`, typeof value === 'string' ? value : JSON.stringify(value))

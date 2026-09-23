@@ -15,12 +15,16 @@ function makeEnv({ activeTasks = 0, callerCompany = 'co1' } = {}) {
         return {
           bind(...args) { state.args = args; return this },
           async first() {
+            if (/FROM employees e\s+JOIN companies c/.test(sql)) {
+              return { employee_id: 99, company_id: callerCompany, employee_role: 'CEO', employee_active: 1, company_active: 1, company_status: 'approved', perms_json: '{}' }
+            }
             if (/COUNT\(\*\) AS n/.test(sql)) return { n: activeTasks }
             if (/SELECT email, name, company_id FROM employees/.test(sql)) {
               return { email: 'alice@acme.com', name: 'Alice Cruz', company_id: 'co1' }
             }
             if (/SELECT name FROM employees WHERE id/.test(sql)) return { name: 'Alice Cruz' }
-            if (/SELECT company_id FROM employees WHERE id = \?/.test(sql)) return { company_id: 'co1' }
+            if (/SELECT company_id, role, email, pay_type, pay_rate FROM employees WHERE id = \?/.test(sql)) return { company_id: 'co1', role: 'Employee', email: 'alice@acme.com', pay_type: 'hourly', pay_rate: 100 }
+            if (/SELECT company_id, role, email FROM employees WHERE id = \?/.test(sql)) return { company_id: 'co1', role: 'Employee', email: 'alice@acme.com' }
             if (/SELECT company_id FROM employees WHERE lower\(email\)/.test(sql)) return { company_id: callerCompany }
             if (/SELECT name FROM companies WHERE id/.test(sql)) return { name: 'Acme' }
             if (/SELECT email FROM employees WHERE id/.test(sql)) return { email: 'alice@acme.com' }
@@ -29,6 +33,10 @@ function makeEnv({ activeTasks = 0, callerCompany = 'co1' } = {}) {
           async all() { return { results: [] } },
           async run() { return { success: true } },
         }
+      },
+      async batch(statements) {
+        calls.push(...statements.map((statement) => statement.sql))
+        return statements.map(() => ({ success: true }))
       },
     },
   }
@@ -87,5 +95,7 @@ describe('employee deactivation guard (70)', () => {
     const env = makeEnv({ activeTasks: 0 })
     const res = await putEmployee(env, null, { sub: 'ceo@acme.com', role: 'ceo' }, 'DELETE')
     expect(res.status).toBe(200)
+    expect(env.calls.filter(Boolean).some((sql) => sql.includes('DELETE FROM users'))).toBe(true)
+    expect(env.calls.filter(Boolean).some((sql) => sql.includes('DELETE FROM employees'))).toBe(false)
   })
 })

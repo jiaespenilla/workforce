@@ -26,7 +26,16 @@ let seedVerified = false
 export async function ensureSeed(env) {
   if (seedVerified) return
   const { count } = await env.DB.prepare('SELECT COUNT(*) AS count FROM users').first()
+  const ceoCreds = getCeoCredentials(env)
   if (count > 0) {
+    // The configured platform CEO is a platform account, not a company CEO.
+    // Make that global scope explicit; ordinary CEOs must always have a linked
+    // employee row and can only access their own company.
+    await env.DB.prepare(
+      `UPDATE users SET role = 'administrator'
+        WHERE lower(email) = lower(?)
+          AND NOT EXISTS (SELECT 1 FROM employees WHERE lower(email) = lower(?))`
+    ).bind(ceoCreds.email, ceoCreds.email).run()
     seedVerified = true
     return
   }
@@ -39,9 +48,8 @@ export async function ensureSeed(env) {
   }
 
   const adminCreds = getAdminCredentials(env)
-  const ceoCreds = getCeoCredentials(env)
   await addUser(adminCreds.username, adminCreds.name, 'administrator', adminCreds.password)
-  await addUser(ceoCreds.email, ceoCreds.name, 'ceo', ceoCreds.password)
+  await addUser(ceoCreds.email, ceoCreds.name, 'administrator', ceoCreds.password)
 
   const defaults = [
     ['CEO', { dashboard: true, timekeeping: true, tasks: true, payroll: true, employees: true, shifts: true, settings: false }],

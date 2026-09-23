@@ -1,7 +1,7 @@
 // Task endpoints — list/create/update/delete with tenant scoping.
 
 import { json, readJson } from '../lib/http.js'
-import { callerCompanyId } from '../lib/auth.js'
+import { callerCompanyId, requireActionPermission, requirePagePermission } from '../lib/auth.js'
 import { mapTask, queueNotification, safeParseArray, escapeLike } from '../lib/db.js'
 import { parsePagination } from '../lib/pagination.js'
 
@@ -13,12 +13,11 @@ async function resolveAssignee(env, assignee) {
   const cname = m[2].trim()
   const comp = await env.DB.prepare('SELECT id FROM companies WHERE lower(name) = lower(?) LIMIT 1').bind(cname).first()
   const assigneeCompanyId = comp?.id || null
-  const emp = await env.DB.prepare('SELECT id, email FROM employees WHERE lower(name) = lower(?) AND company_id = ? LIMIT 1')
+  if (!assigneeCompanyId) return { assigneeEmail: null, assigneeCompanyId: null, assigneeId: null }
+  const emp = await env.DB.prepare('SELECT id, email FROM employees WHERE lower(name) = lower(?) AND company_id = ? AND active = 1 LIMIT 1')
     .bind(m[1].trim(), assigneeCompanyId || '').first()
-  // Fallback: try any employee with that name
-  const match = emp || await env.DB.prepare('SELECT id, email FROM employees WHERE lower(name) = lower(?) LIMIT 1').bind(m[1].trim()).first()
-  if (match?.email) {
-    return { assigneeEmail: match.email.toLowerCase(), assigneeCompanyId, assigneeId: match.id }
+  if (emp?.email) {
+    return { assigneeEmail: emp.email.toLowerCase(), assigneeCompanyId, assigneeId: emp.id }
   }
   return { assigneeEmail: null, assigneeCompanyId, assigneeId: null }
 }
@@ -79,6 +78,7 @@ async function notifyTaskUpdate(env, task, actorEmail, verb) {
 export async function handle({ request, env, url, path, method, claims, isAdmin }) {
   /* tasks */
   if (path === '/api/tasks' && method === 'GET') {
+    await requirePagePermission(env, claims, 'tasks', 'You do not have permission to view tasks.')
     // SQL-level tenant scoping (idx_tasks_company), search and pagination —
     // the table is never fully loaded and filtered in JS like before.
     const companyId = await callerCompanyId(env, claims)
@@ -89,6 +89,12 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
       const suffix = `(${own?.name || ''})`
       conditions.push("(assignee_company_id = ? OR (assignee_company_id IS NULL AND assignee LIKE ? ESCAPE '\\'))")
       params.push(companyId, `%${escapeLike(suffix)}`)
+    }
+    // Regular employees only receive their own tasks from the server. Hidden
+    // UI filtering is not an access-control boundary.
+    if (!isAdmin && claims.role !== 'ceo') {
+      conditions.push("(lower(assignee_email) = ? OR (assignee_email IS NULL AND assignee LIKE ? ESCAPE '\\'))")
+      params.push(String(claims.sub || '').toLowerCase(), `${escapeLike(String(claims.name || ''))} (%)`)
     }
     const pag = parsePagination(url, 50)
     if (pag.q) {
@@ -109,10 +115,17 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
     return json(rows.map(mapTask))
   }
   if (path === '/api/tasks' && method === 'POST') {
-    // Any authenticated member can create tasks if their role permits it (frontend gates via perms).
-    if (!isAdmin && !['ceo','employee'].includes(claims.role)) return json({ error: 'Not authorized to create tasks.' }, 403)
+    await requireActionPermission(env, claims, 'tasks', 'tasks', 'add', 'You do not have permission to create tasks.')
     const t = await readJson(request)
     const { assigneeEmail, assigneeCompanyId, assigneeId } = await resolveAssignee(env, t.assignee)
+    if (!assigneeEmail || !assigneeCompanyId) return json({ error: 'Choose a valid active employee for this task.' }, 400)
+    const callerCompany = await callerCompanyId(env, claims)
+    if (callerCompany && String(assigneeCompanyId) !== String(callerCompany)) {
+      return json({ error: 'Tasks can only be assigned within your own company.' }, 403)
+    }
+    if (!isAdmin && claims.role !== 'ceo' && String(assigneeEmail || '').toLowerCase() !== String(claims.sub || '').toLowerCase()) {
+      return json({ error: 'Employees can only create tasks assigned to themselves.' }, 403)
+    }
     try {
       const result = await env.DB.prepare('INSERT INTO tasks (title, assignee, assignee_email, assignee_company_id, assignee_id, priority, due, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(t.title, t.assignee, assigneeEmail, assigneeCompanyId, assigneeId, t.priority || 'Medium', t.due || null, t.status || 'pending').run()
@@ -177,6 +190,7 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
   {
     const m = path.match(/^\/api\/tasks\/(\d+)$/)
     if (m && method === 'PUT') {
+      await requirePagePermission(env, claims, 'tasks', 'You do not have permission to update tasks.')
       const body = await readJson(request)
       // (69) Normalize the due date: an empty value means "clear it" — sent as
       // null so the COALESCE updates below can never store an empty string.
@@ -186,12 +200,32 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
       if (callerCompany && !(await taskInCompany(env, Number(m[1]), callerCompany))) {
         return json({ error: 'Not authorized to modify this task.' }, 403)
       }
+      const targetTask = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(Number(m[1])).first()
+      if (!targetTask) return json({ error: 'Task not found.' }, 404)
+      const mine = String(targetTask.assignee_email || '').toLowerCase() === String(claims.sub || '').toLowerCase()
+      const management = await canManageTasks(env, claims, isAdmin)
+      const changesManagementFields = body.title !== undefined || body.priority !== undefined || (body.assignee !== undefined && !body.transferTo)
+      if (changesManagementFields) {
+        if (!management) return json({ error: 'Only the CEO or a manager can edit task details.' }, 403)
+        await requireActionPermission(env, claims, 'tasks', 'tasks', 'edit', 'You do not have permission to edit task details.')
+      }
+      if (body.status !== undefined && !mine && !management) {
+        return json({ error: 'Employees can only update their own tasks.' }, 403)
+      }
       // (69/70) Changing the due date or transferring the assignee is a
       // management action — only the CEO, administrators and manager roles.
       if (body.due !== undefined || body.transferTo) {
-        if (!(await canManageTasks(env, claims, isAdmin))) {
+        if (!management) {
           return json({ error: body.transferTo ? 'Only the CEO or a manager can transfer tasks.' : 'Only the CEO or a manager can change the due date.' }, 403)
         }
+        await requireActionPermission(
+          env,
+          claims,
+          'tasks',
+          'tasks',
+          body.transferTo ? 'transfer' : 'edit',
+          body.transferTo ? 'You do not have permission to transfer tasks.' : 'You do not have permission to change due dates.',
+        )
         if (body.transferTo && !String(body.assignee || '').trim()) {
           return json({ error: 'A receiving employee is required to transfer the task.' }, 400)
         }
@@ -203,8 +237,8 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
         if (!Array.isArray(body.notes)) return json({ error: 'notes must be an array.' }, 400)
         const row0 = await env.DB.prepare('SELECT assignee_email FROM tasks WHERE id = ?').bind(Number(m[1])).first()
         if (!row0) return json({ error: 'Task not found.' }, 404)
-        const mine = String(row0.assignee_email || '').toLowerCase() === String(claims.sub || '').toLowerCase()
-        if (!isAdmin && claims.role !== 'ceo' && !mine) return json({ error: 'Not authorized to add notes to this task.' }, 403)
+        const mineForNotes = String(row0.assignee_email || '').toLowerCase() === String(claims.sub || '').toLowerCase()
+        if (!management && !mineForNotes) return json({ error: 'Not authorized to add notes to this task.' }, 403)
         const actorRow = await env.DB.prepare('SELECT name FROM users WHERE lower(email) = ?').bind(String(claims.sub || '').toLowerCase()).first()
         const actorName = actorRow?.name || claims.sub
         const clean = body.notes.slice(-50).map((n) => ({
@@ -228,6 +262,10 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
       // If assignee string is being updated, also refresh normalized columns
       if (body.assignee !== undefined) {
         const { assigneeEmail, assigneeCompanyId, assigneeId } = await resolveAssignee(env, body.assignee)
+        if (!assigneeEmail || !assigneeCompanyId) return json({ error: 'Choose a valid active employee for this task.' }, 400)
+        if (callerCompany && String(assigneeCompanyId) !== String(callerCompany)) {
+          return json({ error: 'Tasks can only be transferred within your own company.' }, 403)
+        }
         try {
           await env.DB.prepare('UPDATE tasks SET title = COALESCE(?, title), assignee = COALESCE(?, assignee), assignee_email = COALESCE(?, assignee_email), assignee_company_id = COALESCE(?, assignee_company_id), assignee_id = COALESCE(?, assignee_id), priority = COALESCE(?, priority), due = COALESCE(?, due), status = COALESCE(?, status) WHERE id = ?')
             .bind(body.title ?? null, body.assignee ?? null, assigneeEmail, assigneeCompanyId, assigneeId, body.priority ?? null, body.due ?? null, body.status ?? null, Number(m[1])).run()
@@ -245,11 +283,17 @@ export async function handle({ request, env, url, path, method, claims, isAdmin 
       return json({ ok: true })
     }
     if (m && method === 'DELETE') {
-      if (!isAdmin && !['ceo','employee'].includes(claims.role)) return json({ error: 'Not authorized to delete tasks.' }, 403)
+      await requireActionPermission(env, claims, 'tasks', 'tasks', 'delete', 'You do not have permission to delete tasks.')
       // Tenant scoping: company accounts may only delete their own tasks.
       const callerCompany = await callerCompanyId(env, claims)
       if (callerCompany && !(await taskInCompany(env, Number(m[1]), callerCompany))) {
         return json({ error: 'Not authorized to delete this task.' }, 403)
+      }
+      const targetTask = await env.DB.prepare('SELECT assignee_email FROM tasks WHERE id = ?').bind(Number(m[1])).first()
+      if (!targetTask) return json({ error: 'Task not found.' }, 404)
+      const mine = String(targetTask.assignee_email || '').toLowerCase() === String(claims.sub || '').toLowerCase()
+      if (!mine && !(await canManageTasks(env, claims, isAdmin))) {
+        return json({ error: 'Employees can only delete their own tasks.' }, 403)
       }
       await env.DB.prepare('DELETE FROM tasks WHERE id = ?').bind(Number(m[1])).run()
       return json({ ok: true })

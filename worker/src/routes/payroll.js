@@ -1,13 +1,14 @@
 // Authenticated payroll endpoints — saved payroll runs (history/audit).
 
 import { json, readJson } from '../lib/http.js'
-import { callerCompanyId } from '../lib/auth.js'
+import { callerCompanyId, requirePagePermission } from '../lib/auth.js'
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
 
-export async function handle({ request, env, url, path, method, claims }) {
+export async function handle({ request, env, url: _url, path, method, claims }) {
   /* payroll runs — list / create / delete (company-scoped) */
   if (path === '/api/payroll/runs' && method === 'GET') {
+    await requirePagePermission(env, claims, 'payroll', 'You do not have permission to view payroll.')
     const callerCompany = await callerCompanyId(env, claims)
     let rows
     if (callerCompany) {
@@ -32,6 +33,7 @@ export async function handle({ request, env, url, path, method, claims }) {
   }
 
   if (path === '/api/payroll/runs' && method === 'POST') {
+    await requirePagePermission(env, claims, 'payroll', 'You do not have permission to create payroll runs.')
     const callerCompany = await callerCompanyId(env, claims)
     const body = await readJson(request)
     const periodStart = String(body.periodStart || '').slice(0, 40)
@@ -57,6 +59,7 @@ export async function handle({ request, env, url, path, method, claims }) {
   {
     const m = path.match(/^\/api\/payroll\/runs\/(\d+)$/)
     if (m && method === 'DELETE') {
+      await requirePagePermission(env, claims, 'payroll', 'You do not have permission to delete payroll runs.')
       const callerCompany = await callerCompanyId(env, claims)
       const target = callerCompany
         ? await env.DB.prepare('SELECT company_id FROM payroll_runs WHERE id = ?').bind(Number(m[1])).first()

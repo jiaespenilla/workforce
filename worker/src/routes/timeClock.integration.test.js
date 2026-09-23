@@ -1,11 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { env } from 'cloudflare:test'
 import { hmac } from '../lib/crypto.js'
+import { callerAccess, requirePagePermission } from '../lib/auth.js'
+import { handle as handleCompanies } from './companies.js'
 import { handle, handlePublic } from './timeClock.js'
 
 const schema = `
 CREATE TABLE IF NOT EXISTS companies (id TEXT PRIMARY KEY, name TEXT, active INTEGER, status TEXT);
-CREATE TABLE IF NOT EXISTS employees (id INTEGER PRIMARY KEY, email TEXT, name TEXT, company_id TEXT, active INTEGER);
+CREATE TABLE IF NOT EXISTS employees (id INTEGER PRIMARY KEY, email TEXT, name TEXT, company_id TEXT, role TEXT, active INTEGER);
+CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, name TEXT, role TEXT, password_salt TEXT, password_hash TEXT);
+CREATE TABLE IF NOT EXISTS roles (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, perms_json TEXT);
+CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, assignee TEXT, assignee_email TEXT, assignee_company_id TEXT, status TEXT);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS webauthn_credentials (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, company_id TEXT, credential_id TEXT UNIQUE, public_key TEXT, counter INTEGER, transports TEXT, created_at TEXT, label TEXT, last_used_at TEXT, revoked_at TEXT);
 CREATE TABLE IF NOT EXISTS login_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT, attempt_at TEXT);
@@ -29,6 +34,9 @@ async function seed() {
     env.DB.prepare('DELETE FROM terminal_employee_mappings'),
     env.DB.prepare('DELETE FROM time_clock_devices'),
     env.DB.prepare('DELETE FROM employees'),
+    env.DB.prepare('DELETE FROM users'),
+    env.DB.prepare('DELETE FROM roles'),
+    env.DB.prepare('DELETE FROM tasks'),
     env.DB.prepare('DELETE FROM companies'),
     env.DB.prepare('DELETE FROM settings'),
     env.DB.prepare('DELETE FROM webauthn_credentials'),
@@ -36,7 +44,9 @@ async function seed() {
   ])
   await env.DB.batch([
     env.DB.prepare("INSERT OR REPLACE INTO companies (id, name, active, status) VALUES ('co-1', 'Acme', 1, 'approved')"),
-    env.DB.prepare("INSERT OR REPLACE INTO employees (id, email, name, company_id, active) VALUES (1, 'emp@acme.com', 'Employee', 'co-1', 1)"),
+    env.DB.prepare("INSERT OR REPLACE INTO employees (id, email, name, company_id, role, active) VALUES (1, 'emp@acme.com', 'Employee', 'co-1', 'Employee', 1)"),
+    env.DB.prepare("INSERT OR REPLACE INTO users (email, name, role, password_salt, password_hash) VALUES ('emp@acme.com', 'Employee', 'employee', 'salt', 'hash')"),
+    env.DB.prepare("INSERT OR REPLACE INTO roles (name, perms_json) VALUES ('Employee', '{\"tasks\":true,\"payroll\":false,\"employees\":false}')"),
     env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('company_locations:co-1', JSON.stringify({ locations: [{ id: 'site-1', name: 'HQ' }] })),
     env.DB.prepare("INSERT OR REPLACE INTO time_clock_devices (id, company_id, site_id, name, secret_version, active) VALUES ('terminal-1', 'co-1', 'site-1', 'Front door', 1, 1)"),
     env.DB.prepare("INSERT OR REPLACE INTO terminal_employee_mappings (device_id, terminal_user_id, employee_id) VALUES ('terminal-1', '1001', 1)"),
@@ -280,5 +290,39 @@ describe('signed terminal batches in the Workers runtime', () => {
     expect(first.status).toBe(202)
     const second = await send(await signedRequest({ events: [event({ eventId: 'event-seq-1', sequence: 1, action: 'out' })] }))
     expect((await second.json()).results[0].status).toBe('needs_review')
+  })
+})
+
+describe('authorization hardening in the Workers runtime', () => {
+  beforeEach(seed)
+
+  it('rejects non-administrator accounts that have no employee record', async () => {
+    await expect(callerAccess(env, { sub: 'removed@acme.com', role: 'employee' }))
+      .rejects.toMatchObject({ status: 401 })
+  })
+
+  it('enforces stored page permissions on direct server calls', async () => {
+    await expect(requirePagePermission(env, { sub: 'emp@acme.com', role: 'employee' }, 'payroll'))
+      .rejects.toMatchObject({ status: 403 })
+  })
+
+  it('archives a removed employee and revokes login, passkeys and terminal mappings', async () => {
+    await env.DB.prepare("INSERT OR REPLACE INTO employees (id, email, name, company_id, role, active) VALUES (2, 'ceo@acme.com', 'Owner', 'co-1', 'CEO', 1)").run()
+    await env.DB.prepare("INSERT INTO webauthn_credentials (email, company_id, credential_id, public_key) VALUES ('emp@acme.com', 'co-1', 'cred-1', 'public-key')").run()
+    const request = new Request('https://app.example/api/employees/1', { method: 'DELETE' })
+    const response = await handleCompanies({
+      request,
+      env,
+      url: new URL(request.url),
+      path: '/api/employees/1',
+      method: 'DELETE',
+      claims: { sub: 'ceo@acme.com', role: 'ceo' },
+      isAdmin: false,
+    })
+    expect(response.status).toBe(200)
+    expect((await env.DB.prepare('SELECT active FROM employees WHERE id = 1').first()).active).toBe(0)
+    expect(await env.DB.prepare("SELECT id FROM users WHERE email = 'emp@acme.com'").first()).toBeNull()
+    expect(await env.DB.prepare("SELECT id FROM webauthn_credentials WHERE email = 'emp@acme.com'").first()).toBeNull()
+    expect(await env.DB.prepare('SELECT id FROM terminal_employee_mappings WHERE employee_id = 1').first()).toBeNull()
   })
 })

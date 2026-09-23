@@ -83,7 +83,7 @@ describe('POST /api/companies — public registration hardening', () => {
       employees: [{ name: 'Emp One', email: 'one@test.co', role: 'Employee' }],
     })
     expect(res.status).toBe(201)
-    const insert = env.DB.calls.find((c) => c.op === 'run' && /INSERT INTO companies/.test(c.sql))
+    const insert = env.DB.calls.find((c) => c.op === 'batch' && /INSERT INTO companies/.test(c.sql))
     expect(insert).toBeTruthy()
     const [id, name, industry, , , , , , status, active] = insert.args
     expect(id).toMatch(/^reg-/)
@@ -107,13 +107,21 @@ describe('POST /api/companies — public registration hardening', () => {
       industry: 'x'.repeat(500),
       address: 'a'.repeat(1000),
       owner: { name: '  Own Er  ' },
+      employees: [{ name: 'Emp One', email: 'one@test.co', role: 'Employee' }],
     })
     expect(res.status).toBe(201)
-    const insert = env.DB.calls.find((c) => c.op === 'run' && /INSERT INTO companies/.test(c.sql))
+    const insert = env.DB.calls.find((c) => c.op === 'batch' && /INSERT INTO companies/.test(c.sql))
     expect(insert.args[1]).toBe('Padded Co')
     expect(insert.args[2]).toHaveLength(100)
     expect(insert.args[3]).toHaveLength(300)
     expect(insert.args[10]).toBe('Own Er')
+  })
+
+  it('rejects registration without an employee before creating a company', async () => {
+    const env = { DB: makeDb(), DEFAULT_EMPLOYEE_PASSWORD: 'uw-test-default' }
+    const res = await register(env, { name: 'No Team Co', employees: [] })
+    expect(res.status).toBe(400)
+    expect(env.DB.calls.some((c) => /INSERT INTO companies/.test(c.sql))).toBe(false)
   })
 })
 describe('GET /api/kiosk/directory — token-gated, company-scoped', () => {
@@ -270,8 +278,51 @@ describe('default password fails closed when unconfigured', () => {
 // Medium-effort scalability & auth hardening batch
 // ---------------------------------------------------------------------------
 import { handle as tasksHandle } from '../worker/src/routes/tasks.js'
+import { handle as companiesHandle } from '../worker/src/routes/companies.js'
+import { handle as payrollHandle } from '../worker/src/routes/payroll.js'
+import { handle as settingsHandle } from '../worker/src/routes/settings.js'
 import { requireAuth } from '../worker/src/lib/auth.js'
 import { recordAttempts } from '../worker/src/lib/rateLimit.js'
+
+describe('server-side role permissions', () => {
+  const claims = { sub: 'member@acme.test', role: 'employee', name: 'Member' }
+  const limitedEnv = () => ({
+    DB: makeDb({
+      first: (sql) => /FROM employees e\s+JOIN companies c/.test(sql)
+        ? {
+            employee_id: 4,
+            company_id: 'co-1',
+            employee_role: 'Employee',
+            employee_active: 1,
+            company_active: 1,
+            company_status: 'approved',
+            perms_json: JSON.stringify({ tasks: true, payroll: false, employees: false, shifts: false, actions: { tasks: { add: false } } }),
+          }
+        : null,
+    }),
+  })
+
+  it('blocks a direct employee-management request even if the UI is bypassed', async () => {
+    const env = limitedEnv()
+    const request = req('/api/companies/co-1/employees', { method: 'POST', body: { name: 'New', email: 'new@acme.test' } })
+    await expect(companiesHandle({ request, env, path: '/api/companies/co-1/employees', method: 'POST', claims, isAdmin: false }))
+      .rejects.toMatchObject({ status: 403 })
+  })
+
+  it('blocks direct payroll, settings and task-creation requests without permission', async () => {
+    const payrollRequest = req('/api/payroll/runs')
+    await expect(payrollHandle({ request: payrollRequest, env: limitedEnv(), path: '/api/payroll/runs', method: 'GET', claims }))
+      .rejects.toMatchObject({ status: 403 })
+
+    const settingsRequest = req('/api/company-settings/co-1', { method: 'PUT', body: { company_locations: { locations: [] } } })
+    await expect(settingsHandle({ request: settingsRequest, env: limitedEnv(), path: '/api/company-settings/co-1', method: 'PUT', claims, isAdmin: false }))
+      .rejects.toMatchObject({ status: 403 })
+
+    const taskRequest = req('/api/tasks', { method: 'POST', body: { title: 'Hidden', assignee: 'Member (Acme)' } })
+    await expect(tasksHandle({ request: taskRequest, env: limitedEnv(), path: '/api/tasks', method: 'POST', claims, isAdmin: false }))
+      .rejects.toMatchObject({ status: 403 })
+  })
+})
 
 describe('GET /api/tasks — SQL-level tenant scoping and pagination', () => {
   function taskEnv() {
@@ -281,6 +332,10 @@ describe('GET /api/tasks — SQL-level tenant scoping and pagination', () => {
       const stmt = origPrepare(sql)
       const oldFirst = stmt.first
       stmt.first = async function () {
+        if (/FROM employees e\s+JOIN companies c/.test(sql)) {
+          db.calls.push({ sql, args: [...(stmt._args || [])], op: 'first' })
+          return { employee_id: 1, company_id: 'co1', employee_role: 'Employee', employee_active: 1, company_active: 1, company_status: 'approved', perms_json: JSON.stringify({ tasks: true }) }
+        }
         if (/COUNT\(\*\) AS n FROM tasks/.test(sql)) {
           db.calls.push({ sql, args: [...(stmt._args || [])], op: 'first' })
           return { n: 3 }
@@ -359,7 +414,7 @@ describe('requireAuth — deactivated employees lose access immediately', () => 
     const { createToken } = await import('../worker/src/lib/crypto.js')
     const env = {
       AUTH_SECRET: 'test-secret',
-      DB: makeDb({ first: (sql) => (/SELECT active FROM employees/.test(sql) ? { active: 0 } : null) }),
+      DB: makeDb({ first: (sql) => (/FROM employees e\s+JOIN companies c/.test(sql) ? { employee_id: 1, company_id: 'co-1', employee_role: 'Employee', employee_active: 0, company_active: 1, company_status: 'approved', perms_json: '{}' } : null) }),
     }
     const token = await createToken({ email: 'deactivated@x.co', role: 'employee', name: 'D' }, env.AUTH_SECRET)
     const request = new Request('https://app.test/api/tasks', { headers: { Authorization: `Bearer ${token}` } })
@@ -370,7 +425,7 @@ describe('requireAuth — deactivated employees lose access immediately', () => 
     const { createToken } = await import('../worker/src/lib/crypto.js')
     const env = {
       AUTH_SECRET: 'test-secret',
-      DB: makeDb({ first: (sql) => (/SELECT active FROM employees/.test(sql) ? { active: 1 } : null) }),
+      DB: makeDb({ first: (sql) => (/FROM employees e\s+JOIN companies c/.test(sql) ? { employee_id: 1, company_id: 'co-1', employee_role: 'Employee', employee_active: 1, company_active: 1, company_status: 'approved', perms_json: '{}' } : null) }),
     }
     const empToken = await createToken({ email: 'active@x.co', role: 'employee', name: 'A' }, env.AUTH_SECRET)
     const empReq = new Request('https://app.test/api/tasks', { headers: { Authorization: `Bearer ${empToken}` } })
@@ -379,6 +434,14 @@ describe('requireAuth — deactivated employees lose access immediately', () => 
     const adminToken = await createToken({ email: 'admin@x.co', role: 'administrator', name: 'Ad' }, envNoRow.AUTH_SECRET)
     const adminReq = new Request('https://app.test/api/tasks', { headers: { Authorization: `Bearer ${adminToken}` } })
     expect((await requireAuth(adminReq, envNoRow)).role).toBe('administrator')
+  })
+
+  it('rejects a non-administrator token when its employee row was removed', async () => {
+    const { createToken } = await import('../worker/src/lib/crypto.js')
+    const env = { AUTH_SECRET: 'test-secret', DB: makeDb() }
+    const token = await createToken({ email: 'removed@x.co', role: 'employee', name: 'Removed' }, env.AUTH_SECRET)
+    const request = new Request('https://app.test/api/tasks', { headers: { Authorization: `Bearer ${token}` } })
+    await expect(requireAuth(request, env)).rejects.toMatchObject({ status: 401 })
   })
 })
 

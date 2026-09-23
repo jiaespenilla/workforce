@@ -83,12 +83,13 @@ export function escapeLike(text) {
 
 // Canonical employee insert (migration guarantees pay_type/pay_rate exist).
 // Exported for the atomic registration batch below.
-function employeeInsertStatement(env, companyId, emp) {
+function employeeInsertStatement(env, companyId, emp, { ignoreDuplicates = true } = {}) {
   const locId = emp.locationId || emp.location || null
   // Payroll fields (49/50): pay_type 'monthly'|'hourly', pay_rate — optional at creation.
   const payType = emp.payType && ['monthly', 'hourly'].includes(String(emp.payType)) ? String(emp.payType) : null
   const payRate = emp.payRate === undefined || emp.payRate === null || emp.payRate === '' ? null : Math.max(0, Number(emp.payRate) || 0)
-  return env.DB.prepare('INSERT OR IGNORE INTO employees (company_id, name, email, role, active, location_id, pay_type, pay_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+  const insert = ignoreDuplicates ? 'INSERT OR IGNORE' : 'INSERT'
+  return env.DB.prepare(`${insert} INTO employees (company_id, name, email, role, active, location_id, pay_type, pay_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(companyId, emp.name || 'Unnamed', (emp.email || '').toLowerCase(), emp.role || 'Unassigned', emp.active === false ? 0 : 1, locId, payType, payRate)
 }
 
@@ -114,14 +115,14 @@ export async function insertEmployee(env, companyId, emp) {
 // Atomic team creation for public registration: every employee row and its
 // login account are inserted in a single D1 batch, so a failure cannot leave
 // a half-registered company behind (the old sequential loop could).
-export async function registerEmployees(env, companyId, employees, defaultPassword) {
+export async function registerEmployees(env, companyId, employees, defaultPassword, initialStatements = []) {
   const list = (Array.isArray(employees) ? employees : []).filter((e) => e && (e.name || e.email))
-  if (!list.length) return 0
+  if (!list.length) throw new Error('registerEmployees: at least one employee is required')
   // SECURITY: fail closed — same rule as ensureUser.
   if (isPlaceholderPassword(defaultPassword)) {
     throw new Error('registerEmployees: no usable DEFAULT_EMPLOYEE_PASSWORD is configured')
   }
-  // Skip login accounts that already exist (mirrors ensureUser's behavior).
+  // Public registration must never reuse an existing login in another company.
   const emails = list.map((e) => String(e.email || '').toLowerCase()).filter(Boolean)
   const existing = new Set()
   if (emails.length) {
@@ -130,16 +131,16 @@ export async function registerEmployees(env, companyId, employees, defaultPasswo
       .bind(...emails).all().then((r) => r.results)
     for (const r of rows) existing.add(String(r.email || '').toLowerCase())
   }
-  const stmts = []
+  if (existing.size) throw new Error('EMPLOYEE_EMAIL_IN_USE')
+  const stmts = [...initialStatements]
   for (const emp of list) {
-    stmts.push(employeeInsertStatement(env, companyId, emp))
+    stmts.push(employeeInsertStatement(env, companyId, emp, { ignoreDuplicates: false }))
     const email = String(emp.email || '').toLowerCase()
-    if (email && !existing.has(email)) {
+    if (email) {
       const roleForUser = (emp.role || '').trim().toLowerCase() === 'ceo' ? 'ceo' : 'employee'
       const salt = crypto.randomUUID()
       stmts.push(env.DB.prepare('INSERT INTO users (email, name, role, password_salt, password_hash, must_change_password) VALUES (?, ?, ?, ?, ?, 1)')
         .bind(email, emp.name || email, roleForUser, salt, await hashPassword(defaultPassword, salt)))
-      existing.add(email)
     }
   }
   await env.DB.batch(stmts)

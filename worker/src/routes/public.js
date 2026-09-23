@@ -49,11 +49,12 @@ export async function handle({ request, env, url, path, method }) {
     if (!ok) return fail()
     if (legacy) await upgradeUserPassword(env, user.id, password || '')
     await clearAttempts(env, idKey)
-    if (user.role !== 'administrator' && user.role !== 'ceo') {
+    if (user.role !== 'administrator') {
       const owner = await env.DB.prepare(
         `SELECT c.active AS company_active, c.status AS company_status, e.active AS emp_active
          FROM employees e JOIN companies c ON c.id = e.company_id WHERE lower(e.email) = ? LIMIT 1`
       ).bind(id).first()
+      if (!owner) return json({ error: 'This account is no longer linked to an active employee. Contact an administrator.' }, 403, request)
       if (owner && (owner.company_active === 0 || owner.company_status === 'rejected')) return json({ error: 'Company is not active. Contact administrator.' }, 403, request)
       if (owner?.emp_active === 0) return json({ error: 'Your account is deactivated. Contact administrator.' }, 403, request)
     }
@@ -74,13 +75,25 @@ export async function handle({ request, env, url, path, method }) {
     await recordAttempts(env, [regKey])
     const body = await readJson(request)
     const trimmedName = String(body.name || '').trim()
+    if (!trimmedName) return json({ error: 'Company name is required.' }, 400, request)
+    const employees = Array.isArray(body.employees) ? body.employees.filter(Boolean) : []
+    if (!employees.length) return json({ error: 'Add at least one employee account.' }, 400, request)
+    if (employees.length > 100) return json({ error: 'A company can register up to 100 initial employees at a time.' }, 400, request)
+    const seenEmails = new Set()
+    for (const employee of employees) {
+      const employeeName = String(employee?.name || '').trim()
+      const email = String(employee?.email || '').trim().toLowerCase()
+      if (!employeeName) return json({ error: 'Every employee must have a name.' }, 400, request)
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Every employee must have a valid email address.' }, 400, request)
+      if (seenEmails.has(email)) return json({ error: `Employee email "${email}" is listed more than once.` }, 400, request)
+      seenEmails.add(email)
+    }
     if (trimmedName) {
       const duplicate = await env.DB.prepare('SELECT id, name FROM companies WHERE lower(name) = lower(?) LIMIT 1').bind(trimmedName).first()
       if (duplicate) return json({ error: `Company name "${duplicate.name}" is already registered. Please choose a different name.` }, 409, request)
     }
     const id = `reg-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`
-    try {
-      await env.DB.prepare(
+    const companyStatement = env.DB.prepare(
         `INSERT INTO companies (id, name, industry, address, city, contact_phone, contact_email, logo_name, status, active, owner_name, owner_title, owner_email, registered)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
@@ -88,17 +101,18 @@ export async function handle({ request, env, url, path, method }) {
         clampText(body.contactPhone, 50), clampText(body.contactEmail, 200), clampText(body.logoName, 300),
         'pending', 1, clampText(body.owner?.name, 100), clampText(body.owner?.title, 100), clampText(body.owner?.email, 200),
         clampText(body.registered, 10) || new Date().toISOString().slice(0, 10),
-      ).run()
-    } catch (error) {
-      if (/unique|primary/i.test(String(error?.message || ''))) return json({ error: `Company name "${trimmedName}" is already registered. Please choose a different name.` }, 409, request)
-      throw error
-    }
+      )
     try {
-      await registerEmployees(env, id, body.employees, getDefaultEmployeePassword(env))
+      // One D1 batch: the company, employees and login accounts all commit or
+      // all roll back. A failed account can never leave an orphaned company.
+      await registerEmployees(env, id, employees, getDefaultEmployeePassword(env), [companyStatement])
     } catch (error) {
-      if (String(error?.message || '').includes('DEFAULT_EMPLOYEE_PASSWORD')) {
+      const message = String(error?.message || '')
+      if (message.includes('DEFAULT_EMPLOYEE_PASSWORD')) {
         return json({ error: 'Team accounts could not be created: no default password is configured for this deployment.' }, 500, request)
       }
+      if (message.includes('EMPLOYEE_EMAIL_IN_USE')) return json({ error: 'One of the employee email addresses is already registered.' }, 409, request)
+      if (/unique|primary/i.test(message)) return json({ error: 'The company name or an employee email address is already registered.' }, 409, request)
       throw error
     }
     await queueNotification(env, {
@@ -106,9 +120,9 @@ export async function handle({ request, env, url, path, method }) {
       subject: `New company registration: ${trimmedName || 'Unnamed Company'}`,
       body: `Company: ${trimmedName || 'Unnamed Company'}\nIndustry: ${body.industry || ''}\nRegistered: ${body.registered || ''}\nTeam size: ${(body.employees || []).length}`,
     })
-    const employees = await env.DB.prepare('SELECT * FROM employees WHERE company_id = ?').bind(id).all().then((result) => result.results)
+    const registeredEmployees = await env.DB.prepare('SELECT * FROM employees WHERE company_id = ?').bind(id).all().then((result) => result.results)
     const company = await env.DB.prepare('SELECT * FROM companies WHERE id = ?').bind(id).first()
-    return json(mapCompany(company, employees), 201, request)
+    return json(mapCompany(company, registeredEmployees), 201, request)
   }
 
   if (path === '/api/companies/check' && method === 'GET') {
