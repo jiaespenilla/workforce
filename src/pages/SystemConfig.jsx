@@ -8,6 +8,7 @@ import { SYSTEM_ICON_PRESETS } from '../lib/iconPresets'
 import { api, apiEnabled } from '../lib/api'
 import { loadVersionHistory, saveVersionHistory, seedInitialHistory } from '../lib/versionHistory'
 import { PageLoader } from '../components/Skeleton'
+import JevTriagePilot from '../components/JevTriagePilot'
 
 const TABS = [
   ['company', 'System Settings', 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z'],
@@ -17,6 +18,7 @@ const TABS = [
   ['system', 'System Status', 'M13 10V3L4 14h7v7l9-11h-7z'],
   ['users', 'User Accounts', 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z'],
   ['version', 'Version Control', 'M9 5h6M9 12h6M9 19h6m-3-7a3 3 0 110 6 3 3 0 010-6zm-7 7a2 2 0 012-2h14a2 2 0 012 2v1a2 2 0 01-2 2H6a2 2 0 01-2-2v-1z'],
+  ['jev', 'Jev Triage Test', 'M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42M12 6a6 6 0 100 12 6 6 0 000-12z'],
 ]
 
 // Controlled toggle — persists via onChange (used for role permissions & maintenance).
@@ -1243,6 +1245,8 @@ export default function SystemConfig() {
           {tab === 'system' && <StatusPanel settings={settings} />}
 
           {tab === 'version' && <VersionPanel settings={settings} onSaved={flashSaved} />}
+
+          {tab === 'jev' && <JevTriagePilot />}
         </div>
       </div>
     </div>

@@ -41,6 +41,24 @@ wrangler secret put DEFAULT_EMPLOYEE_PASSWORD   # used by admin password-reset t
 
 See ../DEPLOY.md for the full environment variable reference.
 
+## Jev attendance triage pilot
+
+The administrator's System Configuration page has a **Jev Triage Test** tab.
+It sends only fixed, fictional attendance reports to TypeSafe and compares the
+suggested category with the expected sample category. It does not read or
+modify employee attendance or payroll records.
+
+Create a TypeSafe API key in the [TypeSafe dashboard](https://console.typesafe.ai),
+then from the project root run:
+
+```bash
+npx wrangler secret put TYPESAFE_API_KEY --config worker/wrangler.jsonc
+```
+
+Enter the key at Wrangler's hidden prompt. Never put it in `wrangler.jsonc`,
+`.env`, a `VITE_` variable, or a Git commit. The test tab will enable its Run
+button when the Worker sees the secret. The TypeSafe model alias is `jev-latest`.
+
 ## Deploy
 
 ```bash

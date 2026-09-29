@@ -15,9 +15,10 @@
   // NOTE: R2 (document file storage) removed for now — requires enabling
   // through the Cloudflare Dashboard. Re-add when needed for Phase 4:
   // "r2_buckets": [{ "binding": "DOCUMENTS", "bucket_name": "workforce-documents" }],
-  // AUTH_SECRET and TIME_CLOCK_DEVICE_MASTER_SECRET are remote secrets:
+  // AUTH_SECRET, TIME_CLOCK_DEVICE_MASTER_SECRET, and optional TYPESAFE_API_KEY are remote secrets:
   //   wrangler secret put AUTH_SECRET
   //   wrangler secret put TIME_CLOCK_DEVICE_MASTER_SECRET
+  //   wrangler secret put TYPESAFE_API_KEY  (optional Jev test)
   // Never put real secrets in this file.
   "vars": {},
   // Transactional email — requires domain onboarding via `wrangler email sending enable <domain>`

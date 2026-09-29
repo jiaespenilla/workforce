@@ -17,6 +17,7 @@ import * as orgUnitRoutes from './routes/orgUnits.js'
 import * as timeClockRoutes from './routes/timeClock.js'
 import * as notificationRoutes from './routes/notifications.js'
 import * as adminRoutes from './routes/admin.js'
+import * as jevTriageRoutes from './routes/jevTriage.js'
 
 // Order matters: these run without a token (login, registration, kiosk…).
 const PUBLIC_HANDLERS = [timeClockRoutes.handlePublic, publicRoutes.handle]
@@ -32,6 +33,7 @@ const API_HANDLERS = [
   orgUnitRoutes.handle,
   timeClockRoutes.handle,
   notificationRoutes.handle,
+  jevTriageRoutes.handle,
   adminRoutes.handle,
 ]
 
