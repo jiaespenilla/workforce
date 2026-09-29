@@ -71,12 +71,14 @@ body {
 
 /* Minimum 44×44px touch target for icon-only controls (iOS HIG).
    Apply `touch-44` to icon buttons so thumbs can hit them reliably. */
-:where(.touch-44) {
-  min-height: 44px;
-  min-width: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+@layer components {
+  .touch-44 {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 /* Respect users who prefer reduced motion (WCAG 2.1 AA). */
