@@ -21,6 +21,7 @@ export default function AdminLayout({ children }) {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [desktopOpen, setDesktopOpen] = useState(true)
   const [maintenance, setMaintenance] = useState(isMaintenanceMode())
   const settings = getActiveSettings()
   const nav = ADMIN_NAV
@@ -29,6 +30,13 @@ export default function AdminLayout({ children }) {
     const t = setInterval(() => setMaintenance(isMaintenanceMode()), 5000)
     return () => clearInterval(t)
   }, [])
+
+  useEffect(() => {
+    if (!menuOpen) return undefined
+    const onKeyDown = (event) => { if (event.key === 'Escape') setMenuOpen(false) }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [menuOpen])
 
   // Logo letter = first letter of the configured system name.
   const brandLetter = (settings.name || 'U').charAt(0).toUpperCase()
@@ -95,11 +103,15 @@ export default function AdminLayout({ children }) {
             onClick={() => setMenuOpen(!menuOpen)}
             aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
             aria-expanded={menuOpen}
+            aria-controls="admin-mobile-navigation"
             className="touch-44 shrink-0 rounded-lg text-gray-500 transition hover:bg-gray-100 lg:hidden"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d={menuOpen ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'} />
             </svg>
+          </button>
+          <button type="button" onClick={() => setDesktopOpen(!desktopOpen)} aria-label={desktopOpen ? 'Hide navigation menu' : 'Show navigation menu'} aria-expanded={desktopOpen} aria-controls="admin-desktop-navigation" className="touch-44 hidden shrink-0 rounded-lg text-gray-500 transition hover:bg-gray-100 lg:inline-flex">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
           <span className="shrink-0">{getSystemIcon() ? <img src={getSystemIcon()} alt="" className="h-8 w-8 rounded-lg bg-white object-contain p-0.5 ring-1 ring-gray-200" /> : <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 font-bold text-sm text-white">{brandLetter}</div>}</span>
           <div className="min-w-0 leading-tight">
@@ -127,7 +139,7 @@ export default function AdminLayout({ children }) {
         </div>
       </header>
 
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-slate-800 bg-slate-950 lg:flex">
+      <aside id="admin-desktop-navigation" className={`fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-slate-800 bg-slate-950 ${desktopOpen ? 'lg:flex' : ''}`}>
         <div className="flex h-16 items-center border-b border-white/10 px-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">Administration</p>
@@ -155,15 +167,18 @@ export default function AdminLayout({ children }) {
 
       {/* Mobile navigation drawer */}
       {menuOpen && (
-        <div className="fixed inset-0 z-30 lg:hidden" onClick={() => setMenuOpen(false)}>
+        <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setMenuOpen(false)}>
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" />
-          <div className="absolute inset-y-0 left-0 flex w-[min(18rem,calc(100vw-2rem))] flex-col bg-slate-950 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex h-16 items-center border-b border-white/10 px-5">
+          <div id="admin-mobile-navigation" className="absolute inset-y-0 left-0 flex w-[min(18rem,calc(100vw-2rem))] flex-col bg-slate-950 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex h-16 items-center justify-between border-b border-white/10 px-5">
+              <div className="flex items-center">
               {getSystemIcon() ? <img src={getSystemIcon()} alt="" className="h-8 w-8 rounded-lg bg-white object-contain p-0.5" /> : <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 font-bold text-sm text-white ring-1 ring-white/20">{brandLetter}</div>}
               <div className="ml-2.5 leading-tight">
                 <p className="text-sm font-semibold text-white">{settings.name}</p>
                 <p className="text-[11px] text-slate-400">System Administration</p>
               </div>
+              </div>
+              <button type="button" onClick={() => setMenuOpen(false)} aria-label="Close navigation menu" className="touch-44 rounded-lg text-slate-300 hover:bg-white/10"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
             </div>
             <div className="flex flex-1 flex-col overflow-y-auto">
               {navLinks(() => setMenuOpen(false))}
@@ -192,7 +207,7 @@ export default function AdminLayout({ children }) {
 
 
 
-      <main className="min-w-0 lg:pl-72">
+      <main className={`min-w-0 ${desktopOpen ? 'lg:pl-72' : ''}`}>
         <div className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6 lg:p-8">
           <DefaultPasswordBanner />
           <div className="app-page">{children ?? <Outlet />}</div>
