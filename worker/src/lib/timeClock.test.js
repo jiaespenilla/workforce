@@ -17,12 +17,28 @@ describe('personal time clock rules', () => {
   it('keeps an open shift clocked in across midnight and calculates overtime', () => {
     const punches = [{ type: 'in', time: '2026-09-20T14:00:00.000Z' }]
     const result = decideAttendanceAction(punches, { open: true }, new Date('2026-09-21T01:00:00.000Z'), 'UTC')
-    expect(result).toEqual({ action: 'out', overtime: true, overtimeMinutes: 660 })
+    expect(result).toEqual({ action: 'out', overtime: true, overtimeMinutes: 180 })
   })
 
   it('honors a terminal-provided action but still calculates on the server', () => {
     const result = decideAttendanceAction([], null, new Date('2026-09-21T01:00:00.000Z'), 'UTC', 'out')
     expect(result).toEqual({ action: 'out', overtime: false, overtimeMinutes: 0 })
+  })
+
+  it('closes an overnight timed shift instead of starting another shift', () => {
+    const punches = [{ type: 'in', time: '2026-09-20T14:00:00.000Z' }]
+    expect(decideAttendanceAction(punches, { start: '22:00', end: '06:00' }, new Date('2026-09-20T22:00:00.000Z'), 'Asia/Manila'))
+      .toEqual({ action: 'out', overtime: false, overtimeMinutes: 0 })
+  })
+
+  it('counts only the minutes beyond eight across split work sessions', () => {
+    const punches = [
+      { type: 'in', time: '2026-09-20T00:00:00.000Z' },
+      { type: 'out', time: '2026-09-20T04:00:00.000Z' },
+      { type: 'in', time: '2026-09-20T05:00:00.000Z' },
+    ]
+    expect(decideAttendanceAction(punches, null, new Date('2026-09-20T10:00:00.000Z'), 'Asia/Manila'))
+      .toEqual({ action: 'out', overtime: true, overtimeMinutes: 60 })
   })
 
   it('blocks inactive employees or companies before a punch', async () => {

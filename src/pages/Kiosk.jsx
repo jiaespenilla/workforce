@@ -4,6 +4,7 @@ import { fetchPublicSystemIcon, usePageTitle } from '../lib/documentMeta'
 import { scanFingerprint, scannerAvailable, subscribeToFingerprintScans } from '../lib/kioskScanner'
 
 const SESSION_KEY = 'uw_standalone_kiosk_session'
+const PENDING_KEY = 'uw_standalone_kiosk_pending_punch'
 
 function sessionHeaders(token) {
   return token ? { 'X-Time-Clock-Kiosk': token } : {}
@@ -18,6 +19,9 @@ export default function Kiosk() {
   const [readerReady, setReaderReady] = useState(() => scannerAvailable())
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState(null)
+  const [pendingScan, setPendingScan] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(PENDING_KEY) || 'null') } catch { return null }
+  })
   const processingRef = useRef(false)
 
   useEffect(() => { fetchPublicSystemIcon() }, [])
@@ -31,11 +35,17 @@ export default function Kiosk() {
     if (!token) { setStatus(null); return }
     api('/api/time-clock/kiosk/status', { headers: sessionHeaders(token) })
       .then(setStatus)
-      .catch(() => {
-        localStorage.removeItem(SESSION_KEY)
-        setToken('')
-        setStatus(null)
-        setNotice({ type: 'error', text: 'This kiosk needs to be paired again by an administrator.' })
+      .catch((error) => {
+        if (error.status === 401 || error.status === 403) {
+          localStorage.removeItem(SESSION_KEY)
+          localStorage.removeItem(PENDING_KEY)
+          setToken('')
+          setPendingScan(null)
+          setStatus(null)
+          setNotice({ type: 'error', text: 'This kiosk needs to be paired again by an administrator.' })
+        } else {
+          setNotice({ type: 'error', text: 'Could not reach the server. Check the connection and reload this kiosk.' })
+        }
       })
   }, [token])
 
@@ -50,6 +60,8 @@ export default function Kiosk() {
         body: { code: code.trim(), name: kioskName.trim() },
       })
       localStorage.setItem(SESSION_KEY, result.token)
+      localStorage.removeItem(PENDING_KEY)
+      setPendingScan(null)
       setToken(result.token)
       setCode('')
       setNotice({ type: 'success', text: 'Kiosk paired successfully. Employees can now use the fingerprint reader.' })
@@ -58,8 +70,14 @@ export default function Kiosk() {
     } finally { setBusy(false) }
   }
 
-  const sendScan = useCallback(async ({ terminalUserId, eventId }) => {
+  const sendScan = useCallback(async ({ terminalUserId, eventId }, retry = false) => {
     if (!token || processingRef.current) return
+    if (pendingScan && !retry) return
+    const punch = { terminalUserId, eventId: eventId || crypto.randomUUID() }
+    if (!retry) {
+      localStorage.setItem(PENDING_KEY, JSON.stringify(punch))
+      setPendingScan(punch)
+    }
     processingRef.current = true
     setBusy(true)
     setNotice({ type: 'info', text: 'Fingerprint recognized. Recording attendance…' })
@@ -67,19 +85,25 @@ export default function Kiosk() {
       const result = await api('/api/time-clock/kiosk/punch', {
         method: 'POST',
         headers: sessionHeaders(token),
-        body: { terminalUserId, eventId: eventId || crypto.randomUUID() },
+        body: punch,
       })
+      localStorage.removeItem(PENDING_KEY)
+      setPendingScan(null)
       setNotice({
         type: 'success',
         text: `${result.employeeName || 'Employee'} successfully clocked ${result.action === 'in' ? 'in' : 'out'} at ${new Date(result.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`,
       })
     } catch (error) {
+      if (error.status >= 400 && error.status < 500 && error.status !== 429) {
+        localStorage.removeItem(PENDING_KEY)
+        setPendingScan(null)
+      }
       setNotice({ type: 'error', text: error.message })
     } finally {
       processingRef.current = false
       setBusy(false)
     }
-  }, [token])
+  }, [token, pendingScan])
 
   useEffect(() => {
     if (!token) return undefined
@@ -87,7 +111,7 @@ export default function Kiosk() {
   }, [token, sendScan])
 
   const startScan = async () => {
-    if (busy) return
+    if (busy || pendingScan) return
     setNotice({ type: 'info', text: 'Waiting for fingerprint…' })
     try { await sendScan(await scanFingerprint()) }
     catch (error) { setNotice({ type: 'error', text: error.message }) }
@@ -97,6 +121,8 @@ export default function Kiosk() {
     if (!confirm('Unpair this kiosk computer? An administrator will need to create a new pairing code.')) return
     try { await api('/api/time-clock/kiosk/session', { method: 'DELETE', headers: sessionHeaders(token) }) } catch { /* clear this computer even if offline */ }
     localStorage.removeItem(SESSION_KEY)
+    localStorage.removeItem(PENDING_KEY)
+    setPendingScan(null)
     setToken('')
     setStatus(null)
     setNotice(null)
@@ -144,7 +170,7 @@ export default function Kiosk() {
               </div>
               <h2 className="mt-4 text-xl font-bold text-gray-950">{readerReady ? 'Ready for fingerprint' : 'Fingerprint connector needed'}</h2>
               <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">{readerReady ? 'Place your finger on the connected reader.' : 'The kiosk is paired, but the manufacturer-specific reader connector is not installed on this computer yet.'}</p>
-              <button type="button" onClick={startScan} disabled={busy || !readerReady || !status} className="mt-5 min-h-14 w-full rounded-xl bg-brand-600 px-6 py-3 text-lg font-bold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-45">{busy ? 'Processing…' : 'Scan fingerprint'}</button>
+              <button type="button" onClick={pendingScan ? () => sendScan(pendingScan, true) : startScan} disabled={busy || (!pendingScan && (!readerReady || !status))} className="mt-5 min-h-14 w-full rounded-xl bg-brand-600 px-6 py-3 text-lg font-bold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-45">{busy ? 'Processing…' : pendingScan ? 'Retry pending punch' : 'Scan fingerprint'}</button>
             </div>
             <div className="mt-5 flex items-center justify-between text-xs text-gray-400">
               <span>Secure device pairing active</span>

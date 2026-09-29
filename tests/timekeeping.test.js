@@ -115,18 +115,17 @@ describe('TimeKeeping hours helpers', () => {
       { type: 'in', time: '2026-09-01T00:00:00.000Z' },
       { type: 'out', time: '2026-09-01T09:00:00.000Z', overtime: true },
     ]
-    expect(overtimeForDay(punches)).toBeCloseTo(9)
+    expect(overtimeForDay(punches)).toBeCloseTo(9) // legacy boolean rows retain their recorded meaning
     expect(overtimeForDay(punches.map((p) => ({ ...p, overtime: false })))).toBe(0)
   })
 
-    it('uses overtime_minutes when present (open shift: whole session is OT)', () => {
-    // 10h clock-out session flagged as overtime → the entire 10h session
-    // (600 minutes) is OT, both for open and timed shifts.
+    it('uses only excess minutes recorded on the clock-out', () => {
+    // A ten-hour session has two hours beyond the eight-hour threshold.
     const punches = [
       { type: 'in', time: '2026-09-01T00:00:00.000Z' },
-      { type: 'out', time: '2026-09-01T10:00:00.000Z', overtime: true, overtime_minutes: 600 },
+      { type: 'out', time: '2026-09-01T10:00:00.000Z', overtime: true, overtime_minutes: 120 },
     ]
-    expect(overtimeForDay(punches)).toBeCloseTo(10)
+    expect(overtimeForDay(punches)).toBeCloseTo(2)
   })
 })
 
@@ -200,19 +199,19 @@ describe('aggregateWindow — weekly report columns', () => {
   const monIn = '2026-08-31T00:00:00.000Z'
   const monOut = '2026-08-31T08:00:00.000Z' // 8h, no OT
   const tueIn = '2026-09-01T00:00:00.000Z'
-  const tueOut = '2026-09-01T10:00:00.000Z' // 10h session, whole session OT
+  const tueOut = '2026-09-01T10:00:00.000Z' // 10h session, 2h OT
   it('computes first clock-in, last clock-out, regular/overtime/total', () => {
     const agg = aggregateWindow([
       { type: 'in', time: tueIn },
-      { type: 'out', time: tueOut, overtime: true, overtime_minutes: 600 },
+      { type: 'out', time: tueOut, overtime: true, overtime_minutes: 120 },
       { type: 'in', time: monIn },
       { type: 'out', time: monOut },
     ])
     expect(agg.clockIn.time).toBe(monIn)
     expect(agg.clockOut.time).toBe(tueOut)
     expect(agg.total).toBeCloseTo(18)  // 8h + 10h
-    expect(agg.ot).toBeCloseTo(10)     // whole flagged session counts
-    expect(agg.regular).toBeCloseTo(8) // total - overtime
+    expect(agg.ot).toBeCloseTo(2)
+    expect(agg.regular).toBeCloseTo(16)
   })
   it('handles an empty window', () => {
     const agg = aggregateWindow([])
@@ -221,6 +220,14 @@ describe('aggregateWindow — weekly report columns', () => {
     expect(agg.regular).toBe(0)
     expect(agg.ot).toBe(0)
     expect(agg.total).toBe(0)
+  })
+  it('pairs clock-in and clock-out across Philippine midnight', () => {
+    const agg = aggregateWindow([
+      { type: 'in', time: '2026-09-01T14:00:00.000Z' },
+      { type: 'out', time: '2026-09-01T22:00:00.000Z', overtime_minutes: 0 },
+    ])
+    expect(agg.total).toBe(8)
+    expect(agg.ot).toBe(0)
   })
 })
 describe('Open shifts - late is not applicable (54)', () => {

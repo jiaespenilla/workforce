@@ -247,6 +247,22 @@ describe('signed terminal batches in the Workers runtime', () => {
     expect((await env.DB.prepare('SELECT COUNT(*) AS count FROM attendance').first()).count).toBe(1)
   })
 
+  it('does not turn an immediate second kiosk scan into a clock-out', async () => {
+    const { token } = await pairKiosk()
+    const punch = async (eventId) => handlePublic({
+      request: new Request('https://app.example/api/time-clock/kiosk/punch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Time-Clock-Kiosk': token },
+        body: JSON.stringify({ eventId, terminalUserId: '1001' }),
+      }),
+      env, path: '/api/time-clock/kiosk/punch', method: 'POST',
+    })
+    expect((await punch('kiosk-scan-one')).status).toBe(201)
+    const repeated = await punch('kiosk-scan-two')
+    expect(await repeated.json()).toEqual(expect.objectContaining({ duplicate: true, action: 'in' }))
+    expect((await env.DB.prepare('SELECT COUNT(*) AS count FROM attendance').first()).count).toBe(1)
+  })
+
   it('rejects an invalid signature', async () => {
     const response = await send(await signedRequest({ events: [event()] }, { signature: '0'.repeat(64) }))
     expect(response.status).toBe(401)
@@ -286,7 +302,8 @@ describe('signed terminal batches in the Workers runtime', () => {
   })
 
   it('flags out-of-order terminal sequences for review', async () => {
-    const first = await send(await signedRequest({ events: [event({ eventId: 'event-seq-2', sequence: 2 })] }))
+    const firstTime = new Date(Date.now() - 61_000).toISOString()
+    const first = await send(await signedRequest({ events: [event({ eventId: 'event-seq-2', sequence: 2, occurredAt: firstTime })] }))
     expect(first.status).toBe(202)
     const second = await send(await signedRequest({ events: [event({ eventId: 'event-seq-1', sequence: 1, action: 'out' })] }))
     expect((await second.json()).results[0].status).toBe('needs_review')

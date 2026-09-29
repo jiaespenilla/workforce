@@ -154,7 +154,8 @@ export function computePayrollRows({ employees, attendance, deductions, period }
         otHourly = payRate / 168
       } else {
         otHourly = payRate
-        base = round2(payRate * hours)
+        // Overtime is paid separately at the premium rate, not again at base rate.
+        base = round2(payRate * Math.max(0, hours - otHours))
       }
       otPay = round2(otHourly * 1.25 * otHours)
     }

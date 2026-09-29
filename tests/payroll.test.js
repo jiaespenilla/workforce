@@ -66,12 +66,12 @@ describe('computePayrollRows — hourly employees', () => {
     const r = rows[0]
     expect(r.hours).toBeCloseTo(8, 5)
     expect(r.otHours).toBeCloseTo(1, 5)
-    expect(r.base).toBe(800)            // 100 × 8
+    expect(r.base).toBe(700)            // 100 × 7 regular hours
     expect(r.otPay).toBe(125)           // 100 × 1.25 × 1
-    expect(r.gross).toBe(925)
-    // deductions: 24.5% of 925 = 226.625 → 226.63
-    expect(r.dedTotal).toBe(226.63)
-    expect(r.net).toBe(698.37)          // 925 − 226.63
+    expect(r.gross).toBe(825)
+    // deductions: 24.5% of 825 = 202.125 → 202.13
+    expect(r.dedTotal).toBe(202.13)
+    expect(r.net).toBe(622.87)
     expect(r.missing).toEqual([])
   })
 

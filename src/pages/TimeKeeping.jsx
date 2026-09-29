@@ -78,12 +78,8 @@ export function hoursForDay(punchesForDay) {
   return total / 3600000
 }
 
-// Overtime hours for a day. The punch records whether a clock-out was an
-// overtime session (past the shift end + grace); the WHOLE clocked-out
-// session counts as OT — both for timed shifts and open shifts (whose
-// "end" is clock-in + 8h + grace). Legacy rows without the flag fall back
-// to the boolean clock-out flag (whole flagged session counts) so history
-// is preserved.
+// Overtime minutes are the portion beyond eight worked hours. Older rows
+// without minutes retain their historical boolean interpretation.
 export function overtimeForDay(punchesForDay) {
   const sorted = [...punchesForDay].sort((a, b) => new Date(a.time) - new Date(b.time))
   if (sorted.some((p) => p.overtime_minutes !== undefined)) {
@@ -125,19 +121,9 @@ export function aggregateWindow(punchesForWindow) {
   const sorted = [...(punchesForWindow || [])].sort((a, b) => new Date(a.time) - new Date(b.time))
   const clockIn = sorted.find((p) => p.type === 'in') || null
   const clockOut = [...sorted].reverse().find((p) => p.type === 'out') || null
-  // Group by system-timezone day so OT is computed per day, then summed.
-  const byDay = new Map()
-  for (const p of sorted) {
-    const k = systemDateKey(p.time)
-    if (!byDay.has(k)) byDay.set(k, [])
-    byDay.get(k).push(p)
-  }
-  let total = 0
-  let ot = 0
-  for (const dayPunches of byDay.values()) {
-    total += hoursForDay(dayPunches)
-    ot += overtimeForDay(dayPunches)
-  }
+  // Pair across midnight; calendar grouping would drop the next-day clock-out.
+  const total = hoursForDay(sorted)
+  const ot = Math.min(total, overtimeForDay(sorted))
   const regular = Math.max(0, total - ot)
   return { clockIn, clockOut, regular, ot, total }
 }

@@ -5,8 +5,8 @@ export function normalizeLocation(value) {
   const status = ['granted', 'denied', 'unavailable', 'unsupported'].includes(value?.status)
     ? value.status
     : 'unavailable'
-  const latitude = Number(value?.latitude)
-  const longitude = Number(value?.longitude)
+  const latitude = value?.latitude == null ? NaN : Number(value.latitude)
+  const longitude = value?.longitude == null ? NaN : Number(value.longitude)
   const accuracy = Number(value?.accuracy)
   if (status !== 'granted' || !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
       latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
@@ -22,7 +22,13 @@ export function normalizeLocation(value) {
 
 function timeZoneName(value) {
   const match = String(value || '').match(/([A-Za-z_]+\/[A-Za-z_+-]+)$/)
-  return match?.[1] || 'UTC'
+  if (!match) return 'Asia/Manila'
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: match[1] })
+    return match[1]
+  } catch {
+    return 'Asia/Manila'
+  }
 }
 
 function zonedParts(date, timeZone) {
@@ -37,35 +43,27 @@ function zonedParts(date, timeZone) {
 
 export function decideAttendanceAction(punches, shift, now = new Date(), timeZone = 'UTC', explicitAction = null) {
   const sorted = [...(punches || [])].sort((a, b) => new Date(a.time) - new Date(b.time))
-  const current = zonedParts(now, timeZone)
-  const today = sorted.filter((punch) => zonedParts(new Date(punch.time), timeZone).dateKey === current.dateKey)
-  const lastToday = today[today.length - 1]
   const lastAny = sorted[sorted.length - 1]
-  let action
-  let openPunch = null
-  if (explicitAction === 'in' || explicitAction === 'out') {
-    action = explicitAction
-    openPunch = action === 'out' && lastAny?.type === 'in' ? lastAny : null
-  } else if (shift?.open) {
-    action = lastAny?.type === 'in' ? 'out' : 'in'
-    openPunch = action === 'out' ? lastAny : null
-  } else {
-    action = lastToday?.type === 'in' ? 'out' : 'in'
-    openPunch = action === 'out' ? lastToday : null
+  const action = explicitAction === 'in' || explicitAction === 'out'
+    ? explicitAction : lastAny?.type === 'in' ? 'out' : 'in'
+  if (action !== 'out' || lastAny?.type !== 'in') return { action, overtime: false, overtimeMinutes: 0 }
+
+  // Attribute overnight work to the day on which the session began.
+  const workday = zonedParts(new Date(lastAny.time), timeZone).dateKey
+  let open = null
+  let earlierMinutes = 0
+  for (const punch of sorted.slice(0, -1)) {
+    if (punch.type === 'in') open = punch
+    else if (punch.type === 'out' && open) {
+      if (zonedParts(new Date(open.time), timeZone).dateKey === workday) {
+        earlierMinutes += Math.max(0, Math.round((new Date(punch.time) - new Date(open.time)) / 60000))
+      }
+      open = null
+    }
   }
-  if (action !== 'out' || !openPunch) return { action, overtime: false, overtimeMinutes: 0 }
-  const worked = Math.max(0, Math.round((now.getTime() - new Date(openPunch.time).getTime()) / 60000))
-  const grace = 15
-  if (shift?.open) {
-    const overtime = worked >= 480 + grace
-    return { action, overtime, overtimeMinutes: overtime ? worked : 0 }
-  }
-  if (shift?.end) {
-    const [hour, minute] = String(shift.end).split(':').map(Number)
-    const overtime = current.minutes >= hour * 60 + minute + grace && worked >= 480
-    return { action, overtime, overtimeMinutes: overtime ? worked : 0 }
-  }
-  return { action, overtime: false, overtimeMinutes: 0 }
+  const sessionMinutes = Math.max(0, Math.round((now - new Date(lastAny.time)) / 60000))
+  const overtimeMinutes = Math.max(0, earlierMinutes + sessionMinutes - 480) - Math.max(0, earlierMinutes - 480)
+  return { action, overtime: overtimeMinutes > 0, overtimeMinutes }
 }
 
 export async function activeEmployee(env, email) {
@@ -164,14 +162,23 @@ export async function createAttendanceEvent(env, {
   location = null, forceReview = false, payload = null,
 }) {
   const duplicate = await env.DB.prepare(
-    'SELECT id, status, punch_type FROM attendance_events WHERE source = ? AND device_id IS ? AND event_id = ? LIMIT 1'
+    'SELECT id, status, punch_type, occurred_at FROM attendance_events WHERE source = ? AND device_id IS ? AND event_id = ? LIMIT 1'
   ).bind(source, deviceId, eventId).first()
-  if (duplicate) return { duplicate: true, eventId: duplicate.id, status: duplicate.status, action: duplicate.punch_type }
+  if (duplicate) return { duplicate: true, eventId: duplicate.id, reviewStatus: duplicate.status, action: duplicate.punch_type, time: duplicate.occurred_at }
 
   const occurrence = new Date(occurredAt)
   if (!Number.isFinite(occurrence.getTime())) throw HttpError(400, 'Event occurrence time is invalid.')
   const { shift, timeZone } = await assignedShift(env, employee)
   const punches = await priorPunches(env, employee.email)
+  const newestPunch = punches[0]
+  const elapsedSinceLast = newestPunch ? occurrence.getTime() - new Date(newestPunch.time).getTime() : Infinity
+  if (elapsedSinceLast >= 0 && elapsedSinceLast < 60_000) {
+    return { duplicate: true, action: newestPunch.type, time: newestPunch.time, reviewStatus: 'accepted' }
+  }
+  if ((explicitAction === 'in' && newestPunch?.type === 'in') ||
+      (explicitAction === 'out' && newestPunch?.type !== 'in')) {
+    throw HttpError(409, 'Punch order conflicts with the employee’s latest recorded punch.')
+  }
   const decision = decideAttendanceAction(punches, shift, occurrence, timeZone, explicitAction)
   const normalizedLocation = normalizeLocation(location)
   const eventRowId = crypto.randomUUID()
