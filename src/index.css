@@ -71,7 +71,7 @@ body {
 
 /* Minimum 44×44px touch target for icon-only controls (iOS HIG).
    Apply `touch-44` to icon buttons so thumbs can hit them reliably. */
-.touch-44 {
+:where(.touch-44) {
   min-height: 44px;
   min-width: 44px;
   display: inline-flex;
