@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getActiveSettings, isMaintenanceMode } from '../lib/systemSettings'
+import { useSystemSettings, isMaintenanceMode } from '../lib/systemSettings'
 import { getSystemIcon } from '../lib/documentMeta'
 import NotificationBell from './NotificationBell'
 import DefaultPasswordBanner from './DefaultPasswordBanner'
@@ -23,7 +23,7 @@ export default function AdminLayout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [desktopOpen, setDesktopOpen] = useState(true)
   const [maintenance, setMaintenance] = useState(isMaintenanceMode())
-  const settings = getActiveSettings()
+  const settings = useSystemSettings()
   const nav = ADMIN_NAV
 
   useEffect(() => {
@@ -160,7 +160,7 @@ export default function AdminLayout({ children }) {
           </button>
           <SignOutButton onConfirm={signOut} className="text-slate-300 hover:bg-white/[0.06] hover:text-red-300" />
           <div className="mt-3 border-t border-white/10 px-3 pt-3 text-[11px] text-slate-500">
-            <p><span className="font-semibold text-slate-400">{settings.name} {settings.version}</span> - <span className="font-semibold">CelestSolutions</span></p>
+            <p><span className="font-semibold text-slate-400">{settings.name} {settings.version}</span> - <span className="font-semibold">{settings.developerCompany}</span></p>
           </div>
         </div>
       </aside>
@@ -197,7 +197,7 @@ export default function AdminLayout({ children }) {
                 <div className="mt-3 space-y-0.5 border-t border-white/10 px-3 pt-3 text-[11px] leading-relaxed text-slate-500">
                   <p className="font-semibold text-slate-400">{settings.name}</p>
                   <p>{settings.version}</p>
-                  <p>by <span className="font-semibold">CelestSolutions</span></p>
+                  <p>by <span className="font-semibold">{settings.developerCompany}</span></p>
                 </div>
               </div>
             </div>

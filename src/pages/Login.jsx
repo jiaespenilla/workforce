@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiEnabled } from '../lib/api'
 import { fetchPublicSystemIcon, getSystemIcon, usePageTitle } from '../lib/documentMeta'
-import { getActiveSettings } from '../lib/systemSettings'
+import { useSystemSettings } from '../lib/systemSettings'
 
 const features = [
   {
@@ -31,7 +31,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [sessionExpired] = useState(() => sessionStorage.getItem('uw_session_expired') === '1')
-  const settings = getActiveSettings()
+  const settings = useSystemSettings()
   const brandLetter = (settings.name || 'C').charAt(0).toUpperCase()
   const [brandIcon, setBrandIcon] = useState(getSystemIcon)
 
@@ -231,7 +231,7 @@ export default function Login() {
             </div>
           </div>
 
-          <p className="mt-6 text-center text-xs text-slate-400">{settings.name} - CelestSolutions</p>
+          <p className="mt-6 text-center text-xs text-slate-400">{settings.name} - {settings.developerCompany}</p>
         </div>
       </section>
     </main>

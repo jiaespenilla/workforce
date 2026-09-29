@@ -1,13 +1,38 @@
 import { api, apiEnabled } from './api'
+import { useSyncExternalStore } from 'react'
 
 const DEFAULT_SETTINGS = {
   name: 'CadensIQ',
+  developerCompany: 'CelestSolutions',
   version: 'v0.1.0',
   timezone: '(GMT+08:00) Asia/Manila',
 }
 
 // In-memory cache populated at startup in cloud mode.
 let _serverSettings = null
+let settingsRevision = 0
+const settingsListeners = new Set()
+function notifySettingsChanged() {
+  settingsRevision += 1
+  for (const listener of settingsListeners) listener()
+}
+function subscribeSettings(listener) {
+  settingsListeners.add(listener)
+  return () => settingsListeners.delete(listener)
+}
+function settingsSnapshot() { return settingsRevision }
+
+export function useSystemSettings() {
+  useSyncExternalStore(subscribeSettings, settingsSnapshot)
+  return getActiveSettings()
+}
+
+function applySystemSettings(settings) {
+  _serverSettings = { ...getActiveSettings(), ...settings }
+  localStorage.setItem('uw_system_settings', JSON.stringify(_serverSettings))
+  localStorage.removeItem('uw_pending_system_settings')
+  notifySettingsChanged()
+}
 
 // Pre-fetch server settings once at startup so getActiveSettings() returns
 // correct data immediately (no flash of default values).
@@ -17,11 +42,13 @@ export async function prefetchServerSettings() {
     const s = await api('/api/settings')
     _serverSettings = {
       ...(s.system_name ? { name: s.system_name } : {}),
+      ...(s.developer_company ? { developerCompany: s.developer_company } : {}),
       ...(s.version ? { version: s.version } : {}),
       ...(s.timezone ? { timezone: s.timezone } : {}),
       ...(s.idle_timeout !== undefined ? { idle_timeout: s.idle_timeout } : s.idle_timeout_minutes !== undefined ? { idle_timeout: s.idle_timeout_minutes } : {}),
     }
     localStorage.setItem('uw_system_settings', JSON.stringify(_serverSettings))
+    notifySettingsChanged()
     if (s.idle_timeout !== undefined || s.idle_timeout_minutes !== undefined) {
       const v = s.idle_timeout ?? s.idle_timeout_minutes
       if (v !== undefined && v !== null && String(v).trim() !== '') localStorage.setItem('uw_session_timeout', String(v))
@@ -67,6 +94,8 @@ export function commitPendingSystemSettings() {
   if (!pending) return
   localStorage.setItem('uw_system_settings', JSON.stringify(pending))
   localStorage.removeItem('uw_pending_system_settings')
+  _serverSettings = { ...getActiveSettings(), ...pending }
+  notifySettingsChanged()
 }
 
 // IANA time zone derived from the system settings (e.g. "(GMT+08:00) Asia/Manila" -> "Asia/Manila").
@@ -104,6 +133,7 @@ export async function syncSystemSettingsFromServer() {
     const s = await api('/api/settings')
     const mapped = {
       ...(s.system_name ? { name: s.system_name } : {}),
+      ...(s.developer_company ? { developerCompany: s.developer_company } : {}),
       ...(s.version ? { version: s.version } : {}),
       ...(s.timezone ? { timezone: s.timezone } : {}),
       ...(s.idle_timeout !== undefined ? { idle_timeout: s.idle_timeout } : s.idle_timeout_minutes !== undefined ? { idle_timeout: s.idle_timeout_minutes } : {}),
@@ -113,6 +143,7 @@ export async function syncSystemSettingsFromServer() {
     if (!Object.keys(mapped).length && !hasIcon && !hasIdle) return
     _serverSettings = { ...(_serverSettings || {}), ...mapped }
     localStorage.setItem('uw_system_settings', JSON.stringify(_serverSettings))
+    notifySettingsChanged()
     if (hasIdle) {
       const v = s.idle_timeout ?? s.idle_timeout_minutes
       if (v !== undefined && v !== null && String(v).trim() !== '') localStorage.setItem('uw_session_timeout', String(v))
@@ -130,17 +161,18 @@ export async function syncSystemSettingsFromServer() {
 }
 
 // Push system details to the server (cloud mode). Returns an error string or null.
-export async function pushSystemSettingsToServer({ name, version, timezone, system_icon, idle_timeout }) {
-  if (!apiEnabled()) return null
+export async function pushSystemSettingsToServer({ name, developerCompany, version, timezone, system_icon, idle_timeout }) {
   try {
     const body = {}
     if (name !== undefined) body.system_name = name
+    if (developerCompany !== undefined) body.developer_company = developerCompany
     if (version !== undefined) body.version = version
     if (timezone !== undefined) body.timezone = timezone
     if (system_icon !== undefined) body.system_icon = system_icon
     if (idle_timeout !== undefined) body.idle_timeout = idle_timeout
     if (!Object.keys(body).length) return null
-    await api('/api/settings', { method: 'PUT', body })
+    if (apiEnabled()) await api('/api/settings', { method: 'PUT', body })
+    applySystemSettings(Object.fromEntries(Object.entries({ name, developerCompany, version, timezone }).filter(([, value]) => value !== undefined)))
     return null
   } catch (err) {
     return err.message || 'Failed to sync system settings.'

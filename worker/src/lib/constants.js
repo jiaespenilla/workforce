@@ -61,4 +61,4 @@ export const COMPANY_SETTING_KEYS = ['shift_schedules', 'company_locations', 'at
 // Public settings are an allowlist. A denylist previously risked exposing new
 // secret-bearing settings (including legacy kiosk tokens) as features grew.
 export const GLOBAL_SETTINGS_SQL =
-  "SELECT key, value FROM settings WHERE key IN ('system_name', 'version', 'timezone', 'system_icon', 'idle_timeout', 'idle_timeout_minutes', 'maintenance_mode')"
+  "SELECT key, value FROM settings WHERE key IN ('system_name', 'developer_company', 'version', 'timezone', 'system_icon', 'idle_timeout', 'idle_timeout_minutes', 'maintenance_mode')"

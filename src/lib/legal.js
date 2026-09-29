@@ -1,3 +1,5 @@
+import { getActiveSettings } from './systemSettings'
+
 export const DEFAULT_TERMS = `Terms & Conditions — CadensIQ by CelestSolutions
 Last updated: September 21, 2026
 
@@ -79,13 +81,16 @@ Last updated: September 21, 2026
 9. Contact
 Questions, requests, or concerns? CelestSolutions — jiaespenilla@gmail.com`
 
-const DEFAULTS = { terms: DEFAULT_TERMS, privacy: DEFAULT_PRIVACY }
-
 export function getLegalDocs() {
+  const developerCompany = getActiveSettings().developerCompany
+  const defaults = {
+    terms: DEFAULT_TERMS.replaceAll('CelestSolutions', developerCompany),
+    privacy: DEFAULT_PRIVACY.replaceAll('CelestSolutions', developerCompany),
+  }
   try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('uw_legal')) }
+    return { ...defaults, ...JSON.parse(localStorage.getItem('uw_legal')) }
   } catch {
-    return { ...DEFAULTS }
+    return defaults
   }
 }
 

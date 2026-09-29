@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getActiveSettings, isMaintenanceMode } from '../lib/systemSettings'
+import { useSystemSettings, isMaintenanceMode } from '../lib/systemSettings'
 import { getSystemIcon } from '../lib/documentMeta'
 import NotificationBell from './NotificationBell'
 import DefaultPasswordBanner from './DefaultPasswordBanner'
@@ -21,7 +21,7 @@ const nav = [
 // NOTE: Storage Setup removed from this sidebar (item 19) - it is
 // administrator-only and lives in the AdminLayout navigation now.
 function Logo({ light = false }) {
-  const settings = getActiveSettings()
+  const settings = useSystemSettings()
   // Logo letter = first letter of the configured system name.
   const brandLetter = (settings.name || 'U').charAt(0).toUpperCase()
   const icon = getSystemIcon()
@@ -48,7 +48,7 @@ export default function Layout({ children }) {
   const [maintenance, setMaintenance] = useState(isMaintenanceMode())
   const navigate = useNavigate()
   const { user, logout } = useAuth()
-  const settings = getActiveSettings()
+  const settings = useSystemSettings()
   const brandLetter = (settings.name || 'U').charAt(0).toUpperCase()
 
   useEffect(() => {
@@ -183,7 +183,7 @@ export default function Layout({ children }) {
       </button>
       <SignOutButton onConfirm={signOut} className="text-slate-300 hover:bg-white/[0.06] hover:text-red-300" />
       <div className="mt-3 border-t border-white/10 px-3 pt-3 text-[11px] text-slate-500">
-        <p><span className="font-semibold text-slate-400">{settings.name} {settings.version}</span> - <span className="font-semibold">CelestSolutions</span></p>
+        <p><span className="font-semibold text-slate-400">{settings.name} {settings.version}</span> - <span className="font-semibold">{settings.developerCompany}</span></p>
       </div>
     </div>
   )

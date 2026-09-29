@@ -7,6 +7,7 @@ vi.mock('../src/context/AuthContext', () => ({
 }))
 vi.mock('../src/lib/systemSettings', () => ({
   getActiveSettings: () => ({ name: 'CadensIQ', version: '1.0' }),
+  useSystemSettings: () => ({ name: 'CadensIQ', developerCompany: 'CelestSolutions', version: '1.0' }),
   isMaintenanceMode: () => false,
 }))
 vi.mock('../src/lib/documentMeta', () => ({ getSystemIcon: () => null }))

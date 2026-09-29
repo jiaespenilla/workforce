@@ -4,6 +4,7 @@ import { api, apiEnabled } from '../lib/api'
 import { getCompanyLocations, addCompanyLocation, renameCompanyLocation, removeCompanyLocation } from '../lib/locations'
 import { getConfiguredRoles } from '../lib/roles'
 import Pagination from '../components/Pagination'
+import { getActiveSettings } from '../lib/systemSettings'
 
 const STATUS_STYLES = {
   pending: 'bg-amber-50 text-amber-700 ring-amber-200',
@@ -605,7 +606,7 @@ export default function Companies() {
 
   const queueWelcomeForCompany = (company) => {
     const welcomeSubject = `Welcome to ${company.name} — You're all set!`
-    const welcomeBody = `Welcome to ${company.name}!\n\nYour company is now active on Unified Workforce.\n\nIndustry: ${company.industry || '—'}${company.city ? ` · ${company.city}` : ''}\nTeam size: ${company.employees.length} member(s)\n\nQuick start:\n• View your Dashboard for an overview\n• Manage teammates in People\n• Set up Shift Schedules for your team\n• Register a phone passkey and clock in/out from Time Keeping\n\nTip: You can find this introduction again in Notifications (bell icon).\n\n— CelestSolutions`
+    const welcomeBody = `Welcome to ${company.name}!\n\nYour company is now active on Unified Workforce.\n\nIndustry: ${company.industry || '—'}${company.city ? ` · ${company.city}` : ''}\nTeam size: ${company.employees.length} member(s)\n\nQuick start:\n• View your Dashboard for an overview\n• Manage teammates in People\n• Set up Shift Schedules for your team\n• Register a phone passkey and clock in/out from Time Keeping\n\nTip: You can find this introduction again in Notifications (bell icon).\n\n— ${getActiveSettings().developerCompany}`
     for (const emp of company.employees) {
       if (!emp.email) continue
       const payload = { to: emp.email, subject: welcomeSubject, body: welcomeBody }

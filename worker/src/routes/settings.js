@@ -58,8 +58,14 @@ export async function handle({ request, env, _url, path, method, claims, isAdmin
     // Only administrators and company owners may change settings.
     if (!isAdmin && claims.role !== 'ceo') return json({ error: 'Only administrators and company owners can change settings.' }, 403)
     const body = await readJson(request)
+    if (Object.hasOwn(body, 'developer_company')) {
+      if (!isAdmin) return json({ error: 'Only administrators can change the developer company.' }, 403, request)
+      if (typeof body.developer_company !== 'string' || !body.developer_company.trim() || body.developer_company.trim().length > 100) {
+        return json({ error: 'Developer company must be 1 to 100 characters.' }, 400, request)
+      }
+    }
     for (const [key, value] of Object.entries(body)) {
-      await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').bind(key, String(value)).run()
+      await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').bind(key, key === 'developer_company' ? value.trim() : String(value)).run()
     }
     return json({ ok: true })
   }

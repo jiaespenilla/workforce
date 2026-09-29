@@ -1,7 +1,7 @@
 import { usePageTitle } from '../lib/documentMeta'
 import { useEffect, useState } from 'react'
-import { getActiveSettings, getPendingSettings, queueSystemSettings, pushSystemSettingsToServer, pushSystemIconToServer, getSystemTimeZone, isMaintenanceMode, setMaintenanceMode, getSessionTimeoutMinutes, setSessionTimeoutMinutes } from '../lib/systemSettings'
-import { getLegalDocs, saveLegalDocs } from '../lib/legal'
+import { useSystemSettings, getPendingSettings, pushSystemSettingsToServer, pushSystemIconToServer, getSystemTimeZone, isMaintenanceMode, setMaintenanceMode, getSessionTimeoutMinutes, setSessionTimeoutMinutes } from '../lib/systemSettings'
+import { DEFAULT_TERMS, DEFAULT_PRIVACY, getLegalDocs, saveLegalDocs } from '../lib/legal'
 import { getConfiguredRoles, saveRolesList, canAction } from '../lib/roles'
 import { getSystemIcon, setSystemIcon } from '../lib/documentMeta'
 import { SYSTEM_ICON_PRESETS } from '../lib/iconPresets'
@@ -678,7 +678,6 @@ function VersionPanel({ settings, onSaved }) {
     await saveVersionHistory(next)
     // Also sync system version if changed
     if (entry.version !== settings.version) {
-      queueSystemSettings({ ...settings, version: entry.version })
       await pushSystemSettingsToServer({ name: settings.name, version: entry.version, timezone: settings.timezone })
       onSaved?.()
     }
@@ -814,10 +813,12 @@ export default function SystemConfig() {
   usePageTitle('System Configuration')
   const [tab, setTab] = useState('company')
   const [saved, setSaved] = useState(false)
+  const [systemSaveError, setSystemSaveError] = useState('')
+  const [savingSystem, setSavingSystem] = useState(false)
   const [roles, setRoles] = useState(getConfiguredRoles)
   const [legalDocs, setLegalDocs] = useState(getLegalDocs)
   const [systemIcon, setSystemIconState] = useState(getSystemIcon)
-  const settings = getActiveSettings()
+  const settings = useSystemSettings()
   const pending = getPendingSettings()
 
   const flashSaved = () => {
@@ -827,16 +828,29 @@ export default function SystemConfig() {
 
   const saveSystemSettings = async (e) => {
     e.preventDefault()
+    if (savingSystem) return
     const form = e.target
     const next = {
-      name: form.systemName.value.trim() || settings.name,
-      version: form.systemVersion.value.trim() || settings.version,
-      timezone: form.timezone.value,
+      name: form.elements.namedItem('systemName').value.trim() || settings.name,
+      developerCompany: form.elements.namedItem('developerCompany').value.trim(),
+      version: form.elements.namedItem('systemVersion').value.trim() || settings.version,
+      timezone: form.elements.namedItem('timezone').value,
     }
-    queueSystemSettings(next)
-    // Persist to the server too, so every device picks the change up.
-    await pushSystemSettingsToServer(next)
-    flashSaved()
+    if (!next.developerCompany) { setSystemSaveError('Developer company is required.'); return }
+    setSavingSystem(true)
+    setSystemSaveError('')
+    const error = await pushSystemSettingsToServer(next)
+    setSavingSystem(false)
+    if (error) setSystemSaveError(error)
+    else {
+      setLegalDocs((current) => ({
+        terms: current.terms === DEFAULT_TERMS.replaceAll('CelestSolutions', settings.developerCompany)
+          ? DEFAULT_TERMS.replaceAll('CelestSolutions', next.developerCompany) : current.terms,
+        privacy: current.privacy === DEFAULT_PRIVACY.replaceAll('CelestSolutions', settings.developerCompany)
+          ? DEFAULT_PRIVACY.replaceAll('CelestSolutions', next.developerCompany) : current.privacy,
+      }))
+      flashSaved()
+    }
   }
 
   const saveOther = (e) => {
@@ -938,7 +952,7 @@ export default function SystemConfig() {
         {/* Panels — responsive padding, max-width for readability */}
         <div className="min-w-0 space-y-5 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6 lg:p-8">
           {tab === 'company' && (
-            <form onSubmit={saveSystemSettings} className="space-y-5">
+            <form key={`${settings.name}:${settings.developerCompany}:${settings.version}:${settings.timezone}`} onSubmit={saveSystemSettings} className="space-y-5">
               {panelHeader('System Details', `These values identify "${settings.name}" across all client devices.`)}
               {pending && (
                 <p className="rounded-lg bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
@@ -949,6 +963,11 @@ export default function SystemConfig() {
                 <label className="block text-sm sm:col-span-2">
                   <span className="font-medium text-gray-700">System name:</span>
                   <input name="systemName" defaultValue={settings.name} required className={inputCls} />
+                </label>
+                <label className="block text-sm sm:col-span-2">
+                  <span className="font-medium text-gray-700">Developer company:</span>
+                  <input name="developerCompany" defaultValue={settings.developerCompany} required maxLength={100} className={inputCls} />
+                  <span className="mt-1 block text-xs text-gray-500">Shown in the sign-in page, navigation, and welcome messages.</span>
                 </label>
                 <label className="block text-sm">
                   <span className="font-medium text-gray-700">System version:</span>
@@ -1051,9 +1070,10 @@ export default function SystemConfig() {
                   <span className="text-xs text-gray-400">PNG/SVG, &lt;500KB. Upload coexists with presets.</span>
                 </div>
               </div>
+              {systemSaveError && <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{systemSaveError}</p>}
               <div className="flex justify-end gap-3 border-t border-gray-100 pt-5">
                 <button type="reset" className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Discard</button>
-                <button type="submit" className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 shadow-sm">Save changes</button>
+                <button type="submit" disabled={savingSystem} className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 shadow-sm disabled:opacity-50">{savingSystem ? 'Saving…' : 'Save changes'}</button>
               </div>
             </form>
           )}
